@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>ko</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>ko</string>
+		<string>en</string>
+	</array>
+	<key>SANSANEnableICloudSync</key>
+	<true/>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.jw.sansan</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>sansan</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
+	<key>SANSANEnableSignIn</key>
+	<false/>
+	<key>SANSANEnableAppleSignIn</key>
+	<false/>
+	<key>SANSANEnableFlythrough</key>
+	<false/>
+	<key>SANSANKMSCCourseBaseURL</key>
+	<string>https://raw.githubusercontent.com/bcd-blank/sansan/main/Shared/Resources/KMSC</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>등산 경로를 기록하기 위해 위치 정보가 필요합니다.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>등산 기록 중 심박수를 표시하기 위해 건강 앱의 심박 데이터를 읽습니다.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>등산 운동 세션의 심박·경로 기록을 건강 앱에 저장합니다.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIBackgroundColor</key>
+		<dict>
+			<key>UIColorComponentAlpha</key>
+			<real>1</real>
+			<key>UIColorComponentBlue</key>
+			<real>1</real>
+			<key>UIColorComponentGreen</key>
+			<real>1</real>
+			<key>UIColorComponentRed</key>
+			<real>1</real>
+		</dict>
+		<key>UIImageName</key>
+		<string>LaunchScreenFull</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<false/>
+	</dict>
+</dict>
+</plist>

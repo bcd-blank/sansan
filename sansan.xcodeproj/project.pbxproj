@@ -6,20 +6,178 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		822233282FCFC9A500BAFBA6 /* sansan Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 822233162FCFC9A500BAFBA6 /* sansan Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		82A1D00C2FD2AA0100BAFBA6 /* SansanWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 82A1D0012FD2AA0100BAFBA6 /* SansanWidgets.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		822233272FCFC9A500BAFBA6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8222330A2FCFC9A300BAFBA6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 822233182FCFC9A500BAFBA6;
+			remoteInfo = "sansan Watch App";
+		};
+		822239A32FCFC9A500BAFBA6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8222330A2FCFC9A300BAFBA6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 822233112FCFC9A300BAFBA6;
+			remoteInfo = sansan;
+		};
+		82A1D00E2FD2AA0100BAFBA6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8222330A2FCFC9A300BAFBA6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 82A1D0022FD2AA0100BAFBA6;
+			remoteInfo = SansanWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		822233252FCFC9A500BAFBA6 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				822233282FCFC9A500BAFBA6 /* sansan Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82A1D00B2FD2AA0100BAFBA6 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				82A1D00C2FD2AA0100BAFBA6 /* SansanWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		822233122FCFC9A300BAFBA6 /* sansan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = sansan.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		822233162FCFC9A500BAFBA6 /* sansan Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "sansan Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		822239A02FCFC9A500BAFBA6 /* sansanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = sansanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		82A1D0012FD2AA0100BAFBA6 /* SansanWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SansanWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		822233342FCFC9A300BAFBA6 /* Exceptions for "sansan" folder in "sansan" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 822233112FCFC9A300BAFBA6 /* sansan */;
+		};
+		822233352FCFC9A300BAFBA7 /* Exceptions for "sansan Watch App" folder in "sansan Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 822233182FCFC9A500BAFBA6 /* sansan Watch App */;
+		};
+		82A1D00F2FD2AA0100BAFBA6 /* Exceptions for "SansanWidgets" folder in "SansanWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 82A1D0022FD2AA0100BAFBA6 /* SansanWidgets */;
+		};
+		82B100022FD2AA0100BAFBA1 /* Exceptions for "Shared" folder in "sansan Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/KMSC,
+				Resources/kmsc_catalog.json,
+			);
+			target = 822233182FCFC9A500BAFBA6 /* sansan Watch App */;
+		};
+		82B100032FD2AA0100BAFBA2 /* Exceptions for "Shared" folder in "sansan" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/KMSC,
+			);
+			target = 822233112FCFC9A300BAFBA6 /* sansan */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		822233142FCFC9A300BAFBA6 /* sansan */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				822233342FCFC9A300BAFBA6 /* Exceptions for "sansan" folder in "sansan" target */,
+			);
 			path = sansan;
+			sourceTree = "<group>";
+		};
+		822233152FCFC9A400BAFBA6 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				82B100032FD2AA0100BAFBA2 /* Exceptions for "Shared" folder in "sansan" target */,
+				82B100022FD2AA0100BAFBA1 /* Exceptions for "Shared" folder in "sansan Watch App" target */,
+			);
+			explicitFolders = (
+				Resources/KMSC,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		822233172FCFC9A500BAFBA6 /* sansan Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				822233352FCFC9A300BAFBA7 /* Exceptions for "sansan Watch App" folder in "sansan Watch App" target */,
+			);
+			path = "sansan Watch App";
+			sourceTree = "<group>";
+		};
+		822239A12FCFC9A500BAFBA6 /* sansanTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = sansanTests;
+			sourceTree = "<group>";
+		};
+		82A1D0092FD2AA0100BAFBA6 /* SansanWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				82A1D00F2FD2AA0100BAFBA6 /* Exceptions for "SansanWidgets" folder in "SansanWidgets" target */,
+			);
+			path = SansanWidgets;
+			sourceTree = "<group>";
+		};
+		82A1D00A2FD2AA0100BAFBA6 /* SharedActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SharedActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		8222330F2FCFC9A300BAFBA6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8222331A2FCFC9A500BAFBA6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		822239A62FCFC9A500BAFBA6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82A1D0042FD2AA0100BAFBA6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +191,11 @@
 			isa = PBXGroup;
 			children = (
 				822233142FCFC9A300BAFBA6 /* sansan */,
+				822233172FCFC9A500BAFBA6 /* sansan Watch App */,
+				82A1D0092FD2AA0100BAFBA6 /* SansanWidgets */,
+				822233152FCFC9A400BAFBA6 /* Shared */,
+				82A1D00A2FD2AA0100BAFBA6 /* SharedActivity */,
+				822239A12FCFC9A500BAFBA6 /* sansanTests */,
 				822233132FCFC9A300BAFBA6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +204,9 @@
 			isa = PBXGroup;
 			children = (
 				822233122FCFC9A300BAFBA6 /* sansan.app */,
+				822233162FCFC9A500BAFBA6 /* sansan Watch App.app */,
+				822239A02FCFC9A500BAFBA6 /* sansanTests.xctest */,
+				82A1D0012FD2AA0100BAFBA6 /* SansanWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -55,13 +221,19 @@
 				8222330E2FCFC9A300BAFBA6 /* Sources */,
 				8222330F2FCFC9A300BAFBA6 /* Frameworks */,
 				822233102FCFC9A300BAFBA6 /* Resources */,
+				822233252FCFC9A500BAFBA6 /* Embed Watch Content */,
+				82A1D00B2FD2AA0100BAFBA6 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				822233262FCFC9A500BAFBA6 /* PBXTargetDependency */,
+				82A1D00D2FD2AA0100BAFBA6 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				822233142FCFC9A300BAFBA6 /* sansan */,
+				822233152FCFC9A400BAFBA6 /* Shared */,
+				82A1D00A2FD2AA0100BAFBA6 /* SharedActivity */,
 			);
 			name = sansan;
 			packageProductDependencies = (
@@ -69,6 +241,75 @@
 			productName = sansan;
 			productReference = 822233122FCFC9A300BAFBA6 /* sansan.app */;
 			productType = "com.apple.product-type.application";
+		};
+		822233182FCFC9A500BAFBA6 /* sansan Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 822233232FCFC9A500BAFBA6 /* Build configuration list for PBXNativeTarget "sansan Watch App" */;
+			buildPhases = (
+				822233192FCFC9A500BAFBA6 /* Sources */,
+				8222331A2FCFC9A500BAFBA6 /* Frameworks */,
+				8222331B2FCFC9A500BAFBA6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				822233152FCFC9A400BAFBA6 /* Shared */,
+				822233172FCFC9A500BAFBA6 /* sansan Watch App */,
+			);
+			name = "sansan Watch App";
+			packageProductDependencies = (
+			);
+			productName = "sansan Watch App";
+			productReference = 822233162FCFC9A500BAFBA6 /* sansan Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		822239A22FCFC9A500BAFBA6 /* sansanTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 822239AA2FCFC9A500BAFBA6 /* Build configuration list for PBXNativeTarget "sansanTests" */;
+			buildPhases = (
+				822239A52FCFC9A500BAFBA6 /* Sources */,
+				822239A62FCFC9A500BAFBA6 /* Frameworks */,
+				822239A72FCFC9A500BAFBA6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				822239A42FCFC9A500BAFBA6 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				822239A12FCFC9A500BAFBA6 /* sansanTests */,
+			);
+			name = sansanTests;
+			packageProductDependencies = (
+			);
+			productName = sansanTests;
+			productReference = 822239A02FCFC9A500BAFBA6 /* sansanTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		82A1D0022FD2AA0100BAFBA6 /* SansanWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 82A1D0062FD2AA0100BAFBA6 /* Build configuration list for PBXNativeTarget "SansanWidgets" */;
+			buildPhases = (
+				82A1D0032FD2AA0100BAFBA6 /* Sources */,
+				82A1D0042FD2AA0100BAFBA6 /* Frameworks */,
+				82A1D0052FD2AA0100BAFBA6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				82A1D0092FD2AA0100BAFBA6 /* SansanWidgets */,
+				82A1D00A2FD2AA0100BAFBA6 /* SharedActivity */,
+			);
+			name = SansanWidgets;
+			packageProductDependencies = (
+			);
+			productName = SansanWidgets;
+			productReference = 82A1D0012FD2AA0100BAFBA6 /* SansanWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -78,19 +319,27 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					822233112FCFC9A300BAFBA6 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					822233182FCFC9A500BAFBA6 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					822239A22FCFC9A500BAFBA6 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 822233112FCFC9A300BAFBA6;
+					};
 				};
 			};
 			buildConfigurationList = 8222330D2FCFC9A300BAFBA6 /* Build configuration list for PBXProject "sansan" */;
-			developmentRegion = en;
+			developmentRegion = ko;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+				ko,
 			);
 			mainGroup = 822233092FCFC9A300BAFBA6;
 			minimizedProjectReferenceProxies = 1;
@@ -100,12 +349,36 @@
 			projectRoot = "";
 			targets = (
 				822233112FCFC9A300BAFBA6 /* sansan */,
+				822233182FCFC9A500BAFBA6 /* sansan Watch App */,
+				82A1D0022FD2AA0100BAFBA6 /* SansanWidgets */,
+				822239A22FCFC9A500BAFBA6 /* sansanTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		822233102FCFC9A300BAFBA6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8222331B2FCFC9A500BAFBA6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		822239A72FCFC9A500BAFBA6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82A1D0052FD2AA0100BAFBA6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,14 +395,93 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		822233192FCFC9A500BAFBA6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		822239A52FCFC9A500BAFBA6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82A1D0032FD2AA0100BAFBA6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		822233262FCFC9A500BAFBA6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 822233182FCFC9A500BAFBA6 /* sansan Watch App */;
+			targetProxy = 822233272FCFC9A500BAFBA6 /* PBXContainerItemProxy */;
+		};
+		822239A42FCFC9A500BAFBA6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 822233112FCFC9A300BAFBA6 /* sansan */;
+			targetProxy = 822239A32FCFC9A500BAFBA6 /* PBXContainerItemProxy */;
+		};
+		82A1D00D2FD2AA0100BAFBA6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = 82A1D0022FD2AA0100BAFBA6 /* SansanWidgets */;
+			targetProxy = 82A1D00E2FD2AA0100BAFBA6 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		8222331C2FCFC9A500BAFBA6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "sansan Watch App/sansanWatch.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=watchsimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "sansan Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수를 측정하기 위해 건강 데이터를 읽습니다.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "등산 운동 세션의 심박수를 건강 앱에 저장합니다.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.jw.sansan;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				INFOPLIST_KEY_WKSupportsAlwaysOnDisplay = NO;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
 		8222331D2FCFC9A300BAFBA6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -159,6 +511,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -182,6 +535,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -192,6 +546,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -221,6 +576,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -237,6 +593,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -245,43 +602,66 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = sansan/sansan.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = sansan/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				"INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphoneos*]" = "등산 기록 중 경로 위치에 사진을 남기기 위해 카메라가 필요합니다.";
+				"INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphonesimulator*]" = "등산 기록 중 경로 위치에 사진을 남기기 위해 카메라가 필요합니다.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription[sdk=iphoneos*]" = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription[sdk=iphonesimulator*]" = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationWhenInUseUsageDescription[sdk=iphoneos*]" = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationWhenInUseUsageDescription[sdk=iphonesimulator*]" = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription[sdk=iphoneos*]" = "등산 기록 카드 이미지를 사진 앱에 저장하기 위해 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription[sdk=iphonesimulator*]" = "등산 기록 카드 이미지를 사진 앱에 저장하기 위해 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryUsageDescription[sdk=iphoneos*]" = "프로필 사진을 선택하기 위해 사진 보관함 접근이 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryUsageDescription[sdk=iphonesimulator*]" = "프로필 사진을 선택하기 위해 사진 보관함 접근이 필요합니다.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIBackgroundModes[sdk=iphoneos*]" = location;
+				"INFOPLIST_KEY_UIBackgroundModes[sdk=iphonesimulator*]" = location;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = NO;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = NO;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				"INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphoneos*]" = Light;
+				"INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphonesimulator*]" = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 26.5;
+				TARGETED_DEVICE_FAMILY = 1;
+				"VALIDATE_EMBEDDED_BINARY[sdk=iphonesimulator*]" = NO;
 			};
 			name = Debug;
 		};
@@ -289,43 +669,218 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = NO;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = sansan/sansan.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = sansan/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				"INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphoneos*]" = "등산 기록 중 경로 위치에 사진을 남기기 위해 카메라가 필요합니다.";
+				"INFOPLIST_KEY_NSCameraUsageDescription[sdk=iphonesimulator*]" = "등산 기록 중 경로 위치에 사진을 남기기 위해 카메라가 필요합니다.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription[sdk=iphoneos*]" = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription[sdk=iphonesimulator*]" = "등산 경로를 기록하기 위해 백그라운드에서도 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationWhenInUseUsageDescription[sdk=iphoneos*]" = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				"INFOPLIST_KEY_NSLocationWhenInUseUsageDescription[sdk=iphonesimulator*]" = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription[sdk=iphoneos*]" = "등산 기록 카드 이미지를 사진 앱에 저장하기 위해 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription[sdk=iphonesimulator*]" = "등산 기록 카드 이미지를 사진 앱에 저장하기 위해 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryUsageDescription[sdk=iphoneos*]" = "프로필 사진을 선택하기 위해 사진 보관함 접근이 필요합니다.";
+				"INFOPLIST_KEY_NSPhotoLibraryUsageDescription[sdk=iphonesimulator*]" = "프로필 사진을 선택하기 위해 사진 보관함 접근이 필요합니다.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIBackgroundModes[sdk=iphoneos*]" = location;
+				"INFOPLIST_KEY_UIBackgroundModes[sdk=iphonesimulator*]" = location;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = NO;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = NO;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				"INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphoneos*]" = Light;
+				"INFOPLIST_KEY_UIUserInterfaceStyle[sdk=iphonesimulator*]" = Light;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
-				XROS_DEPLOYMENT_TARGET = 26.5;
+				TARGETED_DEVICE_FAMILY = 1;
+				"VALIDATE_EMBEDDED_BINARY[sdk=iphonesimulator*]" = NO;
+			};
+			name = Release;
+		};
+		822233222FCFC9A500BAFBA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "sansan Watch App/sansanWatch.entitlements";
+				"CODE_SIGN_IDENTITY[sdk=watchsimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "sansan Watch App/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수를 측정하기 위해 건강 데이터를 읽습니다.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "등산 운동 세션의 심박수를 건강 앱에 저장합니다.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.jw.sansan;
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				INFOPLIST_KEY_WKSupportsAlwaysOnDisplay = NO;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		822239A82FCFC9A500BAFBA6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sansan.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/sansan";
+			};
+			name = Debug;
+		};
+		822239A92FCFC9A500BAFBA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/sansan.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/sansan";
+			};
+			name = Release;
+		};
+		82A1D0072FD2AA0100BAFBA6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SansanWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		82A1D0082FD2AA0100BAFBA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				DEVELOPMENT_TEAM = HNJ8JGRBQ2;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SansanWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = sansan;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jw.sansan.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -346,6 +901,33 @@
 			buildConfigurations = (
 				822233202FCFC9A300BAFBA6 /* Debug */,
 				822233212FCFC9A300BAFBA6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		822233232FCFC9A500BAFBA6 /* Build configuration list for PBXNativeTarget "sansan Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8222331C2FCFC9A500BAFBA6 /* Debug */,
+				822233222FCFC9A500BAFBA6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		822239AA2FCFC9A500BAFBA6 /* Build configuration list for PBXNativeTarget "sansanTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				822239A82FCFC9A500BAFBA6 /* Debug */,
+				822239A92FCFC9A500BAFBA6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		82A1D0062FD2AA0100BAFBA6 /* Build configuration list for PBXNativeTarget "SansanWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				82A1D0072FD2AA0100BAFBA6 /* Debug */,
+				82A1D0082FD2AA0100BAFBA6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
