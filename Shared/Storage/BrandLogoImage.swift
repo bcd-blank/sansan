@@ -14,8 +14,10 @@ enum RouteBrandLogoMetrics {
     static let leading: CGFloat = 32
     /// 1080pt 경로 이미지 기준 하단 여백.
     static let bottom: CGFloat = 42
-    /// 1080pt 기준 로고 한 변.
+    /// 1080pt 기준 로고 한 변(가로). 아트워크는 정사각이 아닙니다.
     static let side: CGFloat = 156
+    /// `SansanLogoSymbol.svg` viewBox 550×478.
+    static let artworkAspect: CGFloat = 550.0 / 478.0
     /// 인터랙티브 MapKit 좌하단 Apple 지도·법적 표기 위로 앱 로고를 올리기 위한 추가 하단 여백 (1080pt 기준).
     static let interactiveMapAttributionBottomOffset: CGFloat = 40
 
@@ -55,9 +57,22 @@ enum BrandLogoImage {
         let format = UIGraphicsImageRendererFormat()
         format.opaque = false
         format.scale = max(source.scale, 2)
+        let aspect = source.size.width / max(source.size.height, 1)
+        let drawSize: CGSize
+        if aspect >= 1 {
+            drawSize = CGSize(width: side, height: side / aspect)
+        } else {
+            drawSize = CGSize(width: side * aspect, height: side)
+        }
+        let drawRect = CGRect(
+            x: (side - drawSize.width) / 2,
+            y: (side - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
 
         return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            source.draw(in: CGRect(origin: .zero, size: size))
+            source.draw(in: drawRect)
         }
     }
 }

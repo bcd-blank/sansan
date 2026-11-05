@@ -17,9 +17,19 @@ struct DashboardElevationProfileCard: View {
     @State private var chartPoints: [DashboardElevationChartPoint] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            headerRow
-            chartContent
+        ZStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                headerRow
+                chartContent
+            }
+            if chartPoints.count < 2 {
+                DashboardChartEmptyPlaceholder(
+                    systemImage: "chart.xyaxis.line",
+                    title: emptyTitle,
+                    description: emptyDescription,
+                    descriptionLineReserve: 2
+                )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -37,16 +47,12 @@ struct DashboardElevationProfileCard: View {
     }
 
     private var headerRow: some View {
-        HStack {
-            Label("고도 프로필", systemImage: "chart.xyaxis.line")
-                .font(.subheadline.weight(.semibold))
-            Spacer()
-            if let last = chartPoints.last {
-                Text("\(Int(last.altitude)) m")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-        }
+        DashboardChartCardHeader(
+            title: "고도",
+            systemImage: "chart.xyaxis.line",
+            tint: .orange,
+            trailing: chartPoints.last.map { "\(Int($0.altitude)) m" }
+        )
     }
 
     @ViewBuilder
@@ -87,12 +93,7 @@ struct DashboardElevationProfileCard: View {
             }
             .frame(height: 120)
         } else {
-            ContentUnavailableView(
-                emptyTitle,
-                systemImage: "chart.line.uptrend.xyaxis",
-                description: Text(emptyDescription)
-            )
-            .frame(height: 120)
+            Color.clear.frame(height: 120)
         }
     }
 
@@ -124,6 +125,14 @@ struct DashboardElevationProfileCard: View {
 
     private func rebuildChartData() {
         let points = workout.sessionData.points
+        if let altitude = HikingSessionMetrics.stationaryAltitude(from: points) {
+            chartPoints = [
+                DashboardElevationChartPoint(id: UUID(), distanceKilometers: 0, altitude: altitude),
+                DashboardElevationChartPoint(id: UUID(), distanceKilometers: 1, altitude: altitude),
+            ]
+            elevationGainText = "0"
+            return
+        }
         chartPoints = HikingSessionMetrics.elevationProfileSamples(from: points).map { sample in
             DashboardElevationChartPoint(
                 id: sample.id,
@@ -133,6 +142,81 @@ struct DashboardElevationProfileCard: View {
         }
         let gain = HikingSessionMetrics.cumulativeElevationGain(from: points)
         elevationGainText = String(format: "%.0f", gain)
+    }
+}
+
+/// 고도·심박 카드가 같은 아이콘 칸과 제목 시작 위치를 쓰도록 헤더를 하나로 둡니다.
+struct DashboardChartCardHeader: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    var trailing: String? = nil
+    var trailingColor: Color = .secondary
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: systemImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 15, height: 15)
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+            Spacer(minLength: 8)
+            if let trailing {
+                Text(trailing)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(trailingColor)
+                    .lineLimit(1)
+            }
+        }
+    }
+}
+
+struct DashboardChartEmptyPlaceholder: View {
+    var systemImage: String? = nil
+    let title: String
+    let description: String
+    /// 1이면 문구 길이대로, 2면 두 줄 높이를 비워 카드마다 제목이 위아래로 밀리지 않습니다.
+    var descriptionLineReserve: Int = 1
+
+    private let iconSize: CGFloat = 20
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+                    .foregroundStyle(.secondary)
+                    .symbolRenderingMode(.monochrome)
+            }
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                descriptionText
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
+    private var descriptionText: some View {
+        let text = Text(description)
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+        if descriptionLineReserve > 1 {
+            text.lineLimit(descriptionLineReserve, reservesSpace: true)
+        } else {
+            text
+        }
     }
 }
 

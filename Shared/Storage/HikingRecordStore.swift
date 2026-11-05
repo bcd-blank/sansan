@@ -30,6 +30,7 @@ final class HikingRecordStore: ObservableObject {
         let mapOptions: HikingShareMapExportOptions
         let fullScreen: Bool
         let image: UIImage
+        let includesOnScreenLogo: Bool
     }
 
     private var routeImageCache: [UUID: RouteImageCacheEntry] = [:]
@@ -108,7 +109,8 @@ final class HikingRecordStore: ObservableObject {
 
     /// 공유·저장 이미지 — 상세 화면과 동일한 SwiftUI 레이아웃으로 렌더링(sansan 앱에서 등록).
     /// `fullScreen`이 true이면 기기 화면 전체 크기로 렌더링(사진 저장용).
-    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool) -> UIImage?)?
+    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool) -> UIImage?)?
+    static var summaryImageRenderer: (@MainActor (SavedHikingSession, HikingShareMapExportOptions) async -> UIImage?)?
 
     /// 사진 저장용 — 기록 상세 지도와 동일한 pt·배율(sansan 앱에서 등록).
     static var detailShareMapCanvasProvider: (@MainActor () -> (size: CGSize, pixelScale: CGFloat))?
@@ -417,48 +419,47 @@ final class HikingRecordStore: ObservableObject {
         }
 
         let listThumbnailMapOptions = HikingShareMapExportOptions(
+            showsDistanceMarkers: false,
+            showsTimeMarkers: false,
+            showsWeatherLabel: false,
             showsPhotoMarkers: false,
             showsPinnedThumbnails: false
         )
-
-        // 기록 종료 직후에는 요약 화면 닫힘·목록 표시 등 화면 전환과 겹쳐 지도 캡처가
-        // 일시적으로 실패할 수 있습니다. 실패 시 화면이 안정된 뒤 재시도합니다.
+        // 지도 타일이 늦게 붙는 경우가 있어 짧게 다시 시도합니다.
         var image: UIImage?
         for attempt in 0..<3 {
             if attempt > 0 {
                 try? await Task.sleep(for: .seconds(1.5 * Double(attempt)))
             }
-            // 재시도 시점에는 세션 병합 등으로 기록이 갱신됐을 수 있어 매번 다시 읽습니다.
             guard let latestRecord = records.first(where: { $0.id == recordID }) else { return }
             image = await HikingRouteSnapshotGenerator.generate(
                 record: latestRecord,
                 style: .routeOnly,
                 mapOptions: listThumbnailMapOptions,
+                canvasSize: CGSize(width: 240, height: 240),
+                pixelScale: 2,
+                reservesLegalAttributionStrip: false,
                 allowLiveDetailCapture: false,
                 preferSwiftUIMapTiles: true,
                 listThumbnailOnly: true
             )
             if image != nil { break }
         }
-        guard let image else { return }
-
-        let filename = HikingStorageLayout.snapshotFilename
+        guard let image, let pngData = image.pngData() else { return }
         guard let root = UserDataPaths.activeUserRoot else { return }
-        let directory = HikingStorageLayout.recordDirectory(recordID: record.id, in: root)
-        let url = HikingStorageLayout.snapshotURL(recordID: record.id, in: root)
 
-        guard let pngData = image.pngData() else { return }
+        let directory = HikingStorageLayout.recordDirectory(recordID: recordID, in: root)
+        let url = HikingStorageLayout.listThumbnailURL(recordID: recordID, in: root)
 
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try pngData.write(to: url, options: [.atomic])
-            HikingRecordAssetCleaner.purgeNumberedConflictCopies(of: filename, in: directory)
-            // 생성 중 기록이 지워지거나 목록이 갱신됐을 수 있어 인덱스를 다시 찾습니다.
-            guard let currentIndex = records.firstIndex(where: { $0.id == recordID }) else { return }
-            records[currentIndex].snapshotFilename = filename
-            persist()
+            HikingRecordAssetCleaner.purgeNumberedConflictCopies(
+                of: HikingStorageLayout.listThumbnailFilename,
+                in: directory
+            )
+            guard records.contains(where: { $0.id == recordID }) else { return }
             bumpSnapshotRevision(for: recordID)
-            invalidateRouteImageCache(for: recordID)
         } catch {
             // PNG 저장 실패 시 JSON 기록은 유지.
         }
@@ -470,7 +471,7 @@ final class HikingRecordStore: ObservableObject {
     func ensureSnapshotExists(for recordID: UUID) async {
         guard let record = records.first(where: { $0.id == recordID }) else { return }
         guard record.session.points.count >= 2 else { return }
-        if let path = record.snapshotFileURL?.path, FileManager.default.fileExists(atPath: path) {
+        if record.listThumbnailFileURL != nil {
             return
         }
         guard !snapshotEnsureInFlightIDs.contains(recordID) else { return }
@@ -486,13 +487,16 @@ final class HikingRecordStore: ObservableObject {
         fullScreen: Bool = false
     ) async -> UIImage? {
         guard let record = records.first(where: { $0.id == recordID }) else { return nil }
+        if HikingRecordImageSavePreferences.style == .summary, let summary = Self.summaryImageRenderer {
+            return await summary(record, mapOptions)
+        }
         guard let routeImage = await routeImageForShare(
             record: record,
             mapOptions: mapOptions,
             fullScreen: fullScreen
         ) else { return nil }
         if let renderer = Self.shareImageRenderer {
-            return renderer(record, routeImage, fullScreen)
+            return renderer(record, routeImage.image, fullScreen, routeImage.includesOnScreenLogo)
         }
         return nil
     }
@@ -520,15 +524,16 @@ final class HikingRecordStore: ObservableObject {
         record: SavedHikingSession,
         mapOptions: HikingShareMapExportOptions,
         fullScreen: Bool
-    ) async -> UIImage? {
+    ) async -> (image: UIImage, includesOnScreenLogo: Bool)? {
         if let cached = routeImageCache[record.id],
            cached.mapOptions == mapOptions,
            cached.fullScreen == fullScreen {
-            return cached.image
+            return (cached.image, cached.includesOnScreenLogo)
         }
 
         // 사진 마커·핀 썸네일은 MKMapView 좌표계로만 정확히 맞출 수 있어 캐시 PNG에 덧그리지 않습니다.
         let image: UIImage?
+        var includesOnScreenLogo = false
         if !fullScreen,
            let url = record.snapshotFileURL,
            let diskCached = UIImage(contentsOfFile: url.path),
@@ -536,27 +541,33 @@ final class HikingRecordStore: ObservableObject {
             image = diskCached
         } else {
             let detailCanvas = fullScreen ? Self.detailShareMapCanvasProvider?() : nil
+            let useLiveMap = HikingRouteSnapshotGenerator.allowsLiveDetailCapture?(record.id) ?? false
             image = await HikingRouteSnapshotGenerator.generate(
                 record: record,
                 style: .routeOnly,
                 mapOptions: mapOptions,
                 canvasSize: detailCanvas?.size,
                 pixelScale: detailCanvas?.pixelScale,
-                reservesLegalAttributionStrip: true,
-                allowLiveDetailCapture: HikingRouteSnapshotGenerator.allowsLiveDetailCapture?(record.id) ?? false
+                reservesLegalAttributionStrip: false,
+                allowLiveDetailCapture: useLiveMap,
+                preferSwiftUIMapTiles: true
             )
+            includesOnScreenLogo = fullScreen && HikingRouteSnapshotGenerator.consumeCaptureIncludesOnScreenLogo()
         }
 
         if let image {
-            let exportImage = fullScreen
+            // 화면 캡처에는 산산 로고와 애플 표기가 이미 같이 들어 있습니다.
+            // 좌하단을 지도 픽셀로 덮으면 그 로고가 늘어납니다.
+            let exportImage = fullScreen && !includesOnScreenLogo
                 ? RouteMapOverlayMetrics.coveringNativeAppleMapsAttribution(on: image)
                 : image
             routeImageCache[record.id] = RouteImageCacheEntry(
                 mapOptions: mapOptions,
                 fullScreen: fullScreen,
-                image: exportImage
+                image: exportImage,
+                includesOnScreenLogo: includesOnScreenLogo
             )
-            return exportImage
+            return (exportImage, includesOnScreenLogo)
         }
         return nil
     }

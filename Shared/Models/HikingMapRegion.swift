@@ -72,16 +72,51 @@ enum HikingMapRegion {
         coordinates: [CLLocationCoordinate2D],
         viewSize: CGSize
     ) -> MKCoordinateRegion {
+        fitting(
+            coordinates: coordinates,
+            viewSize: viewSize,
+            insetTop: 0,
+            insetLeft: 0,
+            insetBottom: 0,
+            insetRight: 0
+        )
+    }
+
+    /// 상·하단 정보 영역을 비운 뒤, 남은 가운데 구간에 경로가 들어가게 맞춥니다.
+    static func fitting(
+        coordinates: [CLLocationCoordinate2D],
+        viewSize: CGSize,
+        insetTop: CGFloat,
+        insetLeft: CGFloat,
+        insetBottom: CGFloat,
+        insetRight: CGFloat,
+        routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction
+    ) -> MKCoordinateRegion {
         guard viewSize.width > 0, viewSize.height > 0 else {
             return fitting(coordinates: coordinates)
         }
-        let aspect = viewSize.width / viewSize.height
-        let contentRect = visibleMapRect(
-            for: coordinates,
-            fittingAspectRatio: aspect
+        let route = routeBoundingMapRect(for: coordinates)
+        guard !route.isNull else { return fitting(coordinates: coordinates) }
+
+        let fill = min(max(routeFillFraction, 0.2), 1)
+        let contentWidth = max(viewSize.width - insetLeft - insetRight, 1)
+        let contentHeight = max(viewSize.height - insetTop - insetBottom, 1)
+        let contentCenterX = insetLeft + contentWidth / 2
+        let contentCenterY = insetTop + contentHeight / 2
+
+        let scale = max(
+            route.size.width / (Double(contentWidth) * Double(fill)),
+            route.size.height / (Double(contentHeight) * Double(fill))
         )
-        guard !contentRect.isNull else { return fitting(coordinates: coordinates) }
-        return MKCoordinateRegion(contentRect)
+        let visibleWidth = scale * Double(viewSize.width)
+        let visibleHeight = scale * Double(viewSize.height)
+        let rect = MKMapRect(
+            x: route.midX - Double(contentCenterX / viewSize.width) * visibleWidth,
+            y: route.midY - Double(contentCenterY / viewSize.height) * visibleHeight,
+            width: visibleWidth,
+            height: visibleHeight
+        )
+        return MKCoordinateRegion(rect)
     }
 
     /// 경로 좌표만으로 지도 영역을 계산합니다.

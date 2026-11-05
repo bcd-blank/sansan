@@ -31,6 +31,10 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    private var stationaryLocation: CLLocationCoordinate2D? {
+        HikingSessionMetrics.stationaryCoordinate(from: session.points)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -57,7 +61,21 @@ struct WorkoutSummaryView: View {
 
     @ViewBuilder
     private var routePreview: some View {
-        if routeCoordinates.count >= 2 {
+        if let location = stationaryLocation {
+            Map(initialPosition: .region(
+                MKCoordinateRegion(
+                    center: location,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                )
+            )) {
+                Annotation("현재 위치", coordinate: location) {
+                    routeEndpointDot(color: RoutePointColors.start)
+                }
+            }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .allowsHitTesting(false)
+        } else if routeCoordinates.count >= 2 {
             Map(initialPosition: .region(
                 HikingMapRegion.fitting(
                     coordinates: routeCoordinates,
@@ -69,12 +87,12 @@ struct WorkoutSummaryView: View {
 
                 if let start = routeCoordinates.first {
                     Annotation("시작", coordinate: start) {
-                        routeEndpointDot(color: Self.routeColor)
+                        routeEndpointDot(color: RoutePointColors.start)
                     }
                 }
                 if let end = routeCoordinates.last {
                     Annotation("종료", coordinate: end) {
-                        routeEndpointDot(color: .red)
+                        routeEndpointDot(color: RoutePointColors.end)
                     }
                 }
             }
@@ -82,10 +100,10 @@ struct WorkoutSummaryView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .allowsHitTesting(false)
         } else {
-            ContentUnavailableView(
-                "경로 없음",
+            DashboardChartEmptyPlaceholder(
                 systemImage: "map",
-                description: Text("기록된 GPS 포인트가 부족합니다. 저장 전에 확인하세요.")
+                title: "경로 없음",
+                description: "기록된 GPS 포인트가 부족합니다. 저장 전에 확인하세요."
             )
             .frame(height: 180)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))

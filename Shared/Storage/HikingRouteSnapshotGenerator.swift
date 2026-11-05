@@ -38,6 +38,9 @@ enum HikingRouteSnapshotGenerator {
     /// 상세 지도 콘텐츠 너비(377pt) 대비 스냅샷 스케일.
     private static let mapLayoutReferenceWidth: CGFloat = 377
     private static let snapshotScale: CGFloat = 2
+    /// 시작·종료·일시정지 점. Android 경로 지도와 같은 색입니다.
+    private static let startPointColor = UIColor(red: 52.0 / 255.0, green: 199.0 / 255.0, blue: 89.0 / 255.0, alpha: 1)
+    private static let endPointColor = UIColor(red: 255.0 / 255.0, green: 59.0 / 255.0, blue: 48.0 / 255.0, alpha: 1)
 
     private static func mapContentScale(for canvasWidth: CGFloat) -> CGFloat {
         canvasWidth / mapLayoutReferenceWidth
@@ -80,19 +83,22 @@ enum HikingRouteSnapshotGenerator {
                 )
             }
 
-            if mapOptions.showsDistanceMarkers {
-                drawDistanceMarkers(
+            if needsSummitOverlays(record: record) {
+                drawSummitMarkers(
                     using: projector,
-                    points: record.session.points,
+                    record: record,
                     contentScale: contentScale,
                     in: context.cgContext
                 )
             }
 
-            if needsSummitOverlays(record: record) {
-                drawSummitMarkers(
+            if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
+                drawKilometerMarkers(
                     using: projector,
                     record: record,
+                    coordinates: coordinates,
+                    showsDistance: mapOptions.showsDistanceMarkers,
+                    showsTime: mapOptions.showsTimeMarkers,
                     contentScale: contentScale,
                     in: context.cgContext
                 )
@@ -118,8 +124,17 @@ enum HikingRouteSnapshotGenerator {
         mapOptions: HikingShareMapExportOptions,
         record: SavedHikingSession
     ) -> Bool {
-        mapOptions.showsDistanceMarkers
+        (mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers)
             && !HikingSessionMetrics.kilometerMarkerPlacements(from: record.session.points).isEmpty
+    }
+
+    /// 직전 `generate`가 상세 화면 지도를 찍어 산산 로고까지 포함했는지.
+    private static var captureIncludesOnScreenLogo = false
+
+    static func consumeCaptureIncludesOnScreenLogo() -> Bool {
+        let included = captureIncludesOnScreenLogo
+        captureIncludesOnScreenLogo = false
+        return included
     }
 
     static func generate(
@@ -163,9 +178,10 @@ enum HikingRouteSnapshotGenerator {
         preferSwiftUIMapTiles: Bool,
         listThumbnailOnly: Bool
     ) async -> UIImage? {
+        captureIncludesOnScreenLogo = false
         let targetCanvas = canvasSize ?? routeImageSize
-        // RouteMapSnapshotCapture가 상세 화면 지도 크기를 우선 사용합니다.
-        let captureMapSize = HikingRouteImageLayout.captureSize
+        // 목록 썸네일은 정사각형 안에 경로 전체를 맞춥니다. 상세 이미지는 상세 지도 크기를 씁니다.
+        let captureMapSize = listThumbnailOnly ? targetCanvas : HikingRouteImageLayout.captureSize
         let scale = pixelScale ?? snapshotScale
 
         if let capture = captureRouteMapBase,
@@ -188,6 +204,7 @@ enum HikingRouteSnapshotGenerator {
             let liveCanvas = base.image.size.width > 1 && base.image.size.height > 1
                 ? base.image.size
                 : targetCanvas
+            captureIncludesOnScreenLogo = base.includesLiveDetailContent
             return composite(
                 baseImage: base.image,
                 projector: projector,
@@ -196,7 +213,8 @@ enum HikingRouteSnapshotGenerator {
                 canvasSize: liveCanvas,
                 pixelScale: scale,
                 mapOptions: mapOptions,
-                includesLiveDetailContent: base.includesLiveDetailContent
+                includesLiveDetailContent: base.includesLiveDetailContent,
+                listThumbnailOnly: listThumbnailOnly
             )
         }
 
@@ -207,7 +225,39 @@ enum HikingRouteSnapshotGenerator {
             canvasSize: targetCanvas,
             pixelScale: scale,
             mapOptions: mapOptions,
-            reservesLegalAttributionStrip: reservesLegalAttributionStrip
+            reservesLegalAttributionStrip: reservesLegalAttributionStrip,
+            listThumbnailOnly: listThumbnailOnly
+        )
+    }
+
+    /// 요약 저장용. 메모 하단부터 거리 상단까지, 경로의 긴 축이 그 영역에 닿게 맞춥니다.
+    @MainActor
+    static func fittedMapImage(
+        record: SavedHikingSession,
+        canvasSize: CGSize,
+        pixelScale: CGFloat,
+        mapOptions: HikingShareMapExportOptions,
+        insetTop: CGFloat = 0,
+        insetBottom: CGFloat = 0,
+        insetLeft: CGFloat = 0,
+        insetRight: CGFloat = 0,
+        routeFillFraction: CGFloat = 1
+    ) async -> UIImage? {
+        let coordinates = HikingSessionMetrics.resolvedDisplayRouteCoordinates(from: record.session)
+        guard coordinates.count >= 2 else { return nil }
+        return await captureWithSnapshotter(
+            record: record,
+            coordinates: coordinates,
+            fittingCoordinates: coordinates,
+            canvasSize: canvasSize,
+            pixelScale: pixelScale,
+            mapOptions: mapOptions,
+            reservesLegalAttributionStrip: false,
+            insetTop: insetTop,
+            insetBottom: insetBottom,
+            insetLeft: insetLeft,
+            insetRight: insetRight,
+            routeFillFraction: routeFillFraction
         )
     }
 
@@ -219,24 +269,28 @@ enum HikingRouteSnapshotGenerator {
         canvasSize: CGSize,
         pixelScale: CGFloat,
         mapOptions: HikingShareMapExportOptions,
-        reservesLegalAttributionStrip: Bool
+        reservesLegalAttributionStrip: Bool,
+        insetTop: CGFloat = 0,
+        insetBottom: CGFloat = 0,
+        insetLeft: CGFloat = 0,
+        insetRight: CGFloat = 0,
+        routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction,
+        listThumbnailOnly: Bool = false
     ) async -> UIImage? {
         // MKMapSnapshotter 이미지에는 Apple 법적 표기·로고가 포함되지 않습니다(개발자가 직접
         // 그려야 함). 따라서 strip 크롭은 실제 지도를 잘라내 경로를 어긋나게 할 뿐이라 하지 않습니다.
         let snapshotCanvas = canvasSize
 
         let options = MKMapSnapshotter.Options()
-        // 화면 상세 지도가 "지금" 보여주는 영역을 그대로 재현합니다(없을 때만 좌표 피팅).
-        let liveRect = LiveRouteMapSnapshotRegistry.shared.liveVisibleMapRect(for: record.id)
-            ?? LiveRouteMapSnapshotRegistry.shared.liveCamera(for: record.id)?.visibleMapRect
-        if let liveRect, !liveRect.isNull {
-            options.region = MKCoordinateRegion(liveRect)
-        } else {
-            options.region = HikingMapRegion.fitting(
-                coordinates: fittingCoordinates,
-                viewSize: snapshotCanvas
-            )
-        }
+        options.region = HikingMapRegion.fitting(
+            coordinates: fittingCoordinates,
+            viewSize: snapshotCanvas,
+            insetTop: insetTop,
+            insetLeft: insetLeft,
+            insetBottom: insetBottom,
+            insetRight: insetRight,
+            routeFillFraction: routeFillFraction
+        )
         options.size = snapshotCanvas
         options.scale = pixelScale
         options.preferredConfiguration = HikingMapCaptureConfiguration.standard
@@ -260,7 +314,8 @@ enum HikingRouteSnapshotGenerator {
                     coordinates: coordinates,
                     canvasSize: canvasSize,
                     pixelScale: pixelScale,
-                    mapOptions: mapOptions
+                    mapOptions: mapOptions,
+                    listThumbnailOnly: listThumbnailOnly
                 )
                 continuation.resume(returning: image)
             }
@@ -275,7 +330,8 @@ enum HikingRouteSnapshotGenerator {
         canvasSize: CGSize,
         pixelScale: CGFloat,
         mapOptions: HikingShareMapExportOptions,
-        includesLiveDetailContent: Bool = false
+        includesLiveDetailContent: Bool = false,
+        listThumbnailOnly: Bool = false
     ) -> UIImage {
         let contentScale = mapContentScale(for: canvasSize.width)
         let format = UIGraphicsImageRendererFormat()
@@ -291,14 +347,23 @@ enum HikingRouteSnapshotGenerator {
                     contentScale: contentScale,
                     in: context.cgContext
                 )
-                drawEndpoints(
-                    using: projector,
-                    coordinates: coordinates,
-                    contentScale: contentScale,
-                    in: context.cgContext
-                )
+            }
 
-                if mapOptions.showsPhotoMarkers {
+            // 목록 썸네일은 지도와 경로 선만 남깁니다.
+            if listThumbnailOnly || includesLiveDetailContent {
+                if !listThumbnailOnly, mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
+                    drawPinnedThumbnails(
+                        record: record,
+                        photos: record.mapPinnedPhotos,
+                        contentScale: contentScale,
+                        in: context.cgContext,
+                        canvasSize: canvasSize
+                    )
+                }
+                return
+            }
+
+            if mapOptions.showsPhotoMarkers {
                     drawPhotoMarkers(
                         using: projector,
                         photos: record.session.photos,
@@ -307,24 +372,33 @@ enum HikingRouteSnapshotGenerator {
                     )
                 }
 
-                if mapOptions.showsDistanceMarkers {
-                    drawDistanceMarkers(
+                if needsSummitOverlays(record: record) {
+                    drawSummitMarkers(
                         using: projector,
-                        points: record.session.points,
+                        record: record,
                         contentScale: contentScale,
                         in: context.cgContext
                     )
                 }
-            }
 
-            if needsSummitOverlays(record: record) {
-                drawSummitMarkers(
-                    using: projector,
-                    record: record,
-                    contentScale: contentScale,
-                    in: context.cgContext
-                )
-            }
+                if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
+                    drawKilometerMarkers(
+                        using: projector,
+                        record: record,
+                        coordinates: coordinates,
+                        showsDistance: mapOptions.showsDistanceMarkers,
+                        showsTime: mapOptions.showsTimeMarkers,
+                        contentScale: contentScale,
+                        in: context.cgContext
+                    )
+                }
+
+            drawEndpoints(
+                using: projector,
+                coordinates: coordinates,
+                contentScale: contentScale,
+                in: context.cgContext
+            )
 
             if mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
                 drawPinnedThumbnails(
@@ -444,13 +518,13 @@ enum HikingRouteSnapshotGenerator {
         guard let start = coordinates.first, let end = coordinates.last else { return }
         drawEndpoint(
             at: projector.point(for: start),
-            fill: UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1),
+            fill: startPointColor,
             contentScale: contentScale,
             in: cgContext
         )
         drawEndpoint(
             at: projector.point(for: end),
-            fill: UIColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1),
+            fill: endPointColor,
             contentScale: contentScale,
             in: cgContext
         )
@@ -502,19 +576,55 @@ enum HikingRouteSnapshotGenerator {
         }
     }
 
-    private static func drawDistanceMarkers(
+    private static func drawKilometerMarkers(
         using projector: MapCoordinateProjecting,
-        points: [HikingPoint],
+        record: SavedHikingSession,
+        coordinates: [CLLocationCoordinate2D],
+        showsDistance: Bool,
+        showsTime: Bool,
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
-        let markers = HikingSessionMetrics.kilometerMarkerPlacements(from: points)
-        for marker in markers {
-            let routePoint = projector.point(for: marker.coordinate)
+        let markers = HikingSessionMetrics.kilometerMarkerPlacements(from: record.session.points)
+        let times = showsTime
+            ? HikingSessionMetrics.kilometerArrivalElapsedLabels(
+                from: record.session.points,
+                startedAt: record.session.effectiveStartedAt,
+                segmentBreaks: record.session.segmentBreaks
+            )
+            : [:]
+        var endpoints: [CGPoint] = []
+        if let start = coordinates.first {
+            endpoints.append(projector.point(for: start))
+        }
+        if let end = coordinates.last, coordinates.count > 1 {
+            endpoints.append(projector.point(for: end))
+        }
+        let requests: [RouteKilometerLabelRequest] = markers.compactMap { marker in
+            let distance = showsDistance ? marker.labelText : nil
+            let time = times[marker.kilometer]
+            guard distance != nil || time != nil else { return nil }
+            return RouteKilometerLabelRequest(
+                kilometer: marker.kilometer,
+                distanceLabel: distance,
+                timeLabel: time,
+                routePoint: projector.point(for: marker.coordinate),
+                preferredLeadingSide: marker.placesLabelOnLeadingSide
+            )
+        }
+        let shifts = RouteKilometerMarkerDrawing.labelShifts(
+            for: requests,
+            endpointPoints: endpoints,
+            contentScale: contentScale
+        )
+        for request in requests {
+            let shift = shifts[request.kilometer]
             RouteKilometerMarkerDrawing.drawMarker(
-                label: marker.labelText,
-                routePoint: routePoint,
-                placesLabelOnLeadingSide: marker.placesLabelOnLeadingSide,
+                distanceLabel: request.distanceLabel,
+                timeLabel: request.timeLabel,
+                routePoint: request.routePoint,
+                placesLabelOnLeadingSide: shift?.placesLabelOnLeadingSide ?? request.preferredLeadingSide,
+                verticalOffset: shift?.verticalOffset ?? 0,
                 contentScale: contentScale,
                 in: cgContext
             )

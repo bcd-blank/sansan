@@ -17,6 +17,9 @@ import UIKit
 final class LiveRouteMapSnapshotRegistry: ObservableObject {
     static let shared = LiveRouteMapSnapshotRegistry()
 
+    /// 저장 캡처 동안 로고·버튼·날씨처럼 카드가 다시 그리는 장식을 화면에서 잠시 숨깁니다.
+    @Published var chromeHiddenRecordID: UUID?
+
     struct Context {
         let globalFrame: CGRect
         /// SwiftUI `Map` 콘텐츠만의 화면 좌표 (오버레이·로고 제외).
@@ -133,6 +136,9 @@ final class LiveRouteMapSnapshotRegistry: ObservableObject {
         renderViews[recordID] = nil
         mapViews[recordID] = nil
         visibleRectProviders[recordID] = nil
+        if chromeHiddenRecordID == recordID {
+            chromeHiddenRecordID = nil
+        }
     }
 
     func context(for recordID: UUID, maxAge: TimeInterval = 120) -> Context? {

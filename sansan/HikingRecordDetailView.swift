@@ -11,9 +11,15 @@ struct HikingRecordDetailView: View {
     let record: SavedHikingSession
     var onFollowRoute: () -> Void = {}
 
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = HikingRecordStore.shared
     @ObservedObject private var snapshotPreferences = HikingSnapshotPreferencesObserver.shared
     @StateObject private var export: HikingRecordExportCoordinator
+    @State private var showsRenameSheet = false
+    @State private var renameDraft = ""
+    @State private var showsDeleteConfirmation = false
+    @State private var pendingRename = false
+    @State private var pendingDelete = false
     private var currentRecord: SavedHikingSession {
         export.currentRecord(fallback: record)
     }
@@ -44,11 +50,6 @@ struct HikingRecordDetailView: View {
                         }
                     )
                     .frame(maxWidth: .infinity)
-
-                    if let weather = currentRecord.weather {
-                        HikingRecordWeatherCard(weather: weather)
-                            .frame(maxWidth: .infinity)
-                    }
 
                     if contentWidth > 0, mapHeight > 0 {
                         HikingRecordRouteMapView(
@@ -123,6 +124,15 @@ struct HikingRecordDetailView: View {
         }
         .sheet(isPresented: $export.showsDetailActions, onDismiss: {
             export.handleDetailActionsSheetDismissed(record: record, onFollowRoute: onFollowRoute)
+            if pendingRename {
+                pendingRename = false
+                renameDraft = currentRecord.displayName ?? ""
+                showsRenameSheet = true
+            }
+            if pendingDelete {
+                pendingDelete = false
+                showsDeleteConfirmation = true
+            }
         }) {
             HikingRecordDetailActionsSheet(
                 isListPinned: currentRecord.isListPinned,
@@ -133,6 +143,10 @@ struct HikingRecordDetailView: View {
                 isGPXShareDisabled: export.isMenuBusy || !export.canShareGPX(for: currentRecord),
                 isSaveDisabled: export.isMenuBusy || !export.hasShareableRoute(for: currentRecord),
                 onFollowRoute: { export.queueDetailAction(.followRoute) },
+                onRename: {
+                    pendingRename = true
+                    export.showsDetailActions = false
+                },
                 onToggleListPinned: {
                     store.toggleListPinned(id: record.id)
                 },
@@ -143,10 +157,33 @@ struct HikingRecordDetailView: View {
                 onShare: { export.queueDetailAction(.shareCard) },
                 onShareGPX: { export.queueDetailAction(.shareGPX) },
                 onSaveToPhotos: { export.queueDetailAction(.saveToPhotos) },
+                onDelete: {
+                    pendingDelete = true
+                    export.showsDetailActions = false
+                },
                 isFlythroughDisabled: export.isMenuBusy || !export.canMakeFlythrough(for: currentRecord),
                 onMakeFlythrough: { export.queueDetailAction(.makeFlythrough) },
                 onAppear: { Task { await export.prewarmExportImageWhenMapReady(record: currentRecord) } }
             )
+        }
+        .sheet(isPresented: $showsRenameSheet) {
+            RecordRenameSheet(
+                draft: $renameDraft,
+                onSave: {
+                    store.renameRecord(id: record.id, title: renameDraft)
+                    showsRenameSheet = false
+                },
+                onCancel: { showsRenameSheet = false }
+            )
+        }
+        .alert("기록을 삭제할까요?", isPresented: $showsDeleteConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) {
+                store.delete(id: record.id)
+                dismiss()
+            }
+        } message: {
+            Text("삭제한 기록은 복구할 수 없습니다.")
         }
         .task(id: record.id) {
             await store.attachWeatherIfNeeded(for: record.id)

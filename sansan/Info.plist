@@ -49,23 +49,7 @@
 	<true/>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIBackgroundColor</key>
-		<dict>
-			<key>UIColorComponentAlpha</key>
-			<real>1</real>
-			<key>UIColorComponentBlue</key>
-			<real>1</real>
-			<key>UIColorComponentGreen</key>
-			<real>1</real>
-			<key>UIColorComponentRed</key>
-			<real>1</real>
-		</dict>
-		<key>UIImageName</key>
-		<string>LaunchScreenFull</string>
-		<key>UIImageRespectsSafeAreaInsets</key>
-		<false/>
-	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 </dict>
 </plist>

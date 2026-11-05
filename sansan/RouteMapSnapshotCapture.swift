@@ -77,6 +77,9 @@ enum RouteMapSnapshotCapture {
                 ) {
                     return visibleMap
                 }
+
+                // 화면에 있는 지도를 못 찍으면 두 번째 지도를 만들어 타일을 기다리지 않습니다.
+                return nil
             }
 
             if let swiftUIMap = await captureWithOffscreenSwiftUIMap(
@@ -276,8 +279,8 @@ enum RouteMapSnapshotCapture {
         else { return nil }
 
         window.layoutIfNeeded()
-        await waitForNextFrame()
-        await waitForNextFrame()
+        await prepareLiveMapForCapture(recordID: recordID)
+        defer { LiveRouteMapSnapshotRegistry.shared.chromeHiddenRecordID = nil }
 
         let cropRectInWindow = renderView.convert(renderView.bounds, to: window)
         guard cropRectInWindow.width > 1, cropRectInWindow.height > 1 else { return nil }
@@ -309,7 +312,8 @@ enum RouteMapSnapshotCapture {
         else { return nil }
 
         window.layoutIfNeeded()
-        await waitForNextFrame()
+        await prepareLiveMapForCapture(recordID: recordID)
+        defer { LiveRouteMapSnapshotRegistry.shared.chromeHiddenRecordID = nil }
 
         let cropRectInWindow = resolveVisibleCropRect(
             recordID: recordID,
@@ -536,6 +540,13 @@ enum RouteMapSnapshotCapture {
         try? await Task.sleep(for: .milliseconds(120))
     }
 
+    /// 안내 오버레이·로고·버튼이 빠진 현재 프레임을 찍기 위해 한 박자 기다립니다.
+    private static func prepareLiveMapForCapture(recordID: UUID) async {
+        LiveRouteMapSnapshotRegistry.shared.chromeHiddenRecordID = recordID
+        await waitForNextFrame()
+        await waitForNextFrame()
+    }
+
     private static func waitForNextFrame() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let target = DisplayLinkFrameWaiter {
@@ -577,7 +588,7 @@ enum RouteMapSnapshotCapture {
         captureFormat.opaque = true
         let captureRenderer = UIGraphicsImageRenderer(bounds: window.bounds, format: captureFormat)
         let windowImage = captureRenderer.image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
         }
 
         guard var cropped = cropImage(windowImage, to: cropRectInWindow) else { return nil }

@@ -13,6 +13,7 @@ struct GeneralSettingsView: View {
     @ObservedObject private var iCloudSync = ICloudRecordSync.shared
     @ObservedObject private var snapshotPreferences = HikingSnapshotPreferencesObserver.shared
     @ObservedObject private var shareExportPreferences = HikingShareExportPreferencesObserver.shared
+    @ObservedObject private var imageSaveStylePreferences = HikingRecordImageSaveStyleObserver.shared
     @ObservedObject private var mapDisplayPreferences = HikingMapDisplayPreferencesObserver.shared
     @ObservedObject private var heartRatePreferences = HeartRatePreferencesObserver.shared
     @ObservedObject private var flythroughPreferences = HikingFlythroughPreferencesObserver.shared
@@ -21,6 +22,7 @@ struct GeneralSettingsView: View {
     @ObservedObject private var recordStore = HikingRecordStore.shared
     @ObservedObject private var profilePhoto = UserProfilePhotoObserver.shared
     @State private var shareMapOptions = HikingShareExportPreferences.mapOptions
+    @State private var imageSaveStyle = HikingRecordImageSavePreferences.style
     @State private var showsSummitMarkers = HikingMapDisplayPreferences.showsSummitMarkers
     @State private var isHeartRateFeatureEnabled = HeartRatePreferences.isFeatureEnabled
     @State private var flythroughOrientation = HikingFlythroughPreferences.orientation
@@ -47,6 +49,9 @@ struct GeneralSettingsView: View {
             }
             .onChange(of: shareMapOptions) { _, newOptions in
                 shareExportPreferences.setMapOptions(newOptions)
+            }
+            .onChange(of: imageSaveStyle) { _, style in
+                imageSaveStylePreferences.setStyle(style)
             }
             .onChange(of: showsSummitMarkers) { _, isOn in
                 mapDisplayPreferences.setShowsSummitMarkers(isOn)
@@ -162,7 +167,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("건강")
             } footer: {
-                Text("켜면 메인 화면에 심박수 카드가 표시됩니다. Apple Watch 착용 시 건강 앱 데이터를 기록합니다.")
+                Text("켜면 메인 화면에 심박수 카드가 표시되고, Apple Watch를 착용한 기록에서 심박을 저장합니다.")
             }
 
             Section {
@@ -188,13 +193,28 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Picker("이미지 저장 방식", selection: $imageSaveStyle) {
+                    ForEach(HikingRecordImageSaveStyle.allCases) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("이미지 저장 방식")
+            } footer: {
+                Text(imageSaveStyle.footer)
+            }
+
+            Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
+                Toggle("시간 표시", isOn: $shareMapOptions.showsTimeMarkers)
+                Toggle("날씨 표시", isOn: $shareMapOptions.showsWeatherLabel)
                 Toggle("사진 위치 표시", isOn: $shareMapOptions.showsPhotoMarkers)
                 Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
             } header: {
                 Text("저장 · 공유 지도")
             } footer: {
-                Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 단위 거리 라벨입니다.")
+                Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 거리 라벨, 시간 표시는 그 지점까지 걸린 시간, 날씨 표시는 기록 상세 지도와 저장 이미지의 날씨 라벨입니다.")
             }
 
             if FlythroughCapabilities.isFeatureEnabled {
@@ -350,7 +370,9 @@ struct GeneralSettingsView: View {
         flythroughPreferences.syncFromStorage()
         themePreferences.syncFromStorage()
         bodyMetrics.syncFromStorage()
+        imageSaveStylePreferences.syncFromStorage()
         shareMapOptions = shareExportPreferences.mapOptions
+        imageSaveStyle = imageSaveStylePreferences.style
         showsSummitMarkers = mapDisplayPreferences.showsSummitMarkers
         isHeartRateFeatureEnabled = heartRatePreferences.isFeatureEnabled
         flythroughOrientation = flythroughPreferences.orientation

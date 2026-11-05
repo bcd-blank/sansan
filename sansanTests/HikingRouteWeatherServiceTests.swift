@@ -160,4 +160,34 @@ final class HikingRouteWeatherServiceTests: XCTestCase {
             ["구름 조금", "구름 조금", "소나기"]
         )
     }
+
+    func testTimelineFittingLeavesShortHikesUntouched() {
+        let start = Date(timeIntervalSince1970: 1_776_240_000)
+        let points = [
+            HikingWeatherHourPoint(date: start, wmoCode: 0, temperatureCelsius: 15),
+            HikingWeatherHourPoint(date: start.addingTimeInterval(hour), wmoCode: 0, temperatureCelsius: 17),
+        ]
+
+        let fitted = HikingRouteWeatherSnapshot.timelineFitting(points, maximumCount: 8)
+
+        XCTAssertEqual(fitted.map(\.temperatureCelsius), [15, 17])
+    }
+
+    func testTimelineFittingKeepsEndsAndAConditionChange() {
+        let start = Date(timeIntervalSince1970: 1_776_240_000)
+        let points = (0..<12).map { index in
+            HikingWeatherHourPoint(
+                date: start.addingTimeInterval(hour * Double(index)),
+                wmoCode: index == 6 ? 80 : 0,
+                temperatureCelsius: 15 + Double(index)
+            )
+        }
+
+        let fitted = HikingRouteWeatherSnapshot.timelineFitting(points, maximumCount: 5)
+
+        XCTAssertLessThanOrEqual(fitted.count, 5)
+        XCTAssertEqual(fitted.first?.temperatureCelsius, 15)
+        XCTAssertEqual(fitted.last?.temperatureCelsius, 26)
+        XCTAssertTrue(fitted.contains { $0.wmoCode == 80 })
+    }
 }

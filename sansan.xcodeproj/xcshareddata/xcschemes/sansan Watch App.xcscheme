@@ -46,7 +46,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "822233182FCFC9A500BAFBA6"
             BuildableName = "sansan Watch App.app"
-            BlueprintName = "sansan Watch App"
             ReferencedContainer = "container:sansan.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -63,7 +62,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "822233182FCFC9A500BAFBA6"
             BuildableName = "sansan Watch App.app"
-            BlueprintName = "sansan Watch App"
             ReferencedContainer = "container:sansan.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

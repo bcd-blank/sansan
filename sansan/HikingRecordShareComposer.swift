@@ -91,6 +91,8 @@ struct HikingRecordShareCardView: View {
     let record: SavedHikingSession
     let routeImage: UIImage
     var format: HikingRecordShareExportFormat = .contentSized
+    /// 경로 지도 캡처에 산산 로고가 이미 있으면 카드에서 다시 그리지 않습니다.
+    var preservesCapturedLogo: Bool = false
 
     static let legacyExportWidth: CGFloat = 1080
     static let nineBySixteenHeight: CGFloat = 1920
@@ -145,7 +147,7 @@ struct HikingRecordShareCardView: View {
     }
 
     private var showsBrandLogo: Bool {
-        HikingSnapshotPreferences.style.showsBrandLogo
+        HikingSnapshotPreferences.style.showsBrandLogo && !preservesCapturedLogo
     }
 
     private var showsLegalAttribution: Bool {
@@ -166,14 +168,11 @@ struct HikingRecordShareCardView: View {
             compact: true,
             showsProfileAvatar: true
         )
-        let weatherCard: CGFloat = record.weather == nil
-            ? 0
-            : gap + HikingRecordCardLayout.estimatedWeatherCardHeight(scale: layoutScale)
         let summary = HikingRecordCardLayout.estimatedSummaryHeight(scale: layoutScale)
         let buffer = HikingRecordCardLayout.exportContentHeightBuffer.recordScaled(screenScale)
         return brandTitleBlockHeight
+            + gap
             + titleHeader
-            + weatherCard
             + gap
             + mapHeight
             + gap
@@ -200,16 +199,9 @@ struct HikingRecordShareCardView: View {
 
     private var cardContent: some View {
         VStack(spacing: HikingRecordCardLayout.detailSectionSpacing.recordScaled(screenScale)) {
-            VStack(alignment: .leading, spacing: 0) {
-                shareBrandTitle
-                HikingRecordTitleCard(record: record, layoutScale: layoutScale, compact: true, showsProfileAvatar: true)
-                    .frame(width: contentWidth, alignment: .leading)
-            }
-
-            if let weather = record.weather {
-                HikingRecordWeatherCard(weather: weather, layoutScale: layoutScale)
-                    .frame(width: contentWidth, alignment: .leading)
-            }
+            shareBrandTitle
+            HikingRecordTitleCard(record: record, layoutScale: layoutScale, compact: true, showsProfileAvatar: true)
+                .frame(width: contentWidth, alignment: .leading)
 
             shareMapSection
 
@@ -243,6 +235,12 @@ struct HikingRecordShareCardView: View {
                 .frame(width: contentWidth, height: mapHeight)
         }
         .frame(width: contentWidth, height: mapHeight)
+        .overlay(alignment: HikingMapDisplayPreferences.weatherLabelOnLeading ? .topLeading : .topTrailing) {
+            if HikingShareExportPreferences.mapOptions.showsWeatherLabel, let weather = record.weather {
+                HikingRecordMapWeatherOverlay(weather: weather, layoutScale: layoutScale)
+                    .padding(10 * layoutScale)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: mapCornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: mapCornerRadius, style: .continuous)
@@ -257,12 +255,14 @@ enum HikingRecordShareComposer {
     static func render(
         record: SavedHikingSession,
         routeImage: UIImage,
-        format: HikingRecordShareExportFormat = .contentSized
+        format: HikingRecordShareExportFormat = .contentSized,
+        preservesCapturedLogo: Bool = false
     ) -> UIImage? {
         let card = HikingRecordShareCardView(
             record: record,
             routeImage: routeImage,
-            format: format
+            format: format,
+            preservesCapturedLogo: preservesCapturedLogo
         )
 
         guard let image = renderCardBitmap(card) else {
@@ -282,6 +282,15 @@ enum HikingRecordShareComposer {
         let calculatedHeight = card.exportContentHeight
         let pixelScale = card.exportPixelScale
 
+        if let image = renderWithImageRenderer(
+            card: card,
+            width: width,
+            height: calculatedHeight,
+            pixelScale: pixelScale
+        ) {
+            return image
+        }
+
         if let window = HikingRecordShareDeviceMetrics.foregroundWindow {
             if let image = renderWithHostingController(
                 card: card,
@@ -294,12 +303,7 @@ enum HikingRecordShareComposer {
             }
         }
 
-        return renderWithImageRenderer(
-            card: card,
-            width: width,
-            height: calculatedHeight,
-            pixelScale: pixelScale
-        )
+        return nil
     }
 
     private static func renderWithHostingController(
@@ -322,32 +326,40 @@ enum HikingRecordShareComposer {
         hosting.view.insetsLayoutMarginsFromSafeArea = false
 
         let container = ShareExportSafeAreaIgnoringView()
-        let offscreen = CGPoint(x: -(width + 64), y: -(height + 64))
-        container.frame = CGRect(origin: offscreen, size: CGSize(width: width, height: 1))
+        let renderSize = CGSize(width: width, height: 1)
+        container.frame = CGRect(origin: .zero, size: renderSize)
         hosting.view.frame = container.bounds
         hosting.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         container.addSubview(hosting.view)
-        window.addSubview(container)
-        window.layoutIfNeeded()
+
+        guard let scene = window.windowScene else { return nil }
+        let exportWindow = UIWindow(windowScene: scene)
+        exportWindow.frame = CGRect(x: window.bounds.width + 64, y: 0, width: width, height: 1)
+        exportWindow.windowLevel = window.windowLevel - 1
+        exportWindow.isHidden = false
+        exportWindow.addSubview(container)
+        exportWindow.layoutIfNeeded()
 
         let fitted = hosting.sizeThatFits(
             in: CGSize(width: width, height: UIView.layoutFittingExpandedSize.height)
         )
         let renderHeight = max(height, ceil(fitted.height) - window.safeAreaInsets.top)
-        container.frame = CGRect(origin: offscreen, size: CGSize(width: width, height: renderHeight))
-        window.layoutIfNeeded()
+        let fittedSize = CGSize(width: width, height: renderHeight)
+        exportWindow.frame.size = fittedSize
+        container.frame = CGRect(origin: .zero, size: fittedSize)
+        exportWindow.layoutIfNeeded()
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = pixelScale
         format.opaque = true
-        let renderSize = CGSize(width: width, height: renderHeight)
-        let renderer = UIGraphicsImageRenderer(size: renderSize, format: format)
+        let renderer = UIGraphicsImageRenderer(size: fittedSize, format: format)
         let image = renderer.image { _ in
             hosting.view.drawHierarchy(
-                in: CGRect(origin: .zero, size: renderSize),
+                in: CGRect(origin: .zero, size: fittedSize),
                 afterScreenUpdates: true
             )
         }
+        exportWindow.isHidden = true
         container.removeFromSuperview()
         return image
     }

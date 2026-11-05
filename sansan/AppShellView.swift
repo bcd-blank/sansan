@@ -91,11 +91,15 @@ struct AppShellView: View {
     @MainActor
     private func configureDataLayer(awaitICloudPull: Bool) async {
         _ = HikingRecordStore.shared
-        HikingRecordStore.shareImageRenderer = { record, routeImage, fullScreen in
+        HikingRecordStore.summaryImageRenderer = { record, mapOptions in
+            await HikingRecordSummaryShareComposer.render(record: record, mapOptions: mapOptions)
+        }
+        HikingRecordStore.shareImageRenderer = { record, routeImage, fullScreen, preservesCapturedLogo in
             HikingRecordShareComposer.render(
                 record: record,
                 routeImage: routeImage,
-                format: fullScreen ? .fullScreen : .contentSized
+                format: fullScreen ? .fullScreen : .contentSized,
+                preservesCapturedLogo: preservesCapturedLogo
             )
         }
         HikingRecordStore.detailShareMapCanvasProvider = {

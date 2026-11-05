@@ -487,28 +487,46 @@ private struct DashboardLiveSessionPane: View {
     }
 
     private var statsGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatCard(
-                title: "소요 시간",
-                value: formattedElapsedTime,
-                unit: "",
-                icon: "clock.fill",
-                tint: .blue
-            )
-            StatCard(
-                title: "이동 거리",
-                value: formattedDistance,
-                unit: "km",
-                icon: "figure.hiking",
-                tint: .green
-            )
-            StatCard(
-                title: "고도 변화",
-                value: dashboardElevationGain,
-                unit: "m↑",
-                icon: "mountain.2.fill",
-                tint: .orange
-            )
+        VStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                StatCard(
+                    title: "소요 시간",
+                    value: formattedElapsedTime,
+                    unit: "",
+                    icon: "clock.fill",
+                    tint: .blue
+                )
+                StatCard(
+                    title: "이동 거리",
+                    value: formattedDistance,
+                    unit: "km",
+                    icon: "figure.hiking",
+                    tint: .green
+                )
+                StatCard(
+                    title: "상승 고도",
+                    value: dashboardElevationGain,
+                    unit: "m↑",
+                    icon: "mountain.2.fill",
+                    tint: .orange
+                )
+            }
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                StatCard(
+                    title: "걸음수",
+                    value: formattedStepCount,
+                    unit: "걸음",
+                    icon: "shoeprints.fill",
+                    tint: .pink
+                )
+                StatCard(
+                    title: "칼로리",
+                    value: formattedCalories,
+                    unit: "kcal",
+                    icon: "flame.fill",
+                    tint: .red
+                )
+            }
         }
     }
 
@@ -525,6 +543,16 @@ private struct DashboardLiveSessionPane: View {
 
     private var formattedDistance: String {
         String(format: "%.2f", workout.sessionData.totalDistance / 1_000)
+    }
+
+    private var formattedStepCount: String {
+        let steps = workout.sessionData.stepCount ?? 0
+        return NumberFormatter.localizedString(from: NSNumber(value: steps), number: .decimal)
+    }
+
+    private var formattedCalories: String {
+        let kilocalories = Int((workout.sessionData.activeEnergyKilocalories ?? 0).rounded())
+        return NumberFormatter.localizedString(from: NSNumber(value: kilocalories), number: .decimal)
     }
 
     private func rebuildRouteCache() {

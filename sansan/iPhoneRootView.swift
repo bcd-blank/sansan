@@ -249,6 +249,7 @@ struct iPhoneRootView: View {
             iPhoneBottomChrome(
                 selection: selectedTabBinding,
                 sessionState: chrome.sessionState,
+                isStartCountdownActive: chrome.startCountdownRemaining != nil,
                 capsuleHeight: chromeCapsuleHeight,
                 onStartWorkout: handleStartWorkoutTap,
                 onShowCamera: { showCamera = true },
@@ -307,6 +308,7 @@ private struct iPhoneBottomChromeGradientBackdrop: View {
 private struct iPhoneBottomChrome: View {
     @Binding var selection: iPhoneMainTab
     var sessionState: HikingSessionState
+    var isStartCountdownActive: Bool
     var capsuleHeight: CGFloat
     var onStartWorkout: () -> Void
     var onShowCamera: () -> Void
@@ -363,20 +365,30 @@ private struct iPhoneBottomChrome: View {
     }
 
     private var startButton: some View {
-        Button(action: onStartWorkout) {
+        let title = isStartCountdownActive ? "기록 준비중" : "기록 시작"
+        return Button(action: onStartWorkout) {
             HStack(spacing: 8) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 15, weight: .bold))
+                if isStartCountdownActive {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                        .frame(width: 15, height: 15)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(width: 15, height: 15)
+                }
 
-                Text("기록 시작")
+                Text(title)
                     .font(.system(size: 15, weight: .semibold))
             }
             .padding(.horizontal, 12)
             .frame(height: controlHeight)
         }
         .buttonStyle(.glassProminent)
-        .tint(.green)
+        .tint(isStartCountdownActive ? .orange : .green)
         .buttonBorderShape(.capsule)
+        .allowsHitTesting(!isStartCountdownActive)
         .background {
             GeometryReader { proxy in
                 Color.clear.preference(
@@ -385,7 +397,7 @@ private struct iPhoneBottomChrome: View {
                 )
             }
         }
-        .accessibilityLabel("기록 시작")
+        .accessibilityLabel(title)
     }
 
     private var photoButton: some View {

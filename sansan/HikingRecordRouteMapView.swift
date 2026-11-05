@@ -19,18 +19,23 @@ struct HikingRecordRouteMapView: View {
     @ObservedObject private var store = HikingRecordStore.shared
     @ObservedObject private var snapshotPreferences = HikingSnapshotPreferencesObserver.shared
     @ObservedObject private var mapDisplayPreferences = HikingMapDisplayPreferencesObserver.shared
+    @ObservedObject private var shareExportPreferences = HikingShareExportPreferencesObserver.shared
+    @ObservedObject private var snapshotRegistry = LiveRouteMapSnapshotRegistry.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var photoGallery: TrailPhotoGalleryPresentation?
     /// 기록 상세 지도 전용 — 저장·공유 이미지 설정(`HikingShareExportPreferences`)과 별개.
     @State private var showsDistanceMarkers = true
+    @State private var showsTimeMarkers = true
     @State private var showsPhotoMarkers = true
+    @State private var kilometerArrivalLabels: [Int: String] = [:]
     @State private var mapResetTrigger = 0
     @State private var cardGlobalFrame: CGRect = .zero
     @State private var mapContentGlobalFrame: CGRect = .zero
     @State private var isLiveRegistryActive = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var kilometerMarkerPlacements: [RouteKilometerMarkerPlacement] = []
+    @State private var kilometerLabelShifts: [Int: RouteKilometerLabelShift] = [:]
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
 
@@ -39,6 +44,11 @@ struct HikingRecordRouteMapView: View {
     }
 
     private var hasTrailPhotos: Bool { !(record?.session.photos.isEmpty ?? true) }
+
+    /// 저장 캡처에는 화면의 산산 로고를 그대로 둡니다. 버튼·날씨만 잠시 숨깁니다.
+    private var hidesCaptureChrome: Bool {
+        snapshotRegistry.chromeHiddenRecordID == recordID
+    }
 
     private var fittingRegion: MKCoordinateRegion {
         HikingMapRegion.fitting(
@@ -68,7 +78,7 @@ struct HikingRecordRouteMapView: View {
         }
         .frame(width: mapWidth, height: mapHeight)
         .overlay(alignment: .top) {
-            if let record, !record.mapPinnedPhotos.isEmpty {
+            if !hidesCaptureChrome, let record, !record.mapPinnedPhotos.isEmpty {
                 MapPinnedThumbnailsTopBar(
                     recordID: recordID,
                     photos: record.mapPinnedPhotos,
@@ -78,8 +88,20 @@ struct HikingRecordRouteMapView: View {
                 .padding(.horizontal, 10)
             }
         }
+        .overlay(
+            alignment: mapDisplayPreferences.weatherLabelOnLeading ? .topLeading : .topTrailing
+        ) {
+            if !hidesCaptureChrome, shareExportPreferences.mapOptions.showsWeatherLabel, let weather = record?.weather {
+                MapWeatherEdgeSnapOverlay(
+                    weather: weather,
+                    mapWidth: mapWidth,
+                    onLeading: mapDisplayPreferences.weatherLabelOnLeading,
+                    onSnap: { mapDisplayPreferences.setWeatherLabelOnLeading($0) }
+                )
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
-            if routeCoordinates.count >= 2 {
+            if !hidesCaptureChrome, routeCoordinates.count >= 2 {
                 mapControlButtons
             }
         }
@@ -174,12 +196,22 @@ struct HikingRecordRouteMapView: View {
             }
             .mapStyle(.standard(elevation: .flat))
             .onMapCameraChange(frequency: .onEnd) { context in
+                updateKilometerLabelShifts(proxy: proxy)
                 guard isLiveRegistryActive else { return }
                 LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
                     recordID: recordID,
                     region: context.region,
                     visibleMapRect: liveVisibleMapRect(proxy: proxy) ?? context.rect
                 )
+            }
+            .onChange(of: kilometerMarkerPlacements) { _, _ in
+                updateKilometerLabelShifts(proxy: proxy)
+            }
+            .onChange(of: showsDistanceMarkers) { _, _ in
+                updateKilometerLabelShifts(proxy: proxy)
+            }
+            .onChange(of: showsTimeMarkers) { _, _ in
+                updateKilometerLabelShifts(proxy: proxy)
             }
             .background {
                 RouteMapVisibleRenderRegistrar(recordID: recordID)
@@ -194,6 +226,7 @@ struct HikingRecordRouteMapView: View {
                 }
             }
             .onAppear {
+                updateKilometerLabelShifts(proxy: proxy)
                 // 저장 시점에 화면 지도가 실제로 보여주는 영역을 그대로 가져와 클론에 적용합니다.
                 // (onMapCameraChange가 초기 프로그램적 카메라에서 안 뜨는 경우 대비)
                 LiveRouteMapSnapshotRegistry.shared.registerVisibleRectProvider(recordID: recordID) {
@@ -223,6 +256,43 @@ struct HikingRecordRouteMapView: View {
         return rect.isNull ? nil : rect
     }
 
+    /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
+    private func updateKilometerLabelShifts(proxy: MapProxy) {
+        guard mapWidth > 1, mapHeight > 1,
+              let start = routeCoordinates.first,
+              let startPoint = proxy.convert(start, to: .local) else { return }
+        var endpoints = [startPoint]
+        if routeCoordinates.count > 1,
+           let end = routeCoordinates.last,
+           let endPoint = proxy.convert(end, to: .local) {
+            endpoints.append(endPoint)
+        }
+        var requests: [RouteKilometerLabelRequest] = []
+        for marker in kilometerMarkerPlacements {
+            let distance = showsDistanceMarkers ? marker.labelText : nil
+            let time = showsTimeMarkers ? kilometerArrivalLabels[marker.kilometer] : nil
+            guard distance != nil || time != nil else { continue }
+            guard let routePoint = proxy.convert(marker.coordinate, to: .local) else { continue }
+            requests.append(
+                RouteKilometerLabelRequest(
+                    kilometer: marker.kilometer,
+                    distanceLabel: distance,
+                    timeLabel: time,
+                    routePoint: routePoint,
+                    preferredLeadingSide: marker.placesLabelOnLeadingSide
+                )
+            )
+        }
+        let shifts = RouteKilometerMarkerDrawing.labelShifts(
+            for: requests,
+            endpointPoints: endpoints,
+            contentScale: 1
+        )
+        if shifts != kilometerLabelShifts {
+            kilometerLabelShifts = shifts
+        }
+    }
+
     @MapContentBuilder
     private var routeMapContent: some MapContent {
         MapPolyline(coordinates: routeCoordinates)
@@ -233,26 +303,36 @@ struct HikingRecordRouteMapView: View {
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
-                RouteEndpointMarker(fill: Color(red: 0.12, green: 0.72, blue: 0.45))
+                RouteEndpointMarker(fill: RoutePointColors.start)
+                    .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.endpoint) }
             }
         }
 
         if let end = routeCoordinates.last, routeCoordinates.count > 1 {
             Annotation("", coordinate: end) {
-                RouteEndpointMarker(fill: Color(red: 0.11, green: 0.11, blue: 0.12))
+                RouteEndpointMarker(fill: RoutePointColors.end)
+                    .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.endpoint) }
             }
         }
     }
 
     @MapContentBuilder
     private var distanceMarkerMapContent: some MapContent {
-        if showsDistanceMarkers {
+        if showsDistanceMarkers || showsTimeMarkers {
             ForEach(kilometerMarkerPlacements) { marker in
-                Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                    RouteKilometerHorizontalMarker(
-                        text: marker.labelText,
-                        placesLabelOnLeadingSide: marker.placesLabelOnLeadingSide
-                    )
+                let distanceText = showsDistanceMarkers ? marker.labelText : nil
+                let timeText = showsTimeMarkers ? kilometerArrivalLabels[marker.kilometer] : nil
+                if distanceText != nil || timeText != nil {
+                    Annotation("", coordinate: marker.coordinate, anchor: .center) {
+                        let shift = kilometerLabelShifts[marker.kilometer]
+                        RouteKilometerHorizontalMarker(
+                            distanceText: distanceText,
+                            timeText: timeText,
+                            placesLabelOnLeadingSide: shift?.placesLabelOnLeadingSide ?? marker.placesLabelOnLeadingSide,
+                            verticalOffset: shift?.verticalOffset ?? 0
+                        )
+                        .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }
+                    }
                 }
             }
         }
@@ -268,6 +348,7 @@ struct HikingRecordRouteMapView: View {
         ForEach(segmentBreakPlacements) { placement in
             Annotation("", coordinate: placement.coordinate, anchor: .center) {
                 SegmentBreakMarkerView(kind: placement.kind)
+                    .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.routePoint) }
             }
         }
     }
@@ -322,6 +403,16 @@ struct HikingRecordRouteMapView: View {
                     : "거리 라벨 표시"
             ) {
                 showsDistanceMarkers.toggle()
+            }
+
+            MapFloatingControlButton(
+                systemImage: "clock",
+                isActive: showsTimeMarkers,
+                accessibilityLabel: showsTimeMarkers
+                    ? "시간 라벨 가리기"
+                    : "시간 라벨 표시"
+            ) {
+                showsTimeMarkers.toggle()
             }
 
             if hasTrailPhotos {
@@ -392,6 +483,7 @@ struct HikingRecordRouteMapView: View {
             isRouteDisplayReady = false
             routeCoordinates = []
             kilometerMarkerPlacements = []
+            kilometerArrivalLabels = [:]
             nearbySummits = []
             return
         }
@@ -410,6 +502,7 @@ struct HikingRecordRouteMapView: View {
 
         routeCoordinates = displayData.coordinates
         kilometerMarkerPlacements = displayData.kilometerMarkers
+        kilometerArrivalLabels = arrivalLabels(for: record)
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
         fitRouteInView(animated: false)
@@ -424,11 +517,20 @@ struct HikingRecordRouteMapView: View {
 
         routeCoordinates = storedCoordinates.map(\.coordinate)
         kilometerMarkerPlacements = record.session.kilometerMarkers ?? []
+        kilometerArrivalLabels = arrivalLabels(for: record)
         nearbySummits = mapDisplayPreferences.showsSummitMarkers
             ? (record.session.nearbySummits ?? [])
             : []
         isRouteDisplayReady = true
         return true
+    }
+
+    private func arrivalLabels(for record: SavedHikingSession) -> [Int: String] {
+        HikingSessionMetrics.kilometerArrivalElapsedLabels(
+            from: record.session.points,
+            startedAt: record.session.effectiveStartedAt,
+            segmentBreaks: record.session.segmentBreaks
+        )
     }
 
     private func fitRouteInView(animated: Bool) {
@@ -577,6 +679,99 @@ private struct GlassLabeledIconButton: View {
     }
 }
 
+/// 날씨 라벨을 가로로 끌면 상단 왼쪽 또는 오른쪽 모서리에 붙습니다.
+/// 놓인 위치는 지도 카드의 leading/trailing 정렬이라, 너비 계산이 어긋나도 카드 밖에 나가지 않습니다.
+private struct MapWeatherEdgeSnapOverlay: View {
+    let weather: HikingRouteWeatherSnapshot
+    let mapWidth: CGFloat
+    let onLeading: Bool
+    let onSnap: (Bool) -> Void
+
+    @State private var labelWidth: CGFloat = 0
+    @State private var dragX: CGFloat = 0
+    @State private var dragging = false
+    @State private var gestureID = 0
+
+    private let inset: CGFloat = 10
+    private let snapThreshold: CGFloat = 28
+    private var snapSpring: Animation {
+        .spring(response: 0.32, dampingFraction: 0.86)
+    }
+
+    /// 왼쪽 모서리에서 오른쪽 모서리까지 라벨이 이동하는 거리.
+    private var maxTravel: CGFloat {
+        guard labelWidth > 1, mapWidth > labelWidth + inset * 2 else { return 0 }
+        return mapWidth - labelWidth - inset * 2
+    }
+
+    var body: some View {
+        HikingRecordMapWeatherOverlay(weather: weather, layoutScale: 0.8)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { newWidth in
+                guard newWidth > 1, abs(newWidth - labelWidth) > 0.5 else { return }
+                labelWidth = newWidth
+            }
+            .padding(.top, inset)
+            .padding(.leading, onLeading ? inset : 0)
+            .padding(.trailing, onLeading ? 0 : inset)
+            .offset(x: dragX)
+            .highPriorityGesture(drag)
+            .accessibilityHint("좌우로 드래그하면 위쪽 모서리로 이동합니다")
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .onChanged { value in
+                if !dragging {
+                    dragging = true
+                    gestureID += 1
+                }
+                dragX = clampedDrag(value.translation.width)
+            }
+            .onEnded { value in
+                let id = gestureID
+                dragging = false
+                let translation = value.translation.width
+                let nextLeading: Bool
+                if translation <= -snapThreshold {
+                    nextLeading = true
+                } else if translation >= snapThreshold {
+                    nextLeading = false
+                } else {
+                    nextLeading = onLeading
+                }
+                let travel = maxTravel
+                guard nextLeading != onLeading, travel > 0 else {
+                    withAnimation(snapSpring) { dragX = 0 }
+                    if nextLeading != onLeading { onSnap(nextLeading) }
+                    return
+                }
+                let target: CGFloat = onLeading ? travel : -travel
+                withAnimation(snapSpring) {
+                    dragX = target
+                } completion: {
+                    guard gestureID == id else { return }
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        dragX = 0
+                        onSnap(nextLeading)
+                    }
+                }
+            }
+    }
+
+    private func clampedDrag(_ translation: CGFloat) -> CGFloat {
+        let travel = maxTravel
+        guard travel > 0 else { return 0 }
+        if onLeading {
+            return min(max(translation, 0), travel)
+        }
+        return min(max(translation, -travel), 0)
+    }
+}
+
 private struct MapFloatingControlButton: View {
     let systemImage: String
     var isActive: Bool = true
@@ -689,8 +884,8 @@ private enum SegmentBreakMarkerBuilder {
 private struct SegmentBreakMarkerView: View {
     let kind: SegmentBreakKind
 
-    private static let pauseColor = Color.orange
-    private static let resumeColor = Color(red: 0.12, green: 0.72, blue: 0.45)
+    private static let pauseColor = RoutePointColors.pause
+    private static let resumeColor = RoutePointColors.start
 
     private let outerDiameter: CGFloat = 19
     private let innerDiameter: CGFloat = 14

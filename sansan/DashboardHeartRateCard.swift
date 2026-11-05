@@ -12,12 +12,21 @@ import SwiftUI
 
 struct DashboardHeartRateCard: View {
     @ObservedObject private var workout = WorkoutManager.shared
-    @ObservedObject private var heartRatePreferences = HeartRatePreferencesObserver.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            headerRow
-            content
+        ZStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                headerRow
+                chartContent
+            }
+            if chartPoints.count < 2 {
+                DashboardChartEmptyPlaceholder(
+                    systemImage: "heart.fill",
+                    title: emptyTitle,
+                    description: emptyDescription,
+                    descriptionLineReserve: 2
+                )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
@@ -29,84 +38,61 @@ struct DashboardHeartRateCard: View {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 10) {
-            Label("심박수", systemImage: "heart.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.pink)
+        DashboardChartCardHeader(
+            title: "심박수",
+            systemImage: "heart.fill",
+            tint: .pink,
+            trailing: trailingText,
+            trailingColor: workout.sessionData.currentHeartRate == nil ? .secondary : .pink
+        )
+    }
 
-            Spacer()
-
-            if heartRatePreferences.isMonitoringEnabled {
-                if let current = workout.sessionData.currentHeartRate {
-                    Text("\(Int(current.rounded())) bpm")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.pink)
-                } else if let average = workout.sessionData.averageHeartRate {
-                    Text("평균 \(Int(average.rounded()))")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            HStack(spacing: 6) {
-                Text("측정")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Toggle("", isOn: monitoringBinding)
-                    .labelsHidden()
-            }
+    private var trailingText: String? {
+        if let current = workout.sessionData.currentHeartRate {
+            return "\(Int(current.rounded())) bpm"
         }
+        if let average = workout.sessionData.averageHeartRate {
+            return "평균 \(Int(average.rounded()))"
+        }
+        return nil
     }
 
     @ViewBuilder
-    private var content: some View {
-        if heartRatePreferences.isMonitoringEnabled {
-            if chartPoints.count >= 2 {
-                Chart(chartPoints) { point in
-                    LineMark(
-                        x: .value("시간", point.elapsedMinutes),
-                        y: .value("심박", point.bpm)
-                    )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.pink.gradient)
+    private var chartContent: some View {
+        if chartPoints.count >= 2 {
+            Chart(chartPoints) { point in
+                LineMark(
+                    x: .value("시간", point.elapsedMinutes),
+                    y: .value("심박", point.bpm)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(.pink.gradient)
 
-                    AreaMark(
-                        x: .value("시간", point.elapsedMinutes),
-                        y: .value("심박", point.bpm)
-                    )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.pink.opacity(0.16))
-                }
-                .chartXAxis(.hidden)
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let bpm = value.as(Double.self) {
-                                Text("\(Int(bpm))")
-                                    .font(.caption2)
-                            }
+                AreaMark(
+                    x: .value("시간", point.elapsedMinutes),
+                    y: .value("심박", point.bpm)
+                )
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(.pink.opacity(0.16))
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let bpm = value.as(Double.self) {
+                            Text("\(Int(bpm))")
+                                .font(.caption2)
                         }
                     }
                 }
-                .chartPlotStyle { plot in
-                    plot.padding(.bottom, 6)
-                }
-                .frame(height: 120)
-            } else {
-                ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: "heart.text.square",
-                    description: Text(emptyDescription)
-                )
-                .frame(height: 120)
             }
+            .chartPlotStyle { plot in
+                plot.padding(.bottom, 6)
+            }
+            .frame(height: 120)
         } else {
-            Text("측정을 켜면 Apple Watch에서 실시간 심박을 기록합니다.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: 72, alignment: .topLeading)
+            Color.clear.frame(height: 120)
         }
     }
 
@@ -119,17 +105,6 @@ struct DashboardHeartRateCard: View {
                 bpm: sample.bpm
             )
         }
-    }
-
-    private var monitoringBinding: Binding<Bool> {
-        Binding(
-            get: { heartRatePreferences.isMonitoringEnabled },
-            set: { isOn in
-                Task {
-                    await workout.setHeartRateMonitoringEnabled(isOn)
-                }
-            }
-        )
     }
 
     private var emptyTitle: String {

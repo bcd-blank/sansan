@@ -22,12 +22,13 @@ struct RouteBrandLogoOverlay: View {
         GeometryReader { geometry in
             let layout = RouteBrandLogoMetrics.layout(forCanvasWidth: geometry.size.width)
             let layoutScale = geometry.size.width / RouteBrandLogoMetrics.referenceCanvasWidth
-            let logoSide = layout.side * sizeScale
+            let logoWidth = layout.side * sizeScale
+            let logoHeight = logoWidth / RouteBrandLogoMetrics.artworkAspect
 
             Image("SansanLogoSymbol")
                 .resizable()
-                .scaledToFit()
-                .frame(width: logoSide, height: logoSide)
+                .aspectRatio(RouteBrandLogoMetrics.artworkAspect, contentMode: .fit)
+                .frame(width: logoWidth, height: logoHeight)
                 .shadow(
                     color: .black.opacity(0.18),
                     radius: 8 * layoutScale,

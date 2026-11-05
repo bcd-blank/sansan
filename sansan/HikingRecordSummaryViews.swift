@@ -47,28 +47,9 @@ enum HikingRecordCardLayout {
     static let detailTitleProfileAvatarScale: CGFloat = 0.88
     static let exportTitleMetaLeadingInset: CGFloat = exportTitleIconBox + exportTitleIconSpacing
     static let detailTitleMetaLeadingInset: CGFloat = detailTitleIconBox + exportTitleIconSpacing
-    static let exportTitleWeatherIconSize: CGFloat = 20
-    static let exportTitleWeatherTempSize: CGFloat = 13
-    static let exportTitleWeatherLabelSize: CGFloat = 10
-    static let exportTitleWeatherSpacing: CGFloat = 4
-    static let exportTitleWeatherInlineSpacing: CGFloat = 5
     static let weatherTimelineIconSize: CGFloat = 20
-    static let weatherTimelineTempSize: CGFloat = 13
-    static let weatherTimelineStackSpacing: CGFloat = 4
-    static let weatherOnFill = Color.white
-
-    static func weatherCardFill(for colorScheme: ColorScheme) -> LinearGradient {
-        let top: Color
-        let bottom: Color
-        if colorScheme == .dark {
-            top = Color(red: 0.28, green: 0.50, blue: 0.30)
-            bottom = Color(red: 0.16, green: 0.36, blue: 0.20)
-        } else {
-            top = Color(red: 0.36, green: 0.62, blue: 0.32)
-            bottom = Color(red: 0.22, green: 0.46, blue: 0.24)
-        }
-        return LinearGradient(colors: [top, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
+    static let weatherTimelineTempSize: CGFloat = 12
+    static let weatherTimelineStackSpacing: CGFloat = 3
 
     static var weatherTimelineHeight: CGFloat {
         weatherTimelineIconSize
@@ -143,13 +124,6 @@ enum HikingRecordCardLayout {
             }
         }
         return padding + leftBlock
-    }
-
-    static func estimatedWeatherCardHeight(scale: CGFloat) -> CGFloat {
-        let pad = cardPadding * 2 * scale
-        let header = compactIconBox * scale
-        let spacing = cardRowSpacing * scale
-        return pad + header + spacing + weatherTimelineHeight * scale
     }
 
     /// 요약 섹션의 메트릭 카드 행 개수 (`HikingRecordSummarySection`과 동기화).
@@ -496,140 +470,157 @@ private struct TitleCardAccessibilityModifier: ViewModifier {
     }
 }
 
-struct HikingRecordWeatherCard: View {
+struct HikingRecordMapWeatherOverlay: View {
     let weather: HikingRouteWeatherSnapshot
     var layoutScale: CGFloat = 1
+    /// 요약 이미지에서 이 너비를 넘지 않도록 칸을 줄이고, 그래도 넘치면 스케일을 낮춥니다.
+    var summaryMaxWidth: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
+    private var hours: [HikingWeatherHourPoint] {
+        guard let summaryMaxWidth, summaryMaxWidth > 0 else { return weather.timelineHours }
+        let capacity = Self.columnCapacity(
+            maxWidth: summaryMaxWidth,
+            scale: min(layoutScale, Self.summaryMinimumScale)
+        )
+        return HikingRouteWeatherSnapshot.timelineFitting(weather.timelineHours, maximumCount: capacity)
+    }
+
+    private var resolvedScale: CGFloat {
+        guard let summaryMaxWidth, summaryMaxWidth > 0 else { return layoutScale }
+        let natural = Self.chipWidth(hours: hours, scale: 1)
+        guard natural > 0 else { return layoutScale }
+        return min(layoutScale, summaryMaxWidth / natural)
+    }
+
     var body: some View {
-        let pad = HikingRecordCardLayout.cardPadding.recordScaled(layoutScale)
-        let rowGap = HikingRecordCardLayout.cardRowSpacing.recordScaled(layoutScale)
-        let headerHeight = HikingRecordCardLayout.compactIconBox.recordScaled(layoutScale)
-        let radius = HikingRecordCardLayout.cardCornerRadius.recordScaled(layoutScale)
-        let onFill = HikingRecordCardLayout.weatherOnFill
-
-        VStack(alignment: .leading, spacing: rowGap) {
-            HStack(alignment: .center, spacing: 5.recordScaled(layoutScale)) {
-                RecordSummaryCardIcon(
-                    icon: "cloud.sun.fill",
-                    tint: onFill,
-                    layoutScale: layoutScale
-                )
-
-                Text("날씨")
-                    .font(.system(
-                        size: HikingRecordCardLayout.cardLabelSize.recordScaled(layoutScale),
-                        weight: .semibold
-                    ))
-                    .foregroundStyle(onFill.opacity(0.86))
-                    .lineLimit(1)
+        let scale = resolvedScale
+        HStack(alignment: .top, spacing: 8 * scale) {
+            ForEach(hours) { hour in
+                hourColumn(hour, scale: scale)
             }
-            .frame(height: headerHeight, alignment: .center)
-
-            HikingRecordWeatherTimeline(weather: weather, layoutScale: layoutScale)
-                .frame(maxWidth: .infinity)
         }
-        .padding(pad)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 14 * scale)
+        .padding(.vertical, 10 * scale)
         .background(
-            HikingRecordCardLayout.weatherCardFill(for: colorScheme),
-            in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+            HikingRecordCardLayout.groupedCardFill.opacity(0.92),
+            in: RoundedRectangle(cornerRadius: 16 * scale, style: .continuous)
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(onFill.opacity(colorScheme == .dark ? 0.16 : 0.12), lineWidth: 0.5)
-        }
         .shadow(
-            color: .black.opacity(colorScheme == .dark ? 0.32 : 0.08),
-            radius: 8.recordScaled(layoutScale),
-            y: 3.recordScaled(layoutScale)
+            color: .black.opacity(colorScheme == .dark ? 0 : 0.12),
+            radius: 2 * scale,
+            y: 1 * scale
         )
+        .fixedSize(horizontal: summaryMaxWidth != nil, vertical: summaryMaxWidth != nil)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("날씨")
     }
-}
 
-struct HikingRecordWeatherTimeline: View {
-    let weather: HikingRouteWeatherSnapshot
-    var layoutScale: CGFloat = 1
-
-    private var hours: [HikingWeatherHourPoint] {
-        weather.timelineHours
-    }
-
-    var body: some View {
-        let columns = displayedHours
-        if shouldScroll(columnCount: columns.count) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8 * layoutScale) {
-                    ForEach(columns) { hour in
-                        hourColumn(hour)
-                            .frame(width: 48 * layoutScale)
-                    }
-                }
-            }
-        } else {
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(columns) { hour in
-                    hourColumn(hour)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-        }
-    }
-
-    private var displayedHours: [HikingWeatherHourPoint] {
-        let all = hours
-        guard layoutScale > 1, all.count > 8 else { return all }
-        return Self.sampledHours(all, maxCount: 8)
-    }
-
-    private func shouldScroll(columnCount: Int) -> Bool {
-        layoutScale <= 1 && columnCount > 8
-    }
-
-    private static func sampledHours(
-        _ hours: [HikingWeatherHourPoint],
-        maxCount: Int
-    ) -> [HikingWeatherHourPoint] {
-        guard hours.count > maxCount, maxCount > 1 else { return hours }
-        let lastIndex = hours.count - 1
-        var picked: [HikingWeatherHourPoint] = []
-        picked.reserveCapacity(maxCount)
-        for i in 0..<maxCount {
-            let index = Int(round(Double(i) * Double(lastIndex) / Double(maxCount - 1)))
-            if picked.last?.date != hours[index].date {
-                picked.append(hours[index])
-            }
-        }
-        return picked
-    }
-
-    private func hourColumn(_ hour: HikingWeatherHourPoint) -> some View {
-        VStack(spacing: HikingRecordCardLayout.weatherTimelineStackSpacing * layoutScale) {
+    private func hourColumn(_ hour: HikingWeatherHourPoint, scale: CGFloat) -> some View {
+        VStack(spacing: HikingRecordCardLayout.weatherTimelineStackSpacing * scale) {
             Image(systemName: HikingRouteWeatherSnapshot.symbolName(for: hour.wmoCode))
                 .font(.system(
-                    size: HikingRecordCardLayout.weatherTimelineIconSize * layoutScale,
+                    size: HikingRecordCardLayout.weatherTimelineIconSize * scale,
                     weight: .semibold
                 ))
-                .foregroundStyle(HikingRecordCardLayout.weatherOnFill)
-                .symbolRenderingMode(.hierarchical)
-                .frame(height: HikingRecordCardLayout.weatherTimelineIconSize * layoutScale)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(
+                    WeatherIconPalette.primary(for: hour.wmoCode),
+                    WeatherIconPalette.secondary(for: hour.wmoCode)
+                )
+                .frame(height: HikingRecordCardLayout.weatherTimelineIconSize * scale)
 
             Text(hour.formattedTemperature)
                 .font(.system(
-                    size: HikingRecordCardLayout.weatherTimelineTempSize * layoutScale,
+                    size: HikingRecordCardLayout.weatherTimelineTempSize * scale,
                     weight: .semibold,
                     design: .rounded
                 ))
-                .foregroundStyle(HikingRecordCardLayout.weatherOnFill)
+                .foregroundStyle(.primary)
                 .monospacedDigit()
+                .lineLimit(summaryMaxWidth == nil ? nil : 1)
+                .fixedSize(horizontal: summaryMaxWidth != nil, vertical: false)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(HikingRouteWeatherSnapshot.conditionLabel(for: hour.wmoCode)), \(hour.formattedTemperature)"
         )
+    }
+
+    /// 이 스케일에서 요약 칸에 들어가는 최대 열 수. 아이콘이 가장 넓은 경우를 기준으로 잡습니다.
+    private static let summaryMinimumScale: CGFloat = 0.55
+
+    private static func columnCapacity(maxWidth: CGFloat, scale: CGFloat) -> Int {
+        guard scale > 0, maxWidth > 0 else { return 1 }
+        let column = 30 * scale
+        let gap = 8 * scale
+        let pad = 28 * scale
+        let count = Int(((maxWidth - pad + gap) / (column + gap)).rounded(.down))
+        return max(1, count)
+    }
+
+    private static func chipWidth(hours: [HikingWeatherHourPoint], scale: CGFloat) -> CGFloat {
+        guard !hours.isEmpty else { return 0 }
+        let fontSize = HikingRecordCardLayout.weatherTimelineTempSize * scale
+        let base = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let font = UIFont(
+            descriptor: base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor,
+            size: fontSize
+        )
+        var width = 28 * scale
+        for (index, hour) in hours.enumerated() {
+            if index > 0 { width += 8 * scale }
+            let textWidth = ceil(
+                (hour.formattedTemperature as NSString).size(withAttributes: [.font: font]).width
+            )
+            let symbol = UIImage.SymbolConfiguration(
+                pointSize: HikingRecordCardLayout.weatherTimelineIconSize * scale,
+                weight: .semibold
+            )
+            let iconWidth = UIImage(
+                systemName: HikingRouteWeatherSnapshot.symbolName(for: hour.wmoCode),
+                withConfiguration: symbol
+            )?.size.width ?? (26 * scale)
+            width += max(textWidth, iconWidth)
+        }
+        return width
+    }
+}
+
+private enum WeatherIconPalette {
+    static func primary(for code: Int) -> Color {
+        switch code {
+        case 0:
+            return Color(red: 1, green: 0.62, blue: 0.04)
+        case 1, 2, 3, 45, 48:
+            return Color(white: 0.78)
+        case 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82:
+            return Color(white: 0.78)
+        case 71, 73, 75, 77, 85, 86:
+            return Color(white: 0.86)
+        case 95, 96, 99:
+            return Color(red: 0.39, green: 0.39, blue: 0.40)
+        default:
+            return Color(white: 0.78)
+        }
+    }
+
+    static func secondary(for code: Int) -> Color {
+        switch code {
+        case 0:
+            return Color(red: 1, green: 0.84, blue: 0.04)
+        case 1, 2, 3:
+            return Color(red: 1, green: 0.62, blue: 0.04)
+        case 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82:
+            return Color(red: 0.35, green: 0.78, blue: 0.98)
+        case 71, 73, 75, 77, 85, 86:
+            return Color.white
+        case 95, 96, 99:
+            return Color(red: 1, green: 0.84, blue: 0.04)
+        default:
+            return Color.white
+        }
     }
 }
 
@@ -1017,6 +1008,10 @@ struct HikingElevationProfileCard: View {
     private static let plotXAxisGap: CGFloat = 2
     private static let chartBottomPadding: CGFloat = 2
 
+    private var stationaryAltitudeMeters: Double? {
+        HikingSessionMetrics.stationaryAltitude(from: points)
+    }
+
     private var chartPoints: [ElevationProfileChartPoint] {
         preparedChartPoints
     }
@@ -1231,28 +1226,35 @@ struct HikingElevationProfileCard: View {
     var body: some View {
         let pad = HikingRecordCardLayout.cardPadding.recordScaled(layoutScale)
 
-        VStack(alignment: .leading, spacing: 10.recordScaled(layoutScale)) {
-            headerRow
+        ZStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 10.recordScaled(layoutScale)) {
+                headerRow
 
-            if isChartDataReady, chartPoints.count >= 2 {
-                profileChart
-                    .frame(height: chartHeight)
-            } else if !isTimeBasedHeartRateFallback, hasPersistedChartData || points.count >= 2 {
-                chartLoadingPlaceholder
-                    .frame(height: chartHeight)
-                    .task(id: chartPreparationToken) {
-                        await prepareChartData()
-                    }
-            } else if isTimeBasedHeartRateFallback {
-                timeBasedHeartRateChart
-                    .frame(height: chartHeight)
-            } else {
-                ContentUnavailableView(
-                    "고도 데이터 없음",
-                    systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("GPS 포인트가 부족합니다.")
+                if let altitude = stationaryAltitudeMeters {
+                    stationaryAltitudeChart(altitude)
+                        .frame(height: chartHeight)
+                } else if isChartDataReady, chartPoints.count >= 2 {
+                    profileChart
+                        .frame(height: chartHeight)
+                } else if !isTimeBasedHeartRateFallback, hasPersistedChartData || points.count >= 2 {
+                    chartLoadingPlaceholder
+                        .frame(height: chartHeight)
+                        .task(id: chartPreparationToken) {
+                            await prepareChartData()
+                        }
+                } else if isTimeBasedHeartRateFallback {
+                    timeBasedHeartRateChart
+                        .frame(height: chartHeight)
+                } else {
+                    Color.clear.frame(height: chartHeight)
+                }
+            }
+            if stationaryAltitudeMeters == nil, !isTimeBasedHeartRateFallback, !hasPersistedChartData, points.count < 2 {
+                DashboardChartEmptyPlaceholder(
+                    systemImage: "chart.xyaxis.line",
+                    title: "고도 데이터 없음",
+                    description: "GPS 포인트가 부족합니다."
                 )
-                .frame(height: chartHeight)
             }
         }
         .padding(pad)
@@ -1461,6 +1463,14 @@ struct HikingElevationProfileCard: View {
                 ))
                 .foregroundStyle(.orange)
                 .monospacedDigit()
+        } else if let altitude = stationaryAltitudeMeters {
+            Text("\(Int(altitude.rounded())) m")
+                .font(.system(
+                    size: HikingRecordCardLayout.cardProfileMetricValueSize.recordScaled(layoutScale),
+                    weight: .medium
+                ))
+                .foregroundStyle(.orange)
+                .monospacedDigit()
         } else {
             Text("최고 \(maxElevationMeters) m")
                 .font(.system(
@@ -1636,6 +1646,48 @@ struct HikingElevationProfileCard: View {
             return heartRateChartPoints.map(\.distanceKilometers)
         }
         return chartPoints.map(\.distanceKilometers)
+    }
+
+    private func stationaryAltitudeChart(_ altitude: Double) -> some View {
+        let axis = ElevationChartYAxisSpec.fitting(minAltitude: altitude, maxAltitude: altitude)
+        return Chart {
+            LineMark(
+                x: .value("구간", 0),
+                y: .value("고도", altitude)
+            )
+            .foregroundStyle(.orange.gradient)
+            LineMark(
+                x: .value("구간", 1),
+                y: .value("고도", altitude)
+            )
+            .foregroundStyle(.orange.gradient)
+            AreaMark(
+                x: .value("구간", 0),
+                yStart: .value("기준", axis.domain.lowerBound),
+                yEnd: .value("고도", altitude)
+            )
+            .foregroundStyle(.orange.opacity(0.15))
+            AreaMark(
+                x: .value("구간", 1),
+                yStart: .value("기준", axis.domain.lowerBound),
+                yEnd: .value("고도", altitude)
+            )
+            .foregroundStyle(.orange.opacity(0.15))
+        }
+        .chartXAxis(.hidden)
+        .chartXScale(domain: 0...1)
+        .chartYScale(domain: axis.domain)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: axis.ticks) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let meters = value.as(Double.self) {
+                        Text("\(Int(meters.rounded()))")
+                            .font(.caption2)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder

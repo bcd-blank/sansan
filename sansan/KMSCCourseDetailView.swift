@@ -72,35 +72,47 @@ struct KMSCCourseDetailView: View {
         }
     }
 
+    /// 메인 화면 지도와 같은 높이·모서리·외곽선.
+    private let previewMapHeight: CGFloat = 320
+
     @ViewBuilder
     private var routePreview: some View {
-        if isLoadingPreview {
-            ProgressView("코스 불러오는 중")
-                .frame(maxWidth: .infinity)
-                .frame(height: 180)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-        } else if coordinates.count >= 2 {
-            Map(initialPosition: .region(
-                HikingMapRegion.fitting(
-                    coordinates: coordinates,
-                    viewSize: CGSize(width: 340, height: 220)
+        Group {
+            if isLoadingPreview {
+                ProgressView("코스 불러오는 중")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.secondarySystemGroupedBackground))
+            } else if coordinates.count >= 2 {
+                GeometryReader { geo in
+                    Map(initialPosition: .region(
+                        HikingMapRegion.fitting(
+                            coordinates: coordinates,
+                            viewSize: geo.size
+                        )
+                    )) {
+                    MapPolyline(coordinates: coordinates)
+                        .stroke(Color(red: 0.12, green: 0.72, blue: 0.45), lineWidth: 4)
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .allowsHitTesting(false)
+                }
+            } else {
+                ContentUnavailableView(
+                    "경로 미리보기 없음",
+                    systemImage: "map",
+                    description: Text(previewError ?? "코스 파일을 받지 못했습니다.")
                 )
-            )) {
-                MapPolyline(coordinates: coordinates)
-                    .stroke(Color(red: 0.12, green: 0.72, blue: 0.45), lineWidth: 4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.secondarySystemGroupedBackground))
             }
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .allowsHitTesting(false)
-        } else {
-            ContentUnavailableView(
-                "경로 미리보기 없음",
-                systemImage: "map",
-                description: Text(previewError ?? "코스 파일을 받지 못했습니다.")
-            )
-            .frame(height: 180)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: previewMapHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private var metaBlock: some View {

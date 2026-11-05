@@ -45,6 +45,10 @@ enum HikingSessionMetrics {
     /// 표시 좌표가 실제 GPS 포인트에서 이 거리 이상 벗어나지 않게 제한합니다.
     nonisolated static let routeDisplayMaxSmoothingShift: CLLocationDistance = 2.5
 
+    /// 시작점 기준 이 반경 안에만 머문 기록은 이동이 없는 것으로 봅니다.
+    /// 안드로이드 GPS가 제자리에서 수십 미터 튀어도 경로 선으로 그리지 않기 위한 한계입니다.
+    nonisolated static let stationaryTrackRadius: CLLocationDistance = 40
+
     /// 표시 경로에서 제자리 GPS 드리프트로 생기는 꼬임을 줄이기 위한 노이즈 반경(m).
     /// 마지막으로 채택한 점에서 이 반경 안에 머무는 점들은 같은 자리로 보고 표시에서 건너뜁니다.
     /// (거리·고도 계산에는 영향 없음 — 원본 포인트는 그대로 보존됩니다.)
@@ -342,6 +346,35 @@ enum HikingSessionMetrics {
     /// 정확히 합산하고, 정지 상태에서 2m 미만으로 흔들리는 GPS 노이즈만 제외합니다.
     nonisolated static func horizontalDistance(from points: [HikingPoint]) -> Double {
         horizontalDistanceWithAnchor(from: points).total
+    }
+
+    /// 시작점에서 `stationaryTrackRadius` 밖으로 나가지 않았으면 이동이 없는 기록입니다.
+    nonisolated static func isStationaryTrack(_ points: [HikingPoint]) -> Bool {
+        guard let first = points.first else { return false }
+        let origin = CLLocation(latitude: first.latitude, longitude: first.longitude)
+        for point in points.dropFirst() {
+            let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
+            if location.distance(from: origin) >= stationaryTrackRadius { return false }
+        }
+        return true
+    }
+
+    /// 제자리 기록에서 지도에 찍을 위치. 수평 정확도가 가장 좋은 점입니다.
+    nonisolated static func stationaryCoordinate(from points: [HikingPoint]) -> CLLocationCoordinate2D? {
+        guard isStationaryTrack(points) else { return nil }
+        let best = points.min { lhs, rhs in
+            (lhs.horizontalAccuracy ?? .greatestFiniteMagnitude)
+                < (rhs.horizontalAccuracy ?? .greatestFiniteMagnitude)
+        }
+        guard let best else { return nil }
+        return best.coordinate
+    }
+
+    /// 제자리 기록의 대표 고도. 샘플의 중앙값이라 한두 번의 GPS 튐에 흔들리지 않습니다.
+    nonisolated static func stationaryAltitude(from points: [HikingPoint]) -> Double? {
+        guard isStationaryTrack(points), !points.isEmpty else { return nil }
+        let sorted = points.map(\.altitude).sorted()
+        return sorted[sorted.count / 2]
     }
 
     /// 이동으로 인정할 최소 변위 — GPS 노이즈 반경(수평 정확도)보다 작은 변위는 제자리 흔들림으로 봅니다.
@@ -647,6 +680,80 @@ enum HikingSessionMetrics {
         }
 
         return markers
+    }
+
+    /// 1km 도달 경과. 1초 단위로 자르고 반올림하지 않습니다. `45:30` 또는 `1:05:30`
+    nonisolated static func splitElapsedLabel(_ elapsed: TimeInterval) -> String {
+        let total = max(0, Int(elapsed))
+        let hours = total / 3_600
+        let minutes = (total % 3_600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    /// 1km, 2km… 지점에 도달한 경과 시간.
+    nonisolated static func kilometerArrivalElapsedLabels(
+        from points: [HikingPoint],
+        startedAt: Date?,
+        segmentBreaks: [HikingSegmentBreak]?
+    ) -> [Int: String] {
+        guard points.count >= 2 else { return [:] }
+
+        let sorted = points.sorted { $0.timestamp < $1.timestamp }
+        let origin = startedAt ?? sorted[0].timestamp
+        let distances = cumulativeDistances(forSorted: sorted)
+        var nextKilometer = 1
+        var labels: [Int: String] = [:]
+
+        for index in 1..<sorted.count {
+            let start = sorted[index - 1]
+            let end = sorted[index]
+            let segmentStart = distances[index - 1]
+            let segmentEnd = distances[index]
+            let segment = segmentEnd - segmentStart
+            guard segment > 0 else { continue }
+
+            while Double(nextKilometer) * 1_000 <= segmentEnd {
+                let targetMeters = Double(nextKilometer) * 1_000
+                if targetMeters > segmentStart {
+                    let ratio = (targetMeters - segmentStart) / segment
+                    let arrival = start.timestamp.addingTimeInterval(
+                        end.timestamp.timeIntervalSince(start.timestamp) * ratio
+                    )
+                    let elapsed = elapsedSeconds(
+                        at: arrival,
+                        startedAt: origin,
+                        segmentBreaks: segmentBreaks
+                    )
+                    labels[nextKilometer] = splitElapsedLabel(elapsed)
+                }
+                nextKilometer += 1
+            }
+        }
+
+        return labels
+    }
+
+    /// 시작 시각부터 `date`까지, 일시정지 구간을 뺀 경과 시간.
+    nonisolated static func elapsedSeconds(
+        at date: Date,
+        startedAt: Date,
+        segmentBreaks: [HikingSegmentBreak]?
+    ) -> TimeInterval {
+        var paused: TimeInterval = 0
+        if let segmentBreaks {
+            for segmentBreak in segmentBreaks where date > segmentBreak.pauseTime {
+                if let resumeTime = segmentBreak.resumeTime, resumeTime <= date {
+                    paused += resumeTime.timeIntervalSince(segmentBreak.pauseTime)
+                } else {
+                    paused += date.timeIntervalSince(segmentBreak.pauseTime)
+                }
+            }
+        }
+        return max(0, date.timeIntervalSince(startedAt) - paused)
     }
 
     nonisolated private static func distanceTimeline(

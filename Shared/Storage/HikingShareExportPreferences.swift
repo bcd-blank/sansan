@@ -12,15 +12,21 @@ import Foundation
 /// 기록 상세 지도 표시(`HikingRecordRouteMapView`)와 별개입니다.
 struct HikingShareMapExportOptions: Equatable, Sendable {
     var showsDistanceMarkers: Bool
+    var showsTimeMarkers: Bool
+    var showsWeatherLabel: Bool
     var showsPhotoMarkers: Bool
     var showsPinnedThumbnails: Bool
 
     nonisolated init(
         showsDistanceMarkers: Bool = true,
+        showsTimeMarkers: Bool = true,
+        showsWeatherLabel: Bool = true,
         showsPhotoMarkers: Bool = true,
         showsPinnedThumbnails: Bool = true
     ) {
         self.showsDistanceMarkers = showsDistanceMarkers
+        self.showsTimeMarkers = showsTimeMarkers
+        self.showsWeatherLabel = showsWeatherLabel
         self.showsPhotoMarkers = showsPhotoMarkers
         self.showsPinnedThumbnails = showsPinnedThumbnails
     }
@@ -29,6 +35,8 @@ struct HikingShareMapExportOptions: Equatable, Sendable {
 extension HikingShareMapExportOptions: Codable {
     private enum CodingKeys: String, CodingKey {
         case showsDistanceMarkers
+        case showsTimeMarkers
+        case showsWeatherLabel
         case showsPhotoMarkers
         case showsPinnedThumbnails
     }
@@ -36,6 +44,8 @@ extension HikingShareMapExportOptions: Codable {
     nonisolated init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         showsDistanceMarkers = try container.decodeIfPresent(Bool.self, forKey: .showsDistanceMarkers) ?? true
+        showsTimeMarkers = try container.decodeIfPresent(Bool.self, forKey: .showsTimeMarkers) ?? true
+        showsWeatherLabel = try container.decodeIfPresent(Bool.self, forKey: .showsWeatherLabel) ?? true
         showsPhotoMarkers = try container.decodeIfPresent(Bool.self, forKey: .showsPhotoMarkers) ?? true
         showsPinnedThumbnails = try container.decodeIfPresent(Bool.self, forKey: .showsPinnedThumbnails) ?? true
     }
@@ -43,6 +53,8 @@ extension HikingShareMapExportOptions: Codable {
     nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(showsDistanceMarkers, forKey: .showsDistanceMarkers)
+        try container.encode(showsTimeMarkers, forKey: .showsTimeMarkers)
+        try container.encode(showsWeatherLabel, forKey: .showsWeatherLabel)
         try container.encode(showsPhotoMarkers, forKey: .showsPhotoMarkers)
         try container.encode(showsPinnedThumbnails, forKey: .showsPinnedThumbnails)
     }

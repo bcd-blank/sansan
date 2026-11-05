@@ -67,7 +67,8 @@ struct HikingRecordsListView: View {
         }
         .navigationTitle("경로 모음")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(Color(.systemGroupedBackground), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 if isSelectingRecords {
@@ -191,10 +192,8 @@ struct HikingRecordsListView: View {
     }
 
     private var recordsTabHeaderOverlay: some View {
-        let navExtension = iPhoneBottomChromeLayout.inlineNavigationBarHeight
-
-        return ZStack(alignment: .top) {
-            recordsTabHeaderGradientBackdrop(navExtension: navExtension)
+        ZStack(alignment: .top) {
+            recordsTabHeaderGradientBackdrop
 
             // 페이드 구간까지 터치를 가로채면 리스트 첫 행(이름 수정 버튼)이 눌리지 않으므로
             // 스와이프 제스처는 헤더 콘텐츠 영역에만 붙입니다.
@@ -224,14 +223,13 @@ struct HikingRecordsListView: View {
         .frame(height: recordsTabHeaderFadeHeight, alignment: .top)
     }
 
-    /// 상단 10%는 상단바와 동일한 불투명 바탕, 하단 90%는 투명으로 페이드.
-    /// 내비게이션 타이틀 바 영역까지 위로 확장해 잘림 없이 이어지게 한다.
-    private func recordsTabHeaderGradientBackdrop(navExtension: CGFloat) -> some View {
+    /// 타이틀·불러오기 캡슐은 내비게이션 바가 가린다.
+    /// 페이드는 그 아래 탭에서만 목록 쪽으로 사라진다.
+    private var recordsTabHeaderGradientBackdrop: some View {
         let solidPortion = iPhoneBottomChromeLayout.recordsTabHeaderSolidPortion
-        let totalHeight = recordsTabHeaderFadeHeight + navExtension
 
         return Color(.systemGroupedBackground)
-            .frame(height: totalHeight)
+            .frame(height: recordsTabHeaderFadeHeight)
             .frame(maxWidth: .infinity)
             .mask {
                 LinearGradient(
@@ -244,8 +242,6 @@ struct HikingRecordsListView: View {
                     endPoint: .bottom
                 )
             }
-            .offset(y: -navExtension)
-            .ignoresSafeArea(edges: .top)
             .allowsHitTesting(false)
     }
 
@@ -397,7 +393,7 @@ struct HikingRecordsListView: View {
                 if isSelectingRecords {
                     Text("항목을 탭해 선택을 추가하거나 해제할 수 있습니다.")
                 } else {
-                    Text("길게 눌러 여러 개를 선택하거나, 왼쪽으로 밀어 즐겨찾기·상단 고정·삭제, 오른쪽으로 밀면 따라가기가 나타납니다.")
+                    Text("오른쪽 연필을 눌러 기록 이름을 바꿀 수 있습니다.\n길게 눌러 여러 개를 선택하거나, 왼쪽으로 밀어 즐겨찾기·상단 고정·삭제, 오른쪽으로 밀면 따라가기가 나타납니다.")
                 }
             }
         }
@@ -405,7 +401,7 @@ struct HikingRecordsListView: View {
         .contentMargins(.top, recordsTabHeaderOverlayHeight, for: .scrollContent)
         .contentMargins(.bottom, recordsListScrollBottomClearance, for: .scrollContent)
         .ignoresSafeArea(edges: .bottom)
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 

@@ -587,7 +587,7 @@ struct RecordThumbnailView: View {
         )
         .animation(.easeInOut(duration: 0.2), value: isRegenerating)
         .task(id: store.snapshotRevision(for: record.id)) {
-            guard let path = record.snapshotFileURL?.path else {
+            guard let path = record.listThumbnailFileURL?.path else {
                 thumbnailImage = nil
                 // 기록 종료 직후 생성이 실패한 기록 — 목록에 보이면 자동으로 다시 생성합니다.
                 await store.ensureSnapshotExists(for: record.id)

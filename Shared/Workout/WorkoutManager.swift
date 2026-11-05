@@ -45,6 +45,10 @@ final class WorkoutManager: NSObject, ObservableObject {
 #if os(iOS)
     /// 워치 연결이 끊겨 iPhone이 위치 기록을 이어받은 상태.
     @Published private(set) var isPhoneRecordingFailoverActive = false
+    /// 워치가 꺼진 뒤 이 기록에서는 동기화·심박 수집을 다시 켜지 않습니다.
+    private var isWatchDetachedForRecording = false
+    /// 이번 기록에서 워치와 실제로 연결되어 있었는지. 한 번도 연결되지 않았으면 아이폰 심박을 유지합니다.
+    private var didLinkWatchDuringRecording = false
 #endif
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
 #if os(iOS)
@@ -89,6 +93,10 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var isLocationProducer = true
     /// 마지막으로 누적 거리에 반영한 포인트 — 2m 미만 GPS 흔들림은 anchor 기준으로 걸러냅니다.
     private var liveDistanceAnchor: HikingPoint?
+    /// 시작점에서 실제로 벗어나면 제자리 고도 샘플을 멈추고 경로 점을 받습니다.
+    private var hasLeftStationaryBubble = false
+    /// 제자리 고도의 최근 수직 정확 샘플. 중앙값으로 흔들림을 누릅니다.
+    private var recentStationaryAltitudes: [Double] = []
     /// 재개 직후 첫 GPS 포인트를 받아 현재 일시정지 마킹의 재개 좌표를 채우기 위한 플래그.
     private var awaitingResumeMarker = false
     /// 기록 중 세션 로컬 백업 최근 저장 시각(스로틀용).
@@ -102,8 +110,13 @@ final class WorkoutManager: NSObject, ObservableObject {
     private static let idleRemoteAdoptionMaxAge: TimeInterval = 90
     /// reachable이 false여도 최근 동기화가 있으면 링크가 살아 있다고 봅니다.
     private static let watchSyncActivityGrace: TimeInterval = 45
-    /// 워치가 이 시간 동안 비활성이면 iPhone이 위치 기록을 이어받습니다(초).
-    private static let watchLossFailoverThreshold: TimeInterval = 45
+    /// 5초마다 워치 심박과 경로 포인트가 함께 들어왔는지 확인합니다.
+    private static let watchHeartRateCheckInterval: TimeInterval = 5
+    /// 심박과 경로가 이 횟수(약 15초) 연속으로 함께 없으면 iPhone이 경로를 바로 채웁니다.
+    private static let watchSignalMissedRouteFillLimit = 3
+    /// 둘 다 이 횟수(60초)까지 없으면 심박 수집과 동기화를 끊습니다.
+    /// 실제 지리산 기록에서 심박·경로가 함께 비었다가 다시 이어진 최장 간격은 51초입니다.
+    private static let watchSignalMissedDetachLimit = 12
     private var watchConnectivityRetryTask: Task<Void, Never>?
 #if os(iOS)
     private var didPrepareAfterMainScreen = false
@@ -130,16 +143,25 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var poorAccuracyStreakStartedAt: Date?
     /// 채택 포인트 정확도가 양호한 상태가 시작된 시각(회복 판단용).
     private var goodAccuracyStreakStartedAt: Date?
-    /// 워치 비활성 감지가 시작된 시각 — 짧은 BLE 끊김은 넘깁니다.
-    private var watchConnectivityLossStartedAt: Date?
+    /// 워치에서 받은 마지막 심박 시각. 아이폰 HealthKit 폴백 샘플은 넣지 않습니다.
+    private var lastWatchHeartRateAt: Date?
+    /// 워치에서 받은 마지막 경로 포인트 시각.
+    private var lastWatchRoutePointAt: Date?
+    /// 워치 신호가 잠시 비는 동안 iPhone GPS로 경로 구멍만 메우는 중. 인계 확정 전에는 워치 포인트를 계속 받습니다.
+    private var isPhoneRouteFillActive = false
+    /// 심박과 경로가 함께 없었던 연속 확인 횟수.
+    private var missedWatchHeartRateChecks = 0
+    /// 마지막으로 심박 신호 유무를 확인한 시각.
+    private var lastWatchHeartRateCheckAt: Date?
     /// iPhone이 워치 대신 기록을 이어받은 시각. 이후 워치 GPS는 병합하지 않습니다.
     private var phoneRecordingFailoverAt: Date?
     /// 워치가 다시 켜졌을 때 인계 명령을 다시 보내기 위한 플래그.
     private var didNotifyWatchOfPhoneTakeover = false
-    private var watchLossFailoverTask: Task<Void, Never>?
 #endif
 
     #if os(watchOS)
+    /// iPhone이 기록을 이어받은 뒤 — 워치 심박·GPS를 다시 켜지 않습니다.
+    private var didYieldRecordingToPhone = false
     /// 기록 중 손목 내림·화면 꺼짐 후에도 앱이 유지되도록 하는 HKWorkoutSession.
     private var watchWorkoutSession: WatchHeartRateWorkoutSession?
     private var lastHeartRateSnapshotPublishedAt: Date?
@@ -162,6 +184,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private static let routeTrackingDistanceFilter: CLLocationDistance = kCLDistanceFilterNone
     /// GPX보내기 앱과 비슷한 약 1초 간격으로 포인트를 저장합니다.
     private static let recordingPointMinInterval: TimeInterval = 1
+    /// 제자리에서는 이 간격으로 고도만 같은 좌표에 남깁니다.
+    private static let stationaryAltitudeInterval: TimeInterval = 5
     /// 1초 안에 거의 움직이지 않았으면 정지 상태 GPS 흔들림 포인트를 건너뜁니다.
     /// 경로를 촘촘히 남기되 제자리 미세 흔들림만 거르는 최소 변위(m).
     /// 휴식·정상 체류 등 장시간 정지 시 GPS 드리프트(±수 m)가 경로로 누적돼 엉키는 것을 막기 위해
@@ -250,7 +274,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func prepareHeartRateMonitoringEarlyIfNeeded() async {
 #if os(iOS)
         guard HeartRatePreferences.isFeatureEnabled else { return }
-        guard HeartRatePreferences.isMonitoringEnabled else { return }
+        if !HeartRatePreferences.isMonitoringEnabled {
+            HeartRatePreferencesObserver.shared.setMonitoringEnabled(true)
+        }
         await HeartRateMonitor.shared.prepareForWorkout()
 #else
         await prepareWatchWorkoutRuntime()
@@ -460,9 +486,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private var shouldCollectHeartRateDuringWorkout: Bool {
-        guard HeartRatePreferences.isFeatureEnabled else { return false }
-        if isWatchCounterpartInstalled { return true }
-        return HeartRatePreferences.isMonitoringEnabled
+        HeartRatePreferences.isFeatureEnabled
     }
 #endif
 
@@ -471,7 +495,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     func setHeartRateFeatureEnabled(_ isEnabled: Bool) async {
         HeartRatePreferencesObserver.shared.setFeatureEnabled(isEnabled)
         if isEnabled {
-            if HeartRatePreferences.isMonitoringEnabled, HeartRateMonitor.canUseHealthKit {
+            HeartRatePreferencesObserver.shared.setMonitoringEnabled(true)
+            if HeartRateMonitor.canUseHealthKit {
                 try? await HeartRateMonitor.shared.requestAuthorization()
                 startHeartRateCollectionIfNeeded()
             }
@@ -973,6 +998,8 @@ final class WorkoutManager: NSObject, ObservableObject {
             accumulatedPausedTime = 0
             pauseBeganAt = nil
             liveDistanceAnchor = nil
+            hasLeftStationaryBubble = false
+            recentStationaryAltitudes = []
 #if os(watchOS)
             isAssistingLocation = false
             assistPoints = []
@@ -1183,6 +1210,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 #if os(watchOS)
         isAssistingLocation = false
         assistPoints = []
+        didYieldRecordingToPhone = false
 #endif
         clearLiveSessionBackup()
 #if os(iOS)
@@ -1213,6 +1241,10 @@ final class WorkoutManager: NSObject, ObservableObject {
            let remoteSnapshot = HikingSessionData(userInfo: userInfo),
            remoteSnapshot.sessionID == sessionData.sessionID {
             mergeFinalSessionFromRemote(remoteSnapshot)
+            if !shouldEndRecordingForRemoteWatchStop() {
+                detachWatchAndContinueRecording()
+                return
+            }
             handleRemoteCommand(.stopRecording)
             return
         }
@@ -1231,6 +1263,12 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func handleReceivedFullSessionTransfer(_ remote: HikingSessionData) {
         if sessionData.state != .idle, remote.sessionID == sessionData.sessionID {
             mergeFinalSessionFromRemote(remote)
+#if os(iOS)
+            if !shouldEndRecordingForRemoteWatchStop() {
+                detachWatchAndContinueRecording()
+                return
+            }
+#endif
             handleRemoteCommand(.stopRecording)
             return
         }
@@ -1314,7 +1352,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var backupPhoneFailoverActive: Bool? { isPhoneRecordingFailoverActive }
     private var backupPhoneFailoverAt: Date? { phoneRecordingFailoverAt }
 #else
-    private var backupPhoneFailoverActive: Bool? { nil }
+    private var backupPhoneFailoverActive: Bool? { didYieldRecordingToPhone }
     private var backupPhoneFailoverAt: Date? { nil }
 #endif
 
@@ -1360,27 +1398,6 @@ final class WorkoutManager: NSObject, ObservableObject {
             return
         }
 
-        // 구버전: 종료 직후 recording 상태로 저장된 요약 대기 백업
-        if backup.session.state == .recording,
-           backup.savedAt.timeIntervalSince(backup.session.lastUpdated) <= 3 {
-            restoreSummaryPendingBackup(
-                LiveSessionBackup(
-                    session: {
-                        var finished = backup.session
-                        finished.state = .idle
-                        finished.finalizeForPersistence()
-                        return finished
-                    }(),
-                    isLocationProducer: backup.isLocationProducer,
-                    accumulatedPausedTime: backup.accumulatedPausedTime,
-                    workoutStartDate: backup.workoutStartDate,
-                    savedAt: backup.savedAt,
-                    isAwaitingSummaryConfirmation: true
-                )
-            )
-            return
-        }
-
         let age = Date().timeIntervalSince(backup.savedAt)
         let shouldResume = backup.session.state == .paused || age <= Self.liveBackupMaxResumeAge
 
@@ -1418,7 +1435,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             .horizontalDistanceWithAnchor(from: backup.session.points).anchor
 #if os(iOS)
         isPhoneRecordingFailoverActive = backup.didFailoverToPhoneRecording ?? false
+        isWatchDetachedForRecording = isPhoneRecordingFailoverActive
         phoneRecordingFailoverAt = backup.phoneRecordingFailoverAt
+#endif
+#if os(watchOS)
+        if backup.didFailoverToPhoneRecording == true {
+            didYieldRecordingToPhone = true
+            isLocationProducer = false
+        }
 #endif
         if backup.session.state == .paused, pauseBeganAt == nil {
             pauseBeganAt = backup.savedAt
@@ -1694,10 +1718,19 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func ingestLocation(_ location: CLLocation) {
-        guard sessionData.state == .recording, isLocationProducer else { return }
+#if os(iOS)
+        let acceptsLocalRoute = isLocationProducer || isPhoneRouteFillActive
+#else
+        let acceptsLocalRoute = isLocationProducer
+#endif
+        guard sessionData.state == .recording, acceptsLocalRoute else { return }
         guard shouldAcceptGPSPoint(at: location.timestamp) else { return }
         guard location.horizontalAccuracy >= 0,
               location.horizontalAccuracy <= allowedHorizontalAccuracy(for: location) else { return }
+        if shouldHoldStationary(location) {
+            recordStationaryAltitudeIfNeeded(from: location)
+            return
+        }
         guard shouldStoreRecordingPoint(for: location) else { return }
 
         let rawAltitude: Double
@@ -1753,6 +1786,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
         accumulateLiveDistance(to: point)
         sessionData.points.append(point)
+        noteLeftStationaryBubble(with: point)
 #if os(iOS)
         noteAcceptedLocalPointForAssist(accuracy: location.horizontalAccuracy)
 #endif
@@ -1847,6 +1881,58 @@ final class WorkoutManager: NSObject, ObservableObject {
         return gap >= Self.recordingGapRescueInterval
             ? Self.maxStorableHorizontalAccuracyDuringGap
             : Self.maxStorableHorizontalAccuracy
+    }
+
+    private func noteLeftStationaryBubble(with point: HikingPoint) {
+        guard let first = sessionData.points.first else { return }
+        let origin = CLLocation(latitude: first.latitude, longitude: first.longitude)
+        let stored = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        if stored.distance(from: origin) >= HikingSessionMetrics.stationaryTrackRadius {
+            hasLeftStationaryBubble = true
+            recentStationaryAltitudes = []
+        }
+    }
+
+    /// 시작점 근처에 머무는 동안은 흔들린 좌표를 경로로 넣지 않습니다.
+    private func shouldHoldStationary(_ location: CLLocation) -> Bool {
+        guard !hasLeftStationaryBubble, let anchor = sessionData.points.first else { return false }
+        let origin = CLLocation(latitude: anchor.latitude, longitude: anchor.longitude)
+        return location.distance(from: origin) < HikingSessionMetrics.stationaryTrackRadius
+    }
+
+    /// 같은 좌표에 고도만 주기적으로 남겨, 움직이지 않아도 현재 위치와 고도가 남게 합니다.
+    private func recordStationaryAltitudeIfNeeded(from location: CLLocation) {
+        guard let anchor = sessionData.points.first, let last = sessionData.points.last else { return }
+        let elapsed = abs(location.timestamp.timeIntervalSince(last.timestamp))
+        guard elapsed >= Self.stationaryAltitudeInterval else { return }
+
+        let altitude = stabilizedStationaryAltitude(from: location, previous: last.altitude)
+        let point = HikingPoint(
+            latitude: anchor.latitude,
+            longitude: anchor.longitude,
+            altitude: altitude,
+            timestamp: location.timestamp,
+            horizontalAccuracy: anchor.horizontalAccuracy
+        )
+        sessionData.points.append(point)
+        sessionData.currentAltitude = altitude
+        sessionData.lastUpdated = Date()
+        saveLiveSessionBackupIfNeeded()
+        publishSessionSnapshot()
+        sendLatestPoint(point)
+    }
+
+    private func stabilizedStationaryAltitude(from location: CLLocation, previous: Double) -> Double {
+        if location.verticalAccuracy > 0,
+           location.verticalAccuracy <= HikingSessionMetrics.acceptableVerticalAccuracy {
+            recentStationaryAltitudes.append(location.altitude)
+            if recentStationaryAltitudes.count > 9 {
+                recentStationaryAltitudes.removeFirst(recentStationaryAltitudes.count - 9)
+            }
+        }
+        guard !recentStationaryAltitudes.isEmpty else { return previous }
+        let sorted = recentStationaryAltitudes.sorted()
+        return sorted[sorted.count / 2]
     }
 
     /// 실제로 이동했을 때만 약 1초 간격으로 저장합니다.
@@ -1964,65 +2050,181 @@ final class WorkoutManager: NSObject, ObservableObject {
         broadcastCommand(.stopLocationAssist)
     }
 
-    /// 워치가 꺼지거나 장시간 비활성이면 같은 세션을 iPhone GPS로 이어받습니다.
+    /// 워치 심박만 비는 것은 인계하지 않습니다. 심박과 경로가 함께 없을 때만 넘깁니다.
     private func evaluateWatchLossFailover(at now: Date = Date()) {
         guard sessionData.state == .recording || sessionData.state == .paused else {
+            cancelPhoneRouteFillIfNeeded()
             resetWatchLossMonitor()
             return
         }
 
-        if isWatchReachable {
+        if isWatchDetachedForRecording {
             resetWatchLossMonitor()
             notifyWatchOfPhoneTakeoverIfNeeded()
             return
         }
 
-        if isPhoneRecordingFailoverActive {
-            didNotifyWatchOfPhoneTakeover = false
-            return
+        if isWatchReachable {
+            didLinkWatchDuringRecording = true
+            notifyWatchOfPhoneTakeoverIfNeeded()
         }
 
-        guard !isLocationProducer else {
+        guard didLinkWatchDuringRecording || !isLocationProducer else {
             resetWatchLossMonitor()
             return
         }
 
-        if isWatchActivelyLinked {
-            resetWatchLossMonitor()
+        // 일시정지 중에는 심박이 멈추므로 놓친 횟수로 세지 않습니다.
+        guard sessionData.state == .recording else {
+            missedWatchHeartRateChecks = 0
+            lastWatchHeartRateCheckAt = nil
             return
         }
 
-        if watchConnectivityLossStartedAt == nil {
-            watchConnectivityLossStartedAt = now
+        if lastWatchHeartRateCheckAt == nil {
+            lastWatchHeartRateCheckAt = now
+            return
+        }
+        guard now.timeIntervalSince(lastWatchHeartRateCheckAt!) >= Self.watchHeartRateCheckInterval else {
+            return
+        }
+        let previousCheck = lastWatchHeartRateCheckAt!
+        lastWatchHeartRateCheckAt = now
+
+        let heardHeart = lastWatchHeartRateAt.map { $0 >= previousCheck } ?? false
+        if isLocationProducer {
+            // 경로는 이미 iPhone이 쓰고 있습니다. 워치가 도달 가능하거나 심박이 오면 유지합니다.
+            if heardHeart || isWatchReachable {
+                missedWatchHeartRateChecks = 0
+                return
+            }
+            missedWatchHeartRateChecks += 1
+            guard missedWatchHeartRateChecks >= Self.watchSignalMissedDetachLimit else { return }
+            detachWatchAndContinueRecording()
+            return
+        }
+
+        let heardRoute = lastWatchRoutePointAt.map { $0 >= previousCheck } ?? false
+        if heardHeart || heardRoute {
+            missedWatchHeartRateChecks = 0
+            cancelPhoneRouteFillIfNeeded()
+            return
+        }
+
+        missedWatchHeartRateChecks += 1
+        if missedWatchHeartRateChecks >= Self.watchSignalMissedRouteFillLimit {
+            beginPhoneRouteFill()
+        }
+        guard missedWatchHeartRateChecks >= Self.watchSignalMissedDetachLimit else { return }
+        detachWatchAndContinueRecording()
+    }
+
+    /// 라이브 수신은 도착 시각으로 셉니다. 과거 스냅샷 병합만 샘플 시각으로 거릅니다.
+    private func noteWatchHeartRateSignal(
+        at timestamp: Date,
+        now: Date = Date(),
+        countsOnArrival: Bool = false
+    ) {
+        guard !isWatchDetachedForRecording else { return }
+        if !countsOnArrival {
+            let freshness = Self.watchHeartRateCheckInterval * Double(Self.watchSignalMissedRouteFillLimit)
+            guard now.timeIntervalSince(timestamp) <= freshness else { return }
+        }
+        lastWatchHeartRateAt = now
+        missedWatchHeartRateChecks = 0
+        didLinkWatchDuringRecording = true
+        cancelPhoneRouteFillIfNeeded()
+    }
+
+    private func noteWatchRouteSignal(
+        at timestamp: Date,
+        now: Date = Date(),
+        countsOnArrival: Bool = false
+    ) {
+        guard !isWatchDetachedForRecording else { return }
+        if !countsOnArrival {
+            let freshness = Self.watchHeartRateCheckInterval * Double(Self.watchSignalMissedRouteFillLimit)
+            guard now.timeIntervalSince(timestamp) <= freshness else { return }
+        }
+        lastWatchRoutePointAt = now
+        missedWatchHeartRateChecks = 0
+        didLinkWatchDuringRecording = true
+        cancelPhoneRouteFillIfNeeded()
+    }
+
+    /// 인계를 확정하기 전에 iPhone GPS만 켜서 경로 구멍을 메웁니다.
+    private func beginPhoneRouteFill() {
+        guard sessionData.state == .recording else { return }
+        guard !isLocationProducer, !isPhoneRecordingFailoverActive, !isWatchDetachedForRecording else { return }
+        guard !isPhoneRouteFillActive else { return }
+        isPhoneRouteFillActive = true
+        Self.diagnosticLogger.notice("phone filling route while watch heart rate and track are both quiet")
+        authorizationStatus = locationManager.authorizationStatus
+        applyRecordingLocationConfiguration()
+        enableBackgroundLocationIfAuthorized()
+        locationManager.startUpdatingLocation()
+        startiPhoneWorkoutKeepAliveIfNeeded()
+    }
+
+    private func cancelPhoneRouteFillIfNeeded() {
+        guard isPhoneRouteFillActive, !isPhoneRecordingFailoverActive else { return }
+        isPhoneRouteFillActive = false
+        if !isLocationProducer {
+            locationManager.stopUpdatingLocation()
+        }
+    }
+
+    /// 워치 배터리 방전 등으로 링크가 끊긴 뒤 — 기록은 유지하고 심박·동기화는 멈춥니다.
+    private func detachWatchAndContinueRecording() {
+        guard sessionData.state == .recording || sessionData.state == .paused else { return }
+        guard !isWatchDetachedForRecording else { return }
+        guard didLinkWatchDuringRecording || !isLocationProducer else { return }
+
+        Self.diagnosticLogger.notice("detaching watch and continuing recording on iPhone")
+        isWatchDetachedForRecording = true
+        stopHeartRateCollection()
+        sessionData.currentHeartRate = nil
+
+        if isLocationProducer {
+            isPhoneRouteFillActive = false
+            isPhoneRecordingFailoverActive = true
+            phoneRecordingFailoverAt = phoneRecordingFailoverAt ?? Date()
+            resetWatchLossMonitor()
+            stopWatchLocationAssist()
             startiPhoneWorkoutKeepAliveIfNeeded()
-            scheduleWatchLossFailoverCheck()
-        }
-
-        guard let lossStart = watchConnectivityLossStartedAt,
-              now.timeIntervalSince(lossStart) >= Self.watchLossFailoverThreshold else {
+            if sessionData.state == .recording {
+                restartLocationTrackingForActiveWorkout()
+                startStepCountingIfNeeded()
+            }
+            saveLiveSessionBackupIfNeeded(force: true)
+            notifyWatchOfPhoneTakeoverIfNeeded()
             return
         }
+
         promotePhoneToLocationProducer()
     }
 
-    private func scheduleWatchLossFailoverCheck() {
-        guard watchLossFailoverTask == nil else { return }
-        watchLossFailoverTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(Self.watchLossFailoverThreshold))
-            guard !Task.isCancelled else { return }
-            self?.evaluateWatchLossFailover()
-        }
+    /// 워치가 도달 가능한 동안의 종료만 기록 종료로 받아들입니다.
+    /// 꺼진 워치에서 늦게 도착한 종료·저장은 배터리 방전으로 보고 무시합니다.
+    private func shouldEndRecordingForRemoteWatchStop() -> Bool {
+        guard sessionData.state == .recording || sessionData.state == .paused else { return false }
+        if isWatchDetachedForRecording || isPhoneRecordingFailoverActive { return false }
+        return isWatchReachable
     }
 
     private func resetWatchLossMonitor() {
-        watchConnectivityLossStartedAt = nil
-        watchLossFailoverTask?.cancel()
-        watchLossFailoverTask = nil
+        missedWatchHeartRateChecks = 0
+        lastWatchHeartRateCheckAt = nil
+        lastWatchHeartRateAt = nil
+        lastWatchRoutePointAt = nil
     }
 
     private func resetPhoneRecordingFailoverState() {
+        cancelPhoneRouteFillIfNeeded()
         resetWatchLossMonitor()
         isPhoneRecordingFailoverActive = false
+        isWatchDetachedForRecording = false
+        didLinkWatchDuringRecording = false
         phoneRecordingFailoverAt = nil
         didNotifyWatchOfPhoneTakeover = false
     }
@@ -2033,6 +2235,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         guard sessionData.state == .recording || sessionData.state == .paused else { return }
 
         Self.diagnosticLogger.notice("phone taking over recording after watch connectivity loss")
+        isPhoneRouteFillActive = false
         isLocationProducer = true
         isPhoneRecordingFailoverActive = true
         phoneRecordingFailoverAt = Date()
@@ -2047,9 +2250,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             startStepCountingIfNeeded()
         }
         startiPhoneWorkoutKeepAliveIfNeeded()
-        startHeartRateCollectionIfNeeded()
         saveLiveSessionBackupIfNeeded(force: true)
-        publishSessionSnapshot()
         notifyWatchOfPhoneTakeoverIfNeeded()
     }
 
@@ -2120,13 +2321,15 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData.lastUpdated = Date()
     }
 
-    /// iPhone이 워치 배터리 방전 등으로 위치 기록을 이어받음 — GPS를 멈추고 미러로 전환합니다.
+    /// iPhone이 워치 배터리 방전 등으로 위치 기록을 이어받음 — GPS·심박을 멈추고 미러로 전환합니다.
     private func adoptPhoneLocationProducerTakeover() {
         guard sessionData.state == .recording || sessionData.state == .paused else { return }
+        didYieldRecordingToPhone = true
         isLocationProducer = false
         stopLocationAssistCollection()
         stepCounter.stopLiveUpdates()
         locationManager.stopUpdatingLocation()
+        stopWatchWorkoutSession()
         saveLiveSessionBackupIfNeeded(force: true)
         syncLocalTrackingToState()
         Self.diagnosticLogger.notice("watch demoted to mirror after phone recording takeover")
@@ -2215,6 +2418,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func publishSessionSnapshot() {
+#if os(iOS)
+        if isWatchDetachedForRecording { return }
+#endif
         guard canSyncWithWatch, let wcSession else { return }
         guard shouldPublish(sessionData) else { return }
 
@@ -2436,6 +2642,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
 #if os(watchOS)
     private func startWatchWorkoutSessionIfNeeded() {
+        guard !didYieldRecordingToPhone else { return }
         guard sessionData.state == .recording || sessionData.state == .paused else { return }
         guard watchWorkoutSession == nil else { return }
 
@@ -2589,6 +2796,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
 #if os(iOS)
     private func startHeartRateCollectionIfNeeded() {
+        guard !isWatchDetachedForRecording else { return }
         guard shouldCollectHeartRateDuringWorkout else { return }
         guard sessionData.state == .recording else { return }
         guard HeartRateMonitor.canUseHealthKit else { return }
@@ -2631,6 +2839,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func shouldUseHealthKitHeartRateFallback() -> Bool {
+        if isWatchDetachedForRecording || missedWatchHeartRateChecks > 0 { return false }
         guard isWatchCounterpartInstalled else { return true }
         guard let last = sessionData.heartRateSamples.last else { return true }
         // Watch에서 WC로 최근 샘플이 오면 HealthKit 중복 수집을 줄입니다.
@@ -2716,7 +2925,16 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData.activeEnergyKilocalories = estimate
     }
 
-    private func appendHeartRateSample(_ sample: HikingHeartRateSample) {
+    private func appendHeartRateSample(_ sample: HikingHeartRateSample, fromWatch: Bool = false) {
+#if os(iOS)
+        if isWatchDetachedForRecording { return }
+        if fromWatch {
+            noteWatchHeartRateSignal(at: sample.timestamp, countsOnArrival: true)
+        }
+#endif
+#if os(watchOS)
+        if didYieldRecordingToPhone { return }
+#endif
         guard sessionData.state == .recording else { return }
 
         if sessionData.heartRateSamples.contains(where: { $0.id == sample.id }) {
@@ -2776,6 +2994,13 @@ final class WorkoutManager: NSObject, ObservableObject {
                 setResumed(syncRemote: false)
             }
         case .stopRecording:
+#if os(iOS)
+            if sessionData.state == .recording || sessionData.state == .paused,
+               !shouldEndRecordingForRemoteWatchStop() {
+                detachWatchAndContinueRecording()
+                break
+            }
+#endif
             if sessionData.state != .idle {
                 setEnded(syncRemote: false)
             }
@@ -2905,7 +3130,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
 
 #if os(iOS)
-        if isPhoneRecordingFailoverActive,
+        if isPhoneRecordingFailoverActive || isWatchDetachedForRecording,
            remote.sessionID == sessionData.sessionID,
            sessionData.state != .idle {
             mergeRemoteSegmentBreaks(remote.segmentBreaks)
@@ -2913,9 +3138,11 @@ final class WorkoutManager: NSObject, ObservableObject {
                 mergeRemotePoints(remote.points)
                 mergeRemotePhotos(remote.photos)
             }
-            mergeRemoteHeartRateSamples(remote.heartRateSamples)
-            if let remoteHeartRate = remote.currentHeartRate {
-                sessionData.currentHeartRate = remoteHeartRate
+            if !isWatchDetachedForRecording {
+                mergeRemoteHeartRateSamples(remote.heartRateSamples)
+                if let remoteHeartRate = remote.currentHeartRate {
+                    sessionData.currentHeartRate = remoteHeartRate
+                }
             }
             if let remoteSteps = remote.stepCount {
                 sessionData.stepCount = max(sessionData.stepCount ?? 0, remoteSteps)
@@ -2933,6 +3160,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         if remote.state == .idle,
            sessionData.state != .idle,
            remote.sessionID == sessionData.sessionID {
+#if os(iOS)
+            if !shouldEndRecordingForRemoteWatchStop() {
+                mergeFinalSessionFromRemote(remote)
+                detachWatchAndContinueRecording()
+                return
+            }
+#endif
             mergeFinalSessionFromRemote(remote)
             setEnded(syncRemote: false)
             return
@@ -2949,6 +3183,12 @@ final class WorkoutManager: NSObject, ObservableObject {
         let wasIdle = sessionData.state == .idle
 
         if remote.sessionID != sessionData.sessionID {
+#if os(iOS)
+            if sessionData.state != .idle,
+               (remote.state == .idle || !isWatchReachable || isWatchDetachedForRecording) {
+                return
+            }
+#endif
             sessionData = remote
             workoutStartDate = remote.effectiveStartedAt
             liveDistanceAnchor = HikingSessionMetrics.horizontalDistanceWithAnchor(from: remote.points).anchor
@@ -3044,6 +3284,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
         merged.sort { $0.timestamp < $1.timestamp }
         sessionData.points = merged
+#if os(iOS)
+        if let newest = incoming.max(by: { $0.timestamp < $1.timestamp }) {
+            noteWatchRouteSignal(at: newest.timestamp)
+        }
+#endif
         let recomputed = HikingSessionMetrics.horizontalDistanceWithAnchor(from: merged)
         sessionData.totalDistance = max(sessionData.totalDistance, recomputed.total)
         liveDistanceAnchor = recomputed.anchor
@@ -3081,11 +3326,19 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
         merged.sort { $0.timestamp < $1.timestamp }
         sessionData.heartRateSamples = merged
+#if os(iOS)
+        if let newest = incoming.max(by: { $0.timestamp < $1.timestamp }) {
+            noteWatchHeartRateSignal(at: newest.timestamp, countsOnArrival: false)
+        }
+#endif
     }
 
     private func appendRemotePoint(_ point: HikingPoint) {
         guard !isAwaitingSummaryConfirmation else { return }
         guard sessionData.state == .recording else { return }
+#if os(iOS)
+        noteWatchRouteSignal(at: point.timestamp, countsOnArrival: true)
+#endif
         guard shouldAcceptGPSPoint(at: point.timestamp) else { return }
 
         if isLocationProducer {
@@ -3141,7 +3394,10 @@ final class WorkoutManager: NSObject, ObservableObject {
                     locationManager.stopUpdatingLocation()
                 }
 #else
-                locationManager.stopUpdatingLocation()
+                // 워치 신호가 잠시 비는 동안 메우는 iPhone GPS는 원격 스냅샷이 끄지 않습니다.
+                if !isPhoneRouteFillActive {
+                    locationManager.stopUpdatingLocation()
+                }
 #endif
             }
             startElapsedTimer()
@@ -3315,7 +3571,7 @@ extension WorkoutManager: WCSessionDelegate {
                 return
             }
             if let sample = HikingHeartRateSample(message: message) {
-                appendHeartRateSample(sample)
+                appendHeartRateSample(sample, fromWatch: true)
             }
         }
     }
@@ -3342,7 +3598,7 @@ extension WorkoutManager: WCSessionDelegate {
                 return
             }
             if let sample = HikingHeartRateSample(message: message) {
-                appendHeartRateSample(sample)
+                appendHeartRateSample(sample, fromWatch: true)
             }
             replyHandler([:])
         }

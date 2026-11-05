@@ -127,13 +127,11 @@ final class HikingRecordExportCoordinator: ObservableObject {
             beginMenuAction(.regeneratingRouteImage)
             Task { await regenerateRouteImage() }
         case .shareCard:
-            progressOverlayMessage = "이미지 생성 중입니다."
             beginMenuAction(.preparingShare)
             Task { await presentShareSheet(record: current) }
         case .shareGPX:
             Task { await presentShareSheet(record: current, gpxOnly: true) }
         case .saveToPhotos:
-            progressOverlayMessage = "이미지 생성 중입니다."
             beginMenuAction(.preparingShare)
             Task { await saveCardToPhotos(record: current) }
         case .followRoute:
@@ -320,9 +318,8 @@ final class HikingRecordExportCoordinator: ObservableObject {
         guard LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil else { return nil }
 
         if showsProgress {
-            progressOverlayMessage = "이미지 생성 중입니다."
+            progressOverlayMessage = nil
             isExportCapturing = true
-            await waitForCaptureReadyUI()
         }
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else {

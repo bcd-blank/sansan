@@ -16,6 +16,8 @@ enum HikingStorageLayout: Sendable {
     nonisolated static var recordsJSONName: String { "records.json" }
     nonisolated static var tombstonesJSONName: String { "tombstones.json" }
     nonisolated static var snapshotFilename: String { "snapshot.png" }
+    /// 목록 썸네일. 지도 위에 경로 선만 올린 정사각형입니다.
+    nonisolated static var listThumbnailFilename: String { "route-map.png" }
     nonisolated static var photosDirectoryName: String { "photos" }
     nonisolated static var profilePhotoFilename: String { "profile.jpg" }
     nonisolated static var avatarFilename: String { "avatar.png" }
@@ -72,6 +74,10 @@ enum HikingStorageLayout: Sendable {
 
     nonisolated static func snapshotURL(recordID: UUID, in userRoot: URL) -> URL {
         recordDirectory(recordID: recordID, in: userRoot).appendingPathComponent(snapshotFilename)
+    }
+
+    nonisolated static func listThumbnailURL(recordID: UUID, in userRoot: URL) -> URL {
+        recordDirectory(recordID: recordID, in: userRoot).appendingPathComponent(listThumbnailFilename)
     }
 
     nonisolated static func photosDirectory(recordID: UUID, in userRoot: URL) -> URL {

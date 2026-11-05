@@ -125,7 +125,7 @@ enum RouteMapOverlayMetrics {
             return image
         }
 
-        let sampleHeight = min(max(6, maskRect.height * 0.18), maskRect.minY)
+        let sampleHeight = min(maskRect.height, maskRect.minY)
         let sampleRect = CGRect(
             x: maskRect.minX,
             y: maskRect.minY - sampleHeight,
@@ -153,9 +153,15 @@ enum RouteMapOverlayMetrics {
         format.scale = image.scale
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let dest = CGRect(
+            x: maskRect.minX,
+            y: maskRect.maxY - sampleHeight,
+            width: maskRect.width,
+            height: sampleHeight
+        )
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
-            sampleImage.draw(in: maskRect)
+            sampleImage.draw(in: dest)
         }
     }
 }

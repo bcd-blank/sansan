@@ -158,6 +158,71 @@ nonisolated struct HikingRouteWeatherSnapshot: Codable, Equatable, Hashable, Sen
         return kept
     }
 
+    /// 요약 이미지처럼 칸 수가 제한될 때, 처음·끝과 날씨 변화를 남기고 그 사이를 솎아냅니다.
+    static func timelineFitting(
+        _ points: [HikingWeatherHourPoint],
+        maximumCount: Int
+    ) -> [HikingWeatherHourPoint] {
+        let ordered = points.sorted { $0.date < $1.date }
+        guard maximumCount >= 1 else { return [] }
+        guard ordered.count > maximumCount else { return ordered }
+        if maximumCount == 1 { return [ordered[0]] }
+
+        var chosen: Set<Int> = [0, ordered.count - 1]
+        for index in 1..<ordered.count {
+            let previous = conditionLabel(for: ordered[index - 1].wmoCode)
+            let current = conditionLabel(for: ordered[index].wmoCode)
+            if current != previous {
+                chosen.insert(index)
+            }
+        }
+        if chosen.count > maximumCount {
+            let must = chosen.sorted().map { ordered[$0] }
+            return evenlyThin(must, maximumCount: maximumCount)
+        }
+
+        let ranked = (1..<(ordered.count - 1))
+            .filter { !chosen.contains($0) }
+            .sorted { lhs, rhs in
+                let left = abs(ordered[lhs].temperatureCelsius - ordered[lhs - 1].temperatureCelsius)
+                let right = abs(ordered[rhs].temperatureCelsius - ordered[rhs - 1].temperatureCelsius)
+                if left == right { return lhs < rhs }
+                return left > right
+            }
+        for index in ranked {
+            if chosen.count >= maximumCount { break }
+            chosen.insert(index)
+        }
+        let kept = chosen.sorted().map { ordered[$0] }
+        return changePoints(from: kept)
+    }
+
+    private static func evenlyThin(
+        _ points: [HikingWeatherHourPoint],
+        maximumCount: Int
+    ) -> [HikingWeatherHourPoint] {
+        guard points.count > maximumCount, maximumCount >= 2 else {
+            return Array(points.prefix(max(maximumCount, 0)))
+        }
+        let lastIndex = points.count - 1
+        var result: [HikingWeatherHourPoint] = []
+        for slot in 0..<maximumCount {
+            let index = Int((Double(slot) * Double(lastIndex) / Double(maximumCount - 1)).rounded())
+            let point = points[min(index, lastIndex)]
+            if result.last?.date != point.date {
+                result.append(point)
+            }
+        }
+        if result.last?.date != points[lastIndex].date {
+            if result.isEmpty {
+                result.append(points[lastIndex])
+            } else {
+                result[result.count - 1] = points[lastIndex]
+            }
+        }
+        return changePoints(from: result)
+    }
+
     var symbolName: String {
         Self.symbolName(for: wmoCode)
     }

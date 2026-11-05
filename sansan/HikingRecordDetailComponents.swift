@@ -19,12 +19,14 @@ struct HikingRecordDetailActionsSheet: View {
     let isGPXShareDisabled: Bool
     let isSaveDisabled: Bool
     let onFollowRoute: () -> Void
+    let onRename: () -> Void
     let onToggleListPinned: () -> Void
     let onToggleFavorite: () -> Void
     let onRegenerate: () -> Void
     let onShare: () -> Void
     let onShareGPX: () -> Void
     let onSaveToPhotos: () -> Void
+    let onDelete: () -> Void
     let isFlythroughDisabled: Bool
     let onMakeFlythrough: () -> Void
     var onAppear: (() -> Void)?
@@ -66,6 +68,13 @@ struct HikingRecordDetailActionsSheet: View {
                     systemImage: "point.topleft.down.to.point.bottomright.curvepath",
                     isDisabled: isFollowDisabled,
                     action: onFollowRoute
+                )
+                DetailActionRow(
+                    title: "이름 변경",
+                    subtitle: "목록과 상세에 표시되는 이름을 바꿉니다.",
+                    systemImage: "pencil",
+                    isDisabled: false,
+                    action: onRename
                 )
                 DetailActionRow(
                     title: isListPinned ? "상단 고정 해제" : "상단 고정",
@@ -118,13 +127,21 @@ struct HikingRecordDetailActionsSheet: View {
                     isDisabled: isSaveDisabled,
                     action: onSaveToPhotos
                 )
+                DetailActionRow(
+                    title: "삭제",
+                    subtitle: "이 기록을 목록에서 삭제합니다. 되돌릴 수 없습니다.",
+                    systemImage: "trash",
+                    isDisabled: false,
+                    isDestructive: true,
+                    action: onDelete
+                )
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
 
             Spacer(minLength: 0)
         }
-        .presentationDetents([.height(showsFlythroughAction ? 720 : 640)])
+        .presentationDetents([.height(showsFlythroughAction ? 910 : 820), .large])
         .presentationDragIndicator(.visible)
         .onAppear { onAppear?() }
     }
@@ -135,6 +152,7 @@ struct DetailActionRow: View {
     var subtitle: String?
     let systemImage: String
     let isDisabled: Bool
+    var isDestructive: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -142,13 +160,13 @@ struct DetailActionRow: View {
             HStack(spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isDestructive ? Color.red : Color.primary)
                     .frame(width: 24, alignment: .center)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(isDestructive ? Color.red : Color.primary)
                     if let subtitle {
                         Text(subtitle)
                             .font(.caption)

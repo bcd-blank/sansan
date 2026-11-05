@@ -21,10 +21,11 @@ enum RouteSummitMarkerDrawing {
         let iconSize = 11 * contentScale
         let spacing = 2 * contentScale
         let capsule = capsuleSize(for: name, contentScale: contentScale)
-        let iconCenter = CGPoint(x: point.x, y: point.y - iconSize / 2)
-        let capsuleCenter = CGPoint(
+        // 라이브 지도와 같이 아이콘이 위, 이름 캡슐이 아래. 캡슐 하단이 정상 좌표에 붙는다.
+        let capsuleCenter = CGPoint(x: point.x, y: point.y - capsule.height / 2)
+        let iconCenter = CGPoint(
             x: point.x,
-            y: iconCenter.y - iconSize / 2 - spacing - capsule.height / 2
+            y: capsuleCenter.y - capsule.height / 2 - spacing - iconSize / 2
         )
 
         drawIcon(at: iconCenter, size: iconSize, contentScale: contentScale, in: cgContext)

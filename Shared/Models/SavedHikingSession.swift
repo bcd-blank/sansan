@@ -16,7 +16,7 @@ nonisolated struct SavedHikingSession: Codable, Identifiable, Hashable, Sendable
     let id: UUID
     let endedAt: Date
     let session: HikingSessionData
-    /// 목록 썸네일 파일명. 현재 레이아웃에서는 항상 `snapshot.png`.
+    /// 경로 스냅샷 파일명. 목록 썸네일은 별도 `route-map.png`입니다.
     var snapshotFilename: String?
     /// 지도 상단에 고정할 사진 ID (최대 5개, 순서 유지).
     var mapPinnedPhotoIDs: [UUID]
@@ -216,6 +216,14 @@ extension SavedHikingSession {
             storedFilename: snapshotFilename,
             in: root
         )
+    }
+
+    /// 목록에 보이는 경로 선 썸네일. 파일이 없으면 nil.
+    var listThumbnailFileURL: URL? {
+        guard UserDataPaths.isUserSelected, let root = UserDataPaths.activeUserRoot else { return nil }
+        let url = HikingStorageLayout.listThumbnailURL(recordID: id, in: root)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
     }
 
     func trailPhotoURL(for photo: HikingTrailPhoto) -> URL {
