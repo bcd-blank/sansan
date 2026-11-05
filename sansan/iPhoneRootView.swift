@@ -36,11 +36,15 @@ enum iPhoneBottomChromeLayout {
     static let tabCapsuleInset: CGFloat = 8
     static let selectionInset: CGFloat = 6
     static let tabItemMinWidth: CGFloat = 76
+    /// 기록 중·일시정지 — 4버튼(사진·카드·일시정지/재개·종료)이 SE(375)에도 들어가도록 축소.
+    static let compactTabItemMinWidth: CGFloat = 58
     /// 기록 중 우측 컨트롤 버튼 크기.
-    static let compactControlHeight: CGFloat = 44
+    static let compactControlHeight: CGFloat = 40
     static let chromeHorizontalPadding: CGFloat = 16
     static let chromeItemSpacing: CGFloat = 8
     static let workoutControlSpacing: CGFloat = 6
+    /// 기록 중 4버튼 간격 — 좁은 폭에서 탭 캡슐과 겹치지 않게 조금 더 촘촘히.
+    static let compactWorkoutControlSpacing: CGFloat = 4
     static let scrollEndBuffer: CGFloat = 16
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
@@ -115,6 +119,7 @@ private struct WorkoutSummaryCoverItem: Identifiable, Sendable {
 /// iPhone 앱 루트 — 메인·모음 탭, 좌우 스와이프·하단 탭으로 전환.
 struct iPhoneRootView: View {
     @ObservedObject private var chrome = WorkoutChromeStateObserver.shared
+    @StateObject private var midHikeShare = MidHikeShareCoordinator()
     @State private var selectedTab: iPhoneMainTab = .dashboard
 
     private var selectedTabBinding: Binding<iPhoneMainTab> {
@@ -156,6 +161,7 @@ struct iPhoneRootView: View {
 #if DEBUG
             .onAppear {
                 applyAppStoreScreenshotModeIfNeeded()
+                exportLayoutPreviewCardIfNeeded()
             }
 #endif
             .environment(\.chromeCapsuleHeight, chromeCapsuleHeight)
@@ -185,14 +191,55 @@ struct iPhoneRootView: View {
                 titleVisibility: .visible
             ) {
                 Button("종료", role: .destructive) {
+                    midHikeShare.cancelForWorkoutEnd()
                     WorkoutManager.shared.endWorkout()
                 }
                 Button("취소", role: .cancel) {}
             }
+            .confirmationDialog(
+                "지금까지의 기록",
+                isPresented: $midHikeShare.showsActionSheet,
+                titleVisibility: .visible
+            ) {
+                Button("사진 앱에 저장") {
+                    midHikeShare.queueSaveToPhotos()
+                }
+                Button("공유하기") {
+                    midHikeShare.queueShare()
+                }
+                Button("취소", role: .cancel) {
+                    midHikeShare.pendingAction = nil
+                }
+            }
+            .onChange(of: midHikeShare.showsActionSheet) { _, isPresented in
+                if !isPresented {
+                    midHikeShare.handleActionSheetDismissed()
+                }
+            }
+            .overlay {
+                if let progressOverlayMessage = midHikeShare.progressOverlayMessage {
+                    RecordCardProgressOverlay(message: progressOverlayMessage)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: midHikeShare.progressOverlayMessage)
             .alert("사진 저장 실패", isPresented: $photoCaptureFailed) {
                 Button("확인", role: .cancel) {}
             } message: {
                 Text("GPS 위치를 확인한 뒤 다시 시도해 주세요.")
+            }
+            .alert("알림", isPresented: Binding(
+                get: { midHikeShare.alertMessage != nil },
+                set: { if !$0 { midHikeShare.alertMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text(midHikeShare.alertMessage ?? "")
+            }
+            .onChange(of: chrome.sessionState) { _, state in
+                if state == .idle {
+                    midHikeShare.cancelForWorkoutEnd()
+                }
             }
             .locationPermissionAlerts(
                 workout: WorkoutManager.shared,
@@ -248,15 +295,29 @@ struct iPhoneRootView: View {
 
             iPhoneBottomChrome(
                 selection: selectedTabBinding,
-                sessionState: chrome.sessionState,
+                sessionState: layoutPreviewSessionState ?? chrome.sessionState,
                 isStartCountdownActive: chrome.startCountdownRemaining != nil,
                 capsuleHeight: chromeCapsuleHeight,
                 onStartWorkout: handleStartWorkoutTap,
                 onShowCamera: { showCamera = true },
+                onShowMidHikeCard: { midHikeShare.presentActionsIfPossible() },
                 onShowEndConfirmation: { showEndConfirmation = true }
             )
             .padding(.bottom, iPhoneBottomChromeLayout.chromeBottomInset)
         }
+    }
+
+    /// DEBUG/`SANSAN_LAYOUT_PREVIEW` — 기록·일시정지 크롬만 강제해 시뮬레이터 레이아웃 점검.
+    private var layoutPreviewSessionState: HikingSessionState? {
+#if DEBUG
+        switch ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] {
+        case "recording": return .recording
+        case "paused": return .paused
+        default: return nil
+        }
+#else
+        nil
+#endif
     }
 
     private func handleStartWorkoutTap() {
@@ -312,6 +373,7 @@ private struct iPhoneBottomChrome: View {
     var capsuleHeight: CGFloat
     var onStartWorkout: () -> Void
     var onShowCamera: () -> Void
+    var onShowMidHikeCard: () -> Void
     var onShowEndConfirmation: () -> Void
 
     private let controlHeight = iPhoneBottomChromeLayout.chromeControlHeight
@@ -324,9 +386,25 @@ private struct iPhoneBottomChrome: View {
         isCompact ? iPhoneBottomChromeLayout.compactControlHeight : controlHeight
     }
 
+    private var tabItemMinWidth: CGFloat {
+        isCompact
+            ? iPhoneBottomChromeLayout.compactTabItemMinWidth
+            : iPhoneBottomChromeLayout.tabItemMinWidth
+    }
+
+    private var activeWorkoutControlSpacing: CGFloat {
+        isCompact
+            ? iPhoneBottomChromeLayout.compactWorkoutControlSpacing
+            : iPhoneBottomChromeLayout.workoutControlSpacing
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: iPhoneBottomChromeLayout.chromeItemSpacing) {
-            iPhoneMainTabBar(selection: $selection, capsuleHeight: capsuleHeight)
+            iPhoneMainTabBar(
+                selection: $selection,
+                capsuleHeight: capsuleHeight,
+                tabItemMinWidth: tabItemMinWidth
+            )
                 .fixedSize(horizontal: true, vertical: false)
 
             Spacer(minLength: iPhoneBottomChromeLayout.chromeItemSpacing)
@@ -345,8 +423,9 @@ private struct iPhoneBottomChrome: View {
             startButton
 
         case .recording:
-            HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
+            HStack(spacing: activeWorkoutControlSpacing) {
                 photoButton
+                cardButton
                 workoutGlassButton(systemImage: "pause.fill", tint: .orange, label: "일시정지") {
                     WorkoutManager.shared.pauseWorkout()
                 }
@@ -354,8 +433,9 @@ private struct iPhoneBottomChrome: View {
             }
 
         case .paused:
-            HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
+            HStack(spacing: activeWorkoutControlSpacing) {
                 photoButton
+                cardButton
                 workoutGlassButton(systemImage: "play.fill", tint: .green, label: "재개") {
                     WorkoutManager.shared.resumeWorkout()
                 }
@@ -404,6 +484,16 @@ private struct iPhoneBottomChrome: View {
         workoutGlassButton(systemImage: "camera.fill", tint: .blue, label: "사진", action: onShowCamera)
     }
 
+    private var cardButton: some View {
+        // 완료 후 공유(square.and.arrow.up)와 구분 — 기록 중 카드 스냅샷 진입점.
+        workoutGlassButton(
+            systemImage: "doc.richtext",
+            tint: .indigo,
+            label: "카드",
+            action: onShowMidHikeCard
+        )
+    }
+
     private var endButton: some View {
         workoutGlassButton(systemImage: "stop.fill", tint: .red, label: "종료", action: onShowEndConfirmation)
     }
@@ -431,6 +521,7 @@ private struct iPhoneBottomChrome: View {
 private struct iPhoneMainTabBar: View {
     @Binding var selection: iPhoneMainTab
     var capsuleHeight: CGFloat
+    var tabItemMinWidth: CGFloat = iPhoneBottomChromeLayout.tabItemMinWidth
     @Namespace private var selectionNamespace
 
     private let tabCapsuleInset = iPhoneBottomChromeLayout.tabCapsuleInset
@@ -476,7 +567,7 @@ private struct iPhoneMainTabBar: View {
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-            .frame(minWidth: iPhoneBottomChromeLayout.tabItemMinWidth, maxHeight: .infinity)
+            .frame(minWidth: tabItemMinWidth, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -499,6 +590,67 @@ private extension iPhoneRootView {
         guard let mode = AppStoreScreenshotMode.current, mode.opensRecordsTab else { return }
         isRecordsTabPrepared = true
         selectedTab = .records
+    }
+
+    /// `SANSAN_LAYOUT_PREVIEW=cardExport` — 극단 폭 점검용 fullScreen 카드 PNG를 Documents에 저장.
+    func exportLayoutPreviewCardIfNeeded() {
+        guard ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] == "cardExport" else { return }
+        Task { @MainActor in
+            let started = Date().addingTimeInterval(-3_600)
+            let p0 = HikingPoint(
+                latitude: 37.5665,
+                longitude: 126.9780,
+                altitude: 40,
+                timestamp: started
+            )
+            let p1 = HikingPoint(
+                latitude: 37.5700,
+                longitude: 126.9850,
+                altitude: 220,
+                timestamp: started.addingTimeInterval(3_600)
+            )
+            var session = HikingSessionData(
+                state: .recording,
+                startedAt: started,
+                totalDistance: 4_250,
+                elapsedTime: 3_600,
+                currentAltitude: 220,
+                points: [p0, p1],
+                stepCount: 5_400,
+                activeEnergyKilocalories: 320,
+                elevationGainMeters: 180
+            )
+            session.elevationProfile = [
+                HikingElevationChartSample(id: UUID(), distanceMeters: 0, altitude: 40),
+                HikingElevationChartSample(id: UUID(), distanceMeters: 2_100, altitude: 160),
+                HikingElevationChartSample(id: UUID(), distanceMeters: 4_250, altitude: 220),
+            ]
+            let record = MidHikeShareSnapshot.makeRecord(from: session, capturedAt: Date())
+            let mapSize = HikingRecordShareDeviceMetrics.detailMapCanvasSize
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = HikingRecordShareDeviceMetrics.nativeScale
+            format.opaque = true
+            let routeImage = UIGraphicsImageRenderer(size: mapSize, format: format).image { ctx in
+                UIColor.secondarySystemFill.setFill()
+                ctx.fill(CGRect(origin: .zero, size: mapSize))
+                UIColor.systemGreen.setStroke()
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: mapSize.width * 0.18, y: mapSize.height * 0.72))
+                path.addLine(to: CGPoint(x: mapSize.width * 0.48, y: mapSize.height * 0.42))
+                path.addLine(to: CGPoint(x: mapSize.width * 0.78, y: mapSize.height * 0.28))
+                path.lineWidth = 4
+                path.stroke()
+            }
+            guard let card = HikingRecordShareComposer.render(
+                record: record,
+                routeImage: routeImage,
+                format: .fullScreen,
+                isInProgressSnapshot: true
+            ) else { return }
+            let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            let url = dir.appendingPathComponent("mid-hike-layout-card.png")
+            try? card.pngData()?.write(to: url, options: .atomic)
+        }
     }
 }
 #endif
