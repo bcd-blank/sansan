@@ -2041,6 +2041,9 @@ struct HikingRecordSummarySection: View {
 
     let record: SavedHikingSession
     var horizontalPadding: CGFloat = 0
+    /// 기록 중 스냅샷이면 일정 카드 종료 라벨을 "현재" 등으로 바꿉니다.
+    var endScheduleLabel: String = "종료"
+    var endScheduleIcon: String = "flag.checkered"
 
     private var summaryFooterText: String {
         let points = "GPS \(record.session.points.count)개 포인트"
@@ -2053,7 +2056,12 @@ struct HikingRecordSummarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HikingRecordCardLayout.cardGridSpacing.recordScaled(layoutScale)) {
-            RecordScheduleCard(record: record, heroStyle: true)
+            RecordScheduleCard(
+                record: record,
+                heroStyle: true,
+                endLabel: endScheduleLabel,
+                endIcon: endScheduleIcon
+            )
 
             HStack(alignment: .top, spacing: HikingRecordCardLayout.cardGridSpacing.recordScaled(layoutScale)) {
                 RecordStatCard(
@@ -2122,6 +2130,9 @@ struct RecordScheduleCard: View {
 
     let record: SavedHikingSession
     var heroStyle: Bool = false
+    /// 완료 카드는 "종료", 기록 중 스냅샷은 "현재".
+    var endLabel: String = "종료"
+    var endIcon: String = "flag.checkered"
 
     var body: some View {
         HStack(alignment: .top, spacing: HikingRecordCardLayout.cardGridSpacing.recordScaled(layoutScale)) {
@@ -2133,9 +2144,9 @@ struct RecordScheduleCard: View {
                 heroStyle: heroStyle
             )
             ScheduleTile(
-                label: "종료",
+                label: endLabel,
                 parts: record.endedScheduleParts,
-                icon: "flag.checkered",
+                icon: endIcon,
                 tint: Color(.systemGray),
                 heroStyle: heroStyle
             )

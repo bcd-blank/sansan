@@ -115,6 +115,7 @@ private struct WorkoutSummaryCoverItem: Identifiable, Sendable {
 /// iPhone 앱 루트 — 메인·모음 탭, 좌우 스와이프·하단 탭으로 전환.
 struct iPhoneRootView: View {
     @ObservedObject private var chrome = WorkoutChromeStateObserver.shared
+    @StateObject private var midHikeShare = MidHikeShareCoordinator()
     @State private var selectedTab: iPhoneMainTab = .dashboard
 
     private var selectedTabBinding: Binding<iPhoneMainTab> {
@@ -185,14 +186,55 @@ struct iPhoneRootView: View {
                 titleVisibility: .visible
             ) {
                 Button("종료", role: .destructive) {
+                    midHikeShare.cancelForWorkoutEnd()
                     WorkoutManager.shared.endWorkout()
                 }
                 Button("취소", role: .cancel) {}
             }
+            .confirmationDialog(
+                "지금까지의 기록",
+                isPresented: $midHikeShare.showsActionSheet,
+                titleVisibility: .visible
+            ) {
+                Button("사진 앱에 저장") {
+                    midHikeShare.queueSaveToPhotos()
+                }
+                Button("공유하기") {
+                    midHikeShare.queueShare()
+                }
+                Button("취소", role: .cancel) {
+                    midHikeShare.pendingAction = nil
+                }
+            }
+            .onChange(of: midHikeShare.showsActionSheet) { _, isPresented in
+                if !isPresented {
+                    midHikeShare.handleActionSheetDismissed()
+                }
+            }
+            .overlay {
+                if let progressOverlayMessage = midHikeShare.progressOverlayMessage {
+                    RecordCardProgressOverlay(message: progressOverlayMessage)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: midHikeShare.progressOverlayMessage)
             .alert("사진 저장 실패", isPresented: $photoCaptureFailed) {
                 Button("확인", role: .cancel) {}
             } message: {
                 Text("GPS 위치를 확인한 뒤 다시 시도해 주세요.")
+            }
+            .alert("알림", isPresented: Binding(
+                get: { midHikeShare.alertMessage != nil },
+                set: { if !$0 { midHikeShare.alertMessage = nil } }
+            )) {
+                Button("확인", role: .cancel) {}
+            } message: {
+                Text(midHikeShare.alertMessage ?? "")
+            }
+            .onChange(of: chrome.sessionState) { _, state in
+                if state == .idle {
+                    midHikeShare.cancelForWorkoutEnd()
+                }
             }
             .locationPermissionAlerts(
                 workout: WorkoutManager.shared,
@@ -252,6 +294,7 @@ struct iPhoneRootView: View {
                 capsuleHeight: chromeCapsuleHeight,
                 onStartWorkout: handleStartWorkoutTap,
                 onShowCamera: { showCamera = true },
+                onShowMidHikeCard: { midHikeShare.presentActionsIfPossible() },
                 onShowEndConfirmation: { showEndConfirmation = true }
             )
             .padding(.bottom, iPhoneBottomChromeLayout.chromeBottomInset)
@@ -310,6 +353,7 @@ private struct iPhoneBottomChrome: View {
     var capsuleHeight: CGFloat
     var onStartWorkout: () -> Void
     var onShowCamera: () -> Void
+    var onShowMidHikeCard: () -> Void
     var onShowEndConfirmation: () -> Void
 
     private let controlHeight = iPhoneBottomChromeLayout.chromeControlHeight
@@ -345,6 +389,7 @@ private struct iPhoneBottomChrome: View {
         case .recording:
             HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
                 photoButton
+                cardButton
                 workoutGlassButton(systemImage: "pause.fill", tint: .orange, label: "일시정지") {
                     WorkoutManager.shared.pauseWorkout()
                 }
@@ -354,6 +399,7 @@ private struct iPhoneBottomChrome: View {
         case .paused:
             HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
                 photoButton
+                cardButton
                 workoutGlassButton(systemImage: "play.fill", tint: .green, label: "재개") {
                     WorkoutManager.shared.resumeWorkout()
                 }
@@ -390,6 +436,16 @@ private struct iPhoneBottomChrome: View {
 
     private var photoButton: some View {
         workoutGlassButton(systemImage: "camera.fill", tint: .blue, label: "사진", action: onShowCamera)
+    }
+
+    private var cardButton: some View {
+        // 완료 후 공유(square.and.arrow.up)와 구분 — 기록 중 카드 스냅샷 진입점.
+        workoutGlassButton(
+            systemImage: "doc.richtext",
+            tint: .indigo,
+            label: "카드",
+            action: onShowMidHikeCard
+        )
     }
 
     private var endButton: some View {
