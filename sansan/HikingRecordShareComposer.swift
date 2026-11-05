@@ -91,6 +91,8 @@ struct HikingRecordShareCardView: View {
     let record: SavedHikingSession
     let routeImage: UIImage
     var format: HikingRecordShareExportFormat = .contentSized
+    /// 산행 중 스냅샷이면 일정 카드에 "현재" 라벨을 씁니다.
+    var isInProgressSnapshot: Bool = false
 
     static let legacyExportWidth: CGFloat = 1080
     static let nineBySixteenHeight: CGFloat = 1920
@@ -213,7 +215,11 @@ struct HikingRecordShareCardView: View {
 
             shareMapSection
 
-            HikingRecordSummarySection(record: record)
+            HikingRecordSummarySection(
+                record: record,
+                endScheduleLabel: isInProgressSnapshot ? "현재" : "종료",
+                endScheduleIcon: isInProgressSnapshot ? "location.fill" : "flag.checkered"
+            )
                 .environment(\.recordCardLayoutScale, layoutScale)
                 .frame(width: contentWidth, alignment: .topLeading)
         }
@@ -257,12 +263,14 @@ enum HikingRecordShareComposer {
     static func render(
         record: SavedHikingSession,
         routeImage: UIImage,
-        format: HikingRecordShareExportFormat = .contentSized
+        format: HikingRecordShareExportFormat = .contentSized,
+        isInProgressSnapshot: Bool = false
     ) -> UIImage? {
         let card = HikingRecordShareCardView(
             record: record,
             routeImage: routeImage,
-            format: format
+            format: format,
+            isInProgressSnapshot: isInProgressSnapshot
         )
 
         guard let image = renderCardBitmap(card) else {
