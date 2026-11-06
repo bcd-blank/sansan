@@ -707,6 +707,11 @@ final class WorkoutManager: NSObject, ObservableObject {
     /// 최초 위치 권한 — 사용 중 허용만 요청합니다. 안내는 UI에서 먼저 표시합니다.
     func requestWhenInUseLocationAuthorization() {
         guard authorizationStatus == .notDetermined else { return }
+#if DEBUG
+        // 레이아웃/스크린샷 촬영에서 시스템 위치 팝업이 크롬을 가리지 않도록 요청을 건너뜁니다.
+        let env = ProcessInfo.processInfo.environment
+        if env["SANSAN_LAYOUT_PREVIEW"] != nil || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1" { return }
+#endif
         locationManager.requestWhenInUseAuthorization()
     }
 

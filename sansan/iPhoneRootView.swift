@@ -28,24 +28,39 @@ private enum iPhoneMainTab: Int, CaseIterable, Hashable {
 
 /// 하단 글래스 크롬 — 스크롤 여백·오버레이 위치 계산용.
 enum iPhoneBottomChromeLayout {
-    /// 탭·기록 시작·기록 중 버튼 공통 터치 높이.
+    /// 탭·기록 시작·기록 중 버튼 공통 터치 높이(idle·recording·paused 동일).
     static let chromeControlHeight: CGFloat = 50
     /// 화면 맨 아래에서 탭까지의 여백 — 홈 인디케이터(시스템 제스처 바)를 비키도록 충분히 확보.
     static let chromeBottomInset: CGFloat = 26
     static let workoutStackSpacing: CGFloat = 10
     static let tabCapsuleInset: CGFloat = 8
     static let selectionInset: CGFloat = 6
+    /// 전 모드 공통 — 기록 중에도 idle과 동일한 탭 폭.
     static let tabItemMinWidth: CGFloat = 76
-    /// 기록 중·일시정지 — 4버튼(사진·카드·일시정지/재개·종료)이 SE(375)에도 들어가도록 축소.
-    static let compactTabItemMinWidth: CGFloat = 58
-    /// 기록 중 우측 컨트롤 버튼 크기.
-    static let compactControlHeight: CGFloat = 40
     static let chromeHorizontalPadding: CGFloat = 16
     static let chromeItemSpacing: CGFloat = 8
-    static let workoutControlSpacing: CGFloat = 6
-    /// 기록 중 4버튼 간격 — 좁은 폭에서 탭 캡슐과 겹치지 않게 조금 더 촘촘히.
-    static let compactWorkoutControlSpacing: CGFloat = 4
+    /// 기록 중 1단(더보기·일시정지/재개·종료) 간격 — SE 예산 가드 ≥12.
+    static let workoutControlSpacing: CGFloat = 12
+    /// SE(375)와 넓은 기기(≥393) 분기 기준 논리 폭.
+    static let recordingComfortableWidth: CGFloat = 393
+    /// SE: 일시정지·종료 ⌀48 / 더보기 hit 44. 넓은 기기: ⌀50.
+    static let recordingPrimaryDiameterNarrow: CGFloat = 48
+    static let recordingPrimaryDiameterComfortable: CGFloat = 50
+    static let recordingOverflowHitNarrow: CGFloat = 44
+    static let recordingOverflowHitComfortable: CGFloat = 50
     static let scrollEndBuffer: CGFloat = 16
+
+    static func recordingPrimaryDiameter(forWidth width: CGFloat) -> CGFloat {
+        width >= recordingComfortableWidth
+            ? recordingPrimaryDiameterComfortable
+            : recordingPrimaryDiameterNarrow
+    }
+
+    static func recordingOverflowHit(forWidth width: CGFloat) -> CGFloat {
+        width >= recordingComfortableWidth
+            ? recordingOverflowHitComfortable
+            : recordingOverflowHitNarrow
+    }
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
     static var workoutControlsHeight: CGFloat { chromeControlHeight }
@@ -311,7 +326,7 @@ struct iPhoneRootView: View {
     private var layoutPreviewSessionState: HikingSessionState? {
 #if DEBUG
         switch ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] {
-        case "recording": return .recording
+        case "recording", "recordingMore": return .recording
         case "paused": return .paused
         default: return nil
         }
@@ -376,26 +391,17 @@ private struct iPhoneBottomChrome: View {
     var onShowMidHikeCard: () -> Void
     var onShowEndConfirmation: () -> Void
 
+    @State private var showMoreActions = false
+    @State private var chromeWidth: CGFloat = iPhoneBottomChromeLayout.recordingComfortableWidth
+
     private let controlHeight = iPhoneBottomChromeLayout.chromeControlHeight
 
-    private var isCompact: Bool {
-        sessionState != .idle
+    private var recordingPrimaryDiameter: CGFloat {
+        iPhoneBottomChromeLayout.recordingPrimaryDiameter(forWidth: chromeWidth)
     }
 
-    private var workoutControlSize: CGFloat {
-        isCompact ? iPhoneBottomChromeLayout.compactControlHeight : controlHeight
-    }
-
-    private var tabItemMinWidth: CGFloat {
-        isCompact
-            ? iPhoneBottomChromeLayout.compactTabItemMinWidth
-            : iPhoneBottomChromeLayout.tabItemMinWidth
-    }
-
-    private var activeWorkoutControlSpacing: CGFloat {
-        isCompact
-            ? iPhoneBottomChromeLayout.compactWorkoutControlSpacing
-            : iPhoneBottomChromeLayout.workoutControlSpacing
+    private var recordingOverflowHit: CGFloat {
+        iPhoneBottomChromeLayout.recordingOverflowHit(forWidth: chromeWidth)
     }
 
     var body: some View {
@@ -403,7 +409,7 @@ private struct iPhoneBottomChrome: View {
             iPhoneMainTabBar(
                 selection: $selection,
                 capsuleHeight: capsuleHeight,
-                tabItemMinWidth: tabItemMinWidth
+                tabItemMinWidth: iPhoneBottomChromeLayout.tabItemMinWidth
             )
                 .fixedSize(horizontal: true, vertical: false)
 
@@ -414,6 +420,38 @@ private struct iPhoneBottomChrome: View {
         }
         .frame(height: capsuleHeight)
         .padding(.horizontal, iPhoneBottomChromeLayout.chromeHorizontalPadding)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { chromeWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in
+                        chromeWidth = width
+                    }
+            }
+        }
+        .sheet(isPresented: $showMoreActions) {
+            RecordingMoreActionsSheet(
+                onTakePhoto: {
+                    showMoreActions = false
+                    onShowCamera()
+                },
+                onMakeRecordCard: {
+                    showMoreActions = false
+                    onShowMidHikeCard()
+                }
+            )
+            .presentationDetents([.height(268)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(28)
+        }
+        .task {
+#if DEBUG
+            // 레이아웃 검수: 더보기 시트를 자동으로 연다.
+            guard ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] == "recordingMore" else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            showMoreActions = true
+#endif
+        }
     }
 
     @ViewBuilder
@@ -423,24 +461,47 @@ private struct iPhoneBottomChrome: View {
             startButton
 
         case .recording:
-            HStack(spacing: activeWorkoutControlSpacing) {
-                photoButton
-                cardButton
-                workoutGlassButton(systemImage: "pause.fill", tint: .orange, label: "일시정지") {
-                    WorkoutManager.shared.pauseWorkout()
-                }
-                endButton
+            recordingControls(
+                primarySystemImage: "pause.fill",
+                primaryTint: .orange,
+                primaryLabel: "일시정지"
+            ) {
+                WorkoutManager.shared.pauseWorkout()
             }
 
         case .paused:
-            HStack(spacing: activeWorkoutControlSpacing) {
-                photoButton
-                cardButton
-                workoutGlassButton(systemImage: "play.fill", tint: .green, label: "재개") {
-                    WorkoutManager.shared.resumeWorkout()
-                }
-                endButton
+            recordingControls(
+                primarySystemImage: "play.fill",
+                primaryTint: .green,
+                primaryLabel: "재개"
+            ) {
+                WorkoutManager.shared.resumeWorkout()
             }
+        }
+    }
+
+    private func recordingControls(
+        primarySystemImage: String,
+        primaryTint: Color,
+        primaryLabel: String,
+        primaryAction: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
+            moreButton
+            workoutGlassButton(
+                systemImage: primarySystemImage,
+                tint: primaryTint,
+                label: primaryLabel,
+                diameter: recordingPrimaryDiameter,
+                action: primaryAction
+            )
+            workoutGlassButton(
+                systemImage: "stop.fill",
+                tint: .red,
+                label: "종료",
+                diameter: recordingPrimaryDiameter,
+                action: onShowEndConfirmation
+            )
         }
     }
 
@@ -461,6 +522,8 @@ private struct iPhoneBottomChrome: View {
 
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 12)
             .frame(height: controlHeight)
@@ -480,40 +543,40 @@ private struct iPhoneBottomChrome: View {
         .accessibilityLabel(title)
     }
 
-    private var photoButton: some View {
-        workoutGlassButton(systemImage: "camera.fill", tint: .blue, label: "사진", action: onShowCamera)
-    }
-
-    private var cardButton: some View {
-        // 완료 후 공유(square.and.arrow.up)와 구분 — 기록 중 카드 스냅샷 진입점.
-        workoutGlassButton(
-            systemImage: "doc.richtext",
-            tint: .indigo,
-            label: "카드",
-            action: onShowMidHikeCard
-        )
-    }
-
-    private var endButton: some View {
-        workoutGlassButton(systemImage: "stop.fill", tint: .red, label: "종료", action: onShowEndConfirmation)
+    /// ⋯ 더보기 — 사진·카드(기록 중 이미지 저장) 보조 진입점. hit ≥44, 시각 가중치는 한 단계 낮춤.
+    private var moreButton: some View {
+        Button {
+            showMoreActions = true
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.85))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Circle())
+        }
+        .frame(width: recordingOverflowHit, height: recordingOverflowHit)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .accessibilityLabel("더보기")
     }
 
     private func workoutGlassButton(
         systemImage: String,
         tint: Color,
         label: String,
+        diameter: CGFloat,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .bold))
-                .frame(width: workoutControlSize, height: workoutControlSize)
+                .font(.system(size: max(14, diameter * 0.34), weight: .bold))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // glassProminent가 고유 패딩으로 커지지 않도록 외곽을 ⌀에 고정합니다.
+        .frame(width: diameter, height: diameter)
         .buttonStyle(.glassProminent)
-        .controlSize(.small)
         .tint(tint)
         .buttonBorderShape(.circle)
-        .fixedSize()
         .accessibilityLabel(label)
     }
 }
@@ -565,6 +628,8 @@ private struct iPhoneMainTabBar: View {
 
                 Text(tab.title)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
             .frame(minWidth: tabItemMinWidth, maxHeight: .infinity)
@@ -581,6 +646,97 @@ private struct iPhoneMainTabBar: View {
             }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(tab.title)
+    }
+}
+
+/// 기록 중 더보기 — 아이콘 + 제목 + 한 줄 부제 (mockup-more-menu).
+private struct RecordingMoreActionsSheet: View {
+    var onTakePhoto: () -> Void
+    var onMakeRecordCard: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("더보기")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(spacing: 8) {
+                moreRow(
+                    systemImage: "camera.fill",
+                    tint: .blue,
+                    title: "사진 찍기",
+                    subtitle: "카메라로 기록에 추가",
+                    action: onTakePhoto
+                )
+                moreRow(
+                    systemImage: "doc.richtext",
+                    tint: .indigo,
+                    title: "기록 카드 만들기",
+                    subtitle: "지금까지 이미지 저장·공유",
+                    action: onMakeRecordCard
+                )
+            }
+            .padding(.horizontal, 16)
+
+            Button("취소", role: .cancel) {
+                dismiss()
+            }
+            .font(.system(size: 17, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func moreRow(
+        systemImage: String,
+        tint: Color,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.14), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
     }
 }
 
