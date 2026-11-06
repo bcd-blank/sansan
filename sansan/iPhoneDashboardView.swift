@@ -59,7 +59,16 @@ struct iPhoneDashboardView: View {
                     isLiveSessionPanePrepared = true
                     try? await Task.sleep(for: .milliseconds(900))
                     await WorkoutManager.shared.prepareAfterMainScreenReady()
+#if DEBUG
+                    let env = ProcessInfo.processInfo.environment
+                    let skipLocationPrompt = env["SANSAN_LAYOUT_PREVIEW"] != nil
+                        || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+                    if !skipLocationPrompt {
+                        WorkoutManager.shared.prepareDashboardMapLocation()
+                    }
+#else
                     WorkoutManager.shared.prepareDashboardMapLocation()
+#endif
                     routeFollow.syncFromStorage()
                 }
             }
@@ -279,7 +288,7 @@ private struct DashboardLiveSessionPane: View {
     private static let liveRouteLineWidth: CGFloat = 5
     private static let followedRouteLineWidth: CGFloat = 3
 
-    @State private var mapPosition: MapCameraPosition = .userLocation(fallback: .automatic)
+    @State private var mapPosition: MapCameraPosition = .automatic
     @State private var isMapReady = false
     @State private var cachedRouteSegments: [[CLLocationCoordinate2D]] = []
     @State private var cachedCurrentPoint: HikingPoint? = nil
@@ -360,11 +369,32 @@ private struct DashboardLiveSessionPane: View {
         }
     }
 
+    private var shouldSkipLocationPromptForScreenshots: Bool {
+#if DEBUG
+        let env = ProcessInfo.processInfo.environment
+        return env["SANSAN_LAYOUT_PREVIEW"] != nil || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+#else
+        false
+#endif
+    }
+
     private var hikingMap: some View {
         Group {
-            if isMapReady {
+            if shouldSkipLocationPromptForScreenshots {
+                // 스크린샷/레이아웃 프리뷰 — MapKit 위치 팝업이 크롬을 가리지 않도록 지도 대신 플레이스홀더.
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.tertiarySystemFill))
+                    .overlay {
+                        Image(systemName: "map")
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+            } else if isMapReady {
                 Map(position: $mapPosition, interactionModes: .all) {
-                    UserAnnotation()
+                    // 권한 전에는 UserAnnotation을 올리지 않아 MapKit 시스템 위치 팝업을 피합니다.
+                    if workout.canRecordWithCurrentLocationAuthorization {
+                        UserAnnotation()
+                    }
 
                     if followedRouteCoordinates.count >= 2 {
                         MapPolyline(coordinates: followedRouteCoordinates)
@@ -422,7 +452,9 @@ private struct DashboardLiveSessionPane: View {
                 }
                 .id("\(livePhotoMapRevision)-\(routeFollow.followedRecordID?.uuidString ?? "none")")
                 .mapControls {
-                    MapUserLocationButton()
+                    if workout.canRecordWithCurrentLocationAuthorization {
+                        MapUserLocationButton()
+                    }
                     MapCompass()
                 }
             } else {
@@ -608,7 +640,11 @@ private struct DashboardLiveSessionPane: View {
             return
         }
 
-        mapPosition = .userLocation(fallback: .automatic)
+        if workout.canRecordWithCurrentLocationAuthorization {
+            mapPosition = .userLocation(fallback: .automatic)
+        } else {
+            mapPosition = .automatic
+        }
     }
 }
 

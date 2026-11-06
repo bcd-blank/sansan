@@ -429,10 +429,20 @@ private struct iPhoneBottomChrome: View {
                     }
             }
         }
-        .confirmationDialog("더보기", isPresented: $showMoreActions, titleVisibility: .hidden) {
-            Button("사진") { onShowCamera() }
-            Button("카드") { onShowMidHikeCard() }
-            Button("취소", role: .cancel) {}
+        .sheet(isPresented: $showMoreActions) {
+            RecordingMoreActionsSheet(
+                onTakePhoto: {
+                    showMoreActions = false
+                    onShowCamera()
+                },
+                onMakeRecordCard: {
+                    showMoreActions = false
+                    onShowMidHikeCard()
+                }
+            )
+            .presentationDetents([.height(268)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(28)
         }
         .task {
 #if DEBUG
@@ -512,6 +522,8 @@ private struct iPhoneBottomChrome: View {
 
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 12)
             .frame(height: controlHeight)
@@ -616,6 +628,8 @@ private struct iPhoneMainTabBar: View {
 
                 Text(tab.title)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
             .frame(minWidth: tabItemMinWidth, maxHeight: .infinity)
@@ -632,6 +646,97 @@ private struct iPhoneMainTabBar: View {
             }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(tab.title)
+    }
+}
+
+/// 기록 중 더보기 — 아이콘 + 제목 + 한 줄 부제 (mockup-more-menu).
+private struct RecordingMoreActionsSheet: View {
+    var onTakePhoto: () -> Void
+    var onMakeRecordCard: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("더보기")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+                .accessibilityAddTraits(.isHeader)
+
+            VStack(spacing: 8) {
+                moreRow(
+                    systemImage: "camera.fill",
+                    tint: .blue,
+                    title: "사진 찍기",
+                    subtitle: "카메라로 기록에 추가",
+                    action: onTakePhoto
+                )
+                moreRow(
+                    systemImage: "doc.richtext",
+                    tint: .indigo,
+                    title: "기록 카드 만들기",
+                    subtitle: "지금까지 이미지 저장·공유",
+                    action: onMakeRecordCard
+                )
+            }
+            .padding(.horizontal, 16)
+
+            Button("취소", role: .cancel) {
+                dismiss()
+            }
+            .font(.system(size: 17, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func moreRow(
+        systemImage: String,
+        tint: Color,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.14), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(subtitle)")
     }
 }
 
