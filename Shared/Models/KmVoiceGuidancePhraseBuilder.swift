@@ -2,28 +2,36 @@
 //  KmVoiceGuidancePhraseBuilder.swift
 //  Shared
 //
-//  1km 음성 안내 문구 — 방금 끝난 1km 구간의 활동 시간(일시정지 제외) 기준.
+//  1km 음성 안내 문구 — 방금 1km 구간 + 전체 활동 시간(둘 다 일시정지 제외).
 //
 
 import Foundation
 
 enum KmVoiceGuidancePhraseBuilder {
-    /// "N킬로 지점입니다. 걸린 시간은 …입니다."
-    static func phrase(kilometers: Int, segmentSeconds: TimeInterval) -> String {
+    /// "N킬로 지점입니다. 이번 1킬로는 …, 전체 시간은 …입니다."
+    /// - segmentSeconds: 방금 끝난 1km의 활동 시간
+    /// - totalSeconds: 기록 시작~현재 누적 활동 시간(= 화면 경과 시간 / `sessionData.elapsedTime`)
+    static func phrase(
+        kilometers: Int,
+        segmentSeconds: TimeInterval,
+        totalSeconds: TimeInterval
+    ) -> String {
         let km = max(1, kilometers)
-        return "\(km)킬로 지점입니다. 걸린 시간은 \(formatSegmentDuration(segmentSeconds))"
+        let segment = formatDuration(segmentSeconds)
+        let total = formatDuration(totalSeconds)
+        return "\(km)킬로 지점입니다. 이번 1킬로는 \(segment), 전체 시간은 \(total)입니다."
     }
 
-    /// 구간 시간 한국어 TTS용 포맷.
-    /// - 1분 미만 → "40초입니다"
-    /// - 1분 이상·60분 미만 → 반올림 분 "15분입니다"
-    /// - 정확히 N시간(반올림 분 기준) → "1시간입니다"
-    /// - 60분 이상 → "1시간 5분입니다"
-    static func formatSegmentDuration(_ seconds: TimeInterval) -> String {
+    /// 한국어 TTS용 시간 조각(문장 끝 「입니다」 없음 — 문구에서 한 번만 붙임).
+    /// - 1분 미만 → "40초"
+    /// - 1분 이상·60분 미만 → 반올림 분 "15분"
+    /// - 정확히 N시간(반올림 분 기준) → "1시간"
+    /// - 60분 이상 → "1시간 5분"
+    static func formatDuration(_ seconds: TimeInterval) -> String {
         let clamped = max(0, seconds)
         if clamped < 60 {
             let wholeSeconds = Int(clamped.rounded())
-            return "\(wholeSeconds)초입니다."
+            return "\(wholeSeconds)초"
         }
 
         let totalMinutes = Int((clamped / 60.0).rounded())
@@ -31,12 +39,12 @@ enum KmVoiceGuidancePhraseBuilder {
         let minutes = totalMinutes % 60
 
         if hours == 0 {
-            return "\(max(totalMinutes, 1))분입니다."
+            return "\(max(totalMinutes, 1))분"
         }
         if minutes == 0 {
-            return "\(hours)시간입니다."
+            return "\(hours)시간"
         }
-        return "\(hours)시간 \(minutes)분입니다."
+        return "\(hours)시간 \(minutes)분"
     }
 
     /// 누적 거리에서 새로 넘긴 km 목록(이미 안내한 km 제외, 오름차순).

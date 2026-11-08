@@ -139,7 +139,8 @@ final class KmVoiceGuidanceController: NSObject {
             )
             let phrase = KmVoiceGuidancePhraseBuilder.phrase(
                 kilometers: kilometers,
-                segmentSeconds: segment
+                segmentSeconds: segment,
+                totalSeconds: activeElapsed
             )
             announcedKilometers.insert(kilometers)
             elapsedAtAnnouncedKilometers[kilometers] = activeElapsed
