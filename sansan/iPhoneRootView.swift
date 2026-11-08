@@ -440,9 +440,11 @@ private struct iPhoneBottomChrome: View {
                     onShowMidHikeCard()
                 }
             )
-            .presentationDetents([.height(268)])
+            // iOS 26: 불투명 Color 배경·커스텀 corner 대신 시스템 presentationBackground.
+            // detent는 행 2개+취소에 맞춰 여백(회색 띠)을 줄입니다.
+            .presentationDetents([.height(214)])
             .presentationDragIndicator(.visible)
-            .presentationCornerRadius(28)
+            .presentationBackground(.regularMaterial)
         }
         .task {
 #if DEBUG
@@ -650,7 +652,9 @@ private struct iPhoneMainTabBar: View {
     }
 }
 
-/// 기록 중 더보기 — 아이콘 + 제목 + 한 줄 부제 (mockup-more-menu).
+/// 기록 중 더보기 — 아이콘 + 제목 + 한 줄 부제.
+/// iOS 26 시트는 시스템 liquid glass를 쓰고, 불투명 grouped/카드 fill은 넣지 않습니다
+/// (하단 크롬 위에 회색 띠가 갈라져 보이던 원인).
 private struct RecordingMoreActionsSheet: View {
     var onTakePhoto: () -> Void
     var onMakeRecordCard: () -> Void
@@ -663,11 +667,11 @@ private struct RecordingMoreActionsSheet: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
                 .accessibilityAddTraits(.isHeader)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 0) {
                 moreRow(
                     systemImage: "camera.fill",
                     tint: .blue,
@@ -675,6 +679,8 @@ private struct RecordingMoreActionsSheet: View {
                     subtitle: "카메라로 기록에 추가",
                     action: onTakePhoto
                 )
+                Divider()
+                    .padding(.leading, 66)
                 moreRow(
                     systemImage: "doc.richtext",
                     tint: .indigo,
@@ -683,18 +689,18 @@ private struct RecordingMoreActionsSheet: View {
                     action: onMakeRecordCard
                 )
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
 
             Button("취소", role: .cancel) {
                 dismiss()
             }
             .font(.system(size: 17, weight: .semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
         }
-        .background(Color(.systemGroupedBackground))
+        .padding(.horizontal, 8)
+        // 시스템 presentationBackground(liquid glass)만 사용 — 커스텀 fill 금지.
     }
 
     private func moreRow(
@@ -730,9 +736,9 @@ private struct RecordingMoreActionsSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
             .padding(.vertical, 12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
