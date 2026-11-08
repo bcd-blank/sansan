@@ -1,0 +1,17 @@
+{
+  "images" : [
+    {
+      "filename" : "SansanLogo.svg",
+      "idiom" : "universal",
+      "platform" : "ios"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true,
+    "template-rendering-intent" : "original"
+  }
+}

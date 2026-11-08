@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="110 0 550 478">
+  <defs>
+    <style>
+      .st0 { fill: url(#grad-mountain); }
+      .st1 { fill: url(#grad-hill); }
+      .st2 { fill: url(#grad-bg); }
+    </style>
+    <linearGradient id="grad-bg" x1="325.32" y1="317.43" x2="325.32" y2="-3.89" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8683ff"/>
+      <stop offset="1" stop-color="#ff6ec1"/>
+      <stop offset="1" stop-color="#bb6ea8" stop-opacity=".3"/>
+    </linearGradient>
+    <linearGradient id="grad-hill" x1="506.36" y1="652.93" x2="515.06" y2="264.51" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00c56e" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#00bb6e"/>
+    </linearGradient>
+    <linearGradient id="grad-mountain" x1="325.32" y1="471.5" x2="325.32" y2="92.56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0062ff" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#0000a3"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path class="st2" d="M196.44,0h257.75C499.36,0,536.04,36.67,536.04,81.84v234.77h-252.84c-93.05,0-168.6-75.55-168.6-168.6v-66.17C114.6,36.67,151.27,0,196.44,0Z"/>
+    <path class="st1" d="M512.07,196.24h0c79.17,0,143.44,64.27,143.44,143.44v117.93c0,7.92-6.43,14.35-14.35,14.35h-258.18c-7.92,0-14.35-6.43-14.35-14.35v-117.93c0-79.17,64.27-143.44,143.44-143.44Z"/>
+    <path class="st0" d="M162.76,471.95l120.06-344.54c18.18-52.17,68.59-51.98,86.59.32l118.46,344.21H162.76Z"/>
+  </g>
+</svg>

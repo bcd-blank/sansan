@@ -6,27 +6,25 @@
 //
 
 import SwiftUI
-import SwiftData
+
+#if os(iOS)
+import UIKit
 
 @main
 struct sansanApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var theme = AppThemePreferencesObserver.shared
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    init() {
+        UIWindow.appearance().backgroundColor = .systemGroupedBackground
+        _ = UIImage(named: "LaunchScreenFull")
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppShellView()
+                .preferredColorScheme(theme.theme.colorScheme)
         }
-        .modelContainer(sharedModelContainer)
     }
 }
+#endif
