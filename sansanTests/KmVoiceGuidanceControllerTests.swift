@@ -48,9 +48,9 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         XCTAssertEqual(
             controller.spokenPhrasesLog,
             [
-                "1킬로 지점입니다. 이번 1킬로는 12분, 전체 시간은 12분입니다.",
-                "2킬로 지점입니다. 이번 1킬로는 13분, 전체 시간은 25분입니다.",
-                "3킬로 지점입니다. 이번 1킬로는 10분, 전체 시간은 35분입니다.",
+                "1킬로미터 지점입니다. 이번 구간 12분, 총 산행 시간 12분입니다.",
+                "2킬로미터 지점입니다. 이번 구간 13분, 총 산행 시간 25분입니다.",
+                "3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 35분입니다.",
             ]
         )
     }
@@ -157,7 +157,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
-            ["3킬로 지점입니다. 이번 1킬로는 10분, 전체 시간은 40분입니다."]
+            ["3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 40분입니다."]
         )
     }
 

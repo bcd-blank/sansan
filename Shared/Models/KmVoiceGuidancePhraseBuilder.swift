@@ -2,15 +2,15 @@
 //  KmVoiceGuidancePhraseBuilder.swift
 //  Shared
 //
-//  1km 음성 안내 문구 — 방금 1km 구간 + 전체 활동 시간(둘 다 일시정지 제외).
+//  1km 음성 안내 문구 — Android와 동일 템플릿.
+//  "N킬로미터 지점입니다. 이번 구간 {segment}, 총 산행 시간 {total}입니다."
 //
 
 import Foundation
 
 enum KmVoiceGuidancePhraseBuilder {
-    /// "N킬로 지점입니다. 이번 1킬로는 …, 전체 시간은 …입니다."
-    /// - segmentSeconds: 방금 끝난 1km의 활동 시간
-    /// - totalSeconds: 기록 시작~현재 누적 활동 시간(= 화면 경과 시간 / `sessionData.elapsedTime`)
+    /// - segmentSeconds: 방금 끝난 1km의 활동 시간(일시정지 제외)
+    /// - totalSeconds: 화면 소요 시간(= `sessionData.elapsedTime`, 일시정지 제외 누적)
     static func phrase(
         kilometers: Int,
         segmentSeconds: TimeInterval,
@@ -19,7 +19,7 @@ enum KmVoiceGuidancePhraseBuilder {
         let km = max(1, kilometers)
         let segment = formatDuration(segmentSeconds)
         let total = formatDuration(totalSeconds)
-        return "\(km)킬로 지점입니다. 이번 1킬로는 \(segment), 전체 시간은 \(total)입니다."
+        return "\(km)킬로미터 지점입니다. 이번 구간 \(segment), 총 산행 시간 \(total)입니다."
     }
 
     /// 한국어 TTS용 시간 조각(문장 끝 「입니다」 없음 — 문구에서 한 번만 붙임).
