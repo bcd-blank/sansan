@@ -38,7 +38,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>등산 경로를 기록하기 위해 위치 정보가 필요합니다.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>등산 기록 중 심박수를 표시하기 위해 건강 앱의 심박 데이터를 읽습니다.</string>
+	<string>등산 기록 중 심박수·걸음수를 표시하기 위해 건강 앱 데이터를 읽습니다.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>등산 운동 세션의 심박·경로 기록을 건강 앱에 저장합니다.</string>
 	<key>UIBackgroundModes</key>

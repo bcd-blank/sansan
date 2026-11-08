@@ -452,7 +452,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "sansan Watch App/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = sansan;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수를 측정하기 위해 건강 데이터를 읽습니다.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수·걸음수를 측정하기 위해 건강 데이터를 읽습니다.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "등산 운동 세션의 심박수를 건강 앱에 저장합니다.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";
@@ -746,7 +746,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "sansan Watch App/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = sansan;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수를 측정하기 위해 건강 데이터를 읽습니다.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "등산 기록 중 심박수·걸음수를 측정하기 위해 건강 데이터를 읽습니다.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "등산 운동 세션의 심박수를 건강 앱에 저장합니다.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "등산 경로를 기록하기 위해 위치 정보가 필요합니다.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "등산 기록 중 걸음 수를 집계하기 위해 동작 및 피트니스 데이터가 필요합니다.";

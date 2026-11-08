@@ -32,6 +32,9 @@ private enum WatchHealthKitAuthorization {
                 if let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) {
                     readTypes.insert(energyType)
                 }
+                if let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) {
+                    readTypes.insert(stepType)
+                }
                 let healthStore = HKHealthStore()
                 try? await healthStore.requestAuthorization(
                     toShare: [HKObjectType.workoutType()],

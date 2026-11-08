@@ -35,7 +35,11 @@ final class HeartRateMonitor {
     func requestAuthorization() async throws {
         guard let healthStore = resolvedHealthStore() else { return }
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
-        try await healthStore.requestAuthorization(toShare: [], read: [heartRateType])
+        var readTypes: Set<HKObjectType> = [heartRateType]
+        if let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) {
+            readTypes.insert(stepType)
+        }
+        try await healthStore.requestAuthorization(toShare: [], read: readTypes)
     }
 
     /// 기록 시작 전 미리 권한을 요청해 운동 시작 직후 지연을 줄입니다.
