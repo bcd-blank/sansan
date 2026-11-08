@@ -109,14 +109,14 @@ final class KmVoiceGuidanceController: NSObject {
         synthesizer.stopSpeaking(at: .immediate)
     }
 
-    /// 거리·활동 경과가 갱신될 때 호출. 일시정지 중·토글 OFF면 안내하지 않습니다.
+    /// 거리·활동 경과가 갱신될 때 호출. 일시정지 중이면 return.
+    /// 토글 OFF여도 세션을 묶고 지난 km는 무발화 시드해, 다시 켤 때 소급 발화가 나지 않게 합니다.
     func evaluate(
         sessionID evaluateSessionID: UUID,
         distanceMeters: Double,
         activeElapsed: TimeInterval,
         state: HikingSessionState
     ) {
-        guard KmVoiceGuidancePreferences.isEnabled else { return }
         guard state == .recording else { return }
 
         bindSession(
@@ -131,30 +131,60 @@ final class KmVoiceGuidanceController: NSObject {
         )
         guard !pending.isEmpty else { return }
 
-        for kilometers in pending {
-            let segment = KmVoiceGuidancePhraseBuilder.segmentSeconds(
-                for: kilometers,
-                currentActiveElapsed: activeElapsed,
-                elapsedAtAnnouncedKilometers: elapsedAtAnnouncedKilometers
-            )
+        let speakEnabled = KmVoiceGuidancePreferences.isEnabled
+        applyPendingCrossings(
+            pending,
+            activeElapsed: activeElapsed,
+            speakEnabled: speakEnabled
+        )
+        persist()
+    }
+
+    /// 다중 km 도약 시 Android와 같이 구간을 균등 분배합니다. OFF면 발화 없이 시드만 합니다.
+    private func applyPendingCrossings(
+        _ pending: [Int],
+        activeElapsed: TimeInterval,
+        speakEnabled: Bool
+    ) {
+        let first = pending[0]
+        let baseline: TimeInterval = first <= 1
+            ? 0
+            : (elapsedAtAnnouncedKilometers[first - 1] ?? 0)
+        let plans = KmVoiceGuidancePhraseBuilder.planCatchUpCrossings(
+            pendingKilometers: pending,
+            baselineElapsed: baseline,
+            currentActiveElapsed: activeElapsed
+        )
+
+        for plan in plans {
+            announcedKilometers.insert(plan.kilometers)
+            elapsedAtAnnouncedKilometers[plan.kilometers] = plan.totalSeconds
+            guard speakEnabled else { continue }
             let phrase = KmVoiceGuidancePhraseBuilder.phrase(
-                kilometers: kilometers,
-                segmentSeconds: segment,
-                totalSeconds: activeElapsed
+                kilometers: plan.kilometers,
+                segmentSeconds: plan.segmentSeconds,
+                totalSeconds: plan.totalSeconds
             )
-            announcedKilometers.insert(kilometers)
-            elapsedAtAnnouncedKilometers[kilometers] = activeElapsed
             speak(phrase)
         }
-        persist()
+
+        // 마지막 km는 현재 활동 경과에 정확히 맞춰 다음 구간 기준을 고정합니다.
+        if let last = pending.last {
+            elapsedAtAnnouncedKilometers[last] = max(0, activeElapsed)
+        }
     }
 
     private func seedAlreadyCrossedKilometers(distanceMeters: Double, activeElapsed: TimeInterval) {
         let crossed = Int(floor(max(0, distanceMeters) / 1_000))
         guard crossed >= 1 else { return }
-        for kilometers in 1...crossed {
+        let seeded = KmVoiceGuidancePhraseBuilder.seedElapsedByDistance(
+            crossedKilometers: crossed,
+            distanceMeters: distanceMeters,
+            activeElapsed: activeElapsed
+        )
+        for (kilometers, elapsed) in seeded {
             announcedKilometers.insert(kilometers)
-            elapsedAtAnnouncedKilometers[kilometers] = max(0, activeElapsed)
+            elapsedAtAnnouncedKilometers[kilometers] = elapsed
         }
         Self.logger.notice(
             "seeded announced km 1...\(crossed) without speaking (late bind / restore)"

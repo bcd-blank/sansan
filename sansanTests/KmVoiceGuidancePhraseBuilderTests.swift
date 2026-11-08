@@ -145,4 +145,30 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
             "1킬로미터 지점입니다. 이번 구간 40초, 총 산행 시간 40초입니다."
         )
     }
+
+    func testPlanCatchUpCrossingsSplitsEvenlyLikeAndroid() {
+        let plans = KmVoiceGuidancePhraseBuilder.planCatchUpCrossings(
+            pendingKilometers: [1, 2, 3],
+            baselineElapsed: 0,
+            currentActiveElapsed: 900
+        )
+        XCTAssertEqual(plans.count, 3)
+        XCTAssertEqual(plans[0].segmentSeconds, 300, accuracy: 0.001)
+        XCTAssertEqual(plans[0].totalSeconds, 300, accuracy: 0.001)
+        XCTAssertEqual(plans[1].segmentSeconds, 300, accuracy: 0.001)
+        XCTAssertEqual(plans[1].totalSeconds, 600, accuracy: 0.001)
+        XCTAssertEqual(plans[2].segmentSeconds, 300, accuracy: 0.001)
+        XCTAssertEqual(plans[2].totalSeconds, 900, accuracy: 0.001)
+        XCTAssertFalse(plans.contains { $0.segmentSeconds == 0 })
+    }
+
+    func testSeedElapsedByDistanceApproximatesKmBoundaries() {
+        let seeded = KmVoiceGuidancePhraseBuilder.seedElapsedByDistance(
+            crossedKilometers: 2,
+            distanceMeters: 2_400,
+            activeElapsed: 1_800
+        )
+        XCTAssertEqual(seeded[1] ?? -1, 1_800 * (1_000 / 2_400), accuracy: 0.001)
+        XCTAssertEqual(seeded[2] ?? -1, 1_800 * (2_000 / 2_400), accuracy: 0.001)
+    }
 }

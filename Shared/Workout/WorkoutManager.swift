@@ -61,6 +61,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     @Published private(set) var startCountdownRemaining: Int?
     /// 종료 버튼 후 저장 전 검토용 세션 — nil이 아니면 요약 화면을 띄웁니다.
     @Published private(set) var summarySession: HikingSessionData?
+    /// 요약 "저장 완료" 처리 중 — 연타로 confirm 태스크가 두 번 뜨지 않게 합니다.
+    @Published private(set) var isConfirmingSummary = false
     /// 일시정지 중 방향성 이동 감지 시 기록 재개 확인.
     @Published private(set) var resumeHikingPrompt: ResumeHikingPrompt?
 
@@ -90,6 +92,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var isApplyingRemoteUpdate = false
     /// 종료 후 요약 검토 중 — 원격 갱신·타이머가 기록을 다시 켜지 않도록 합니다.
     private var isAwaitingSummaryConfirmation = false
+    /// 원격·로컬 종료 세대 — 늦은 걸음 조회가 새 기록의 `resetSessionToIdle`을 호출하지 못하게 합니다.
+    private var endingEpoch: UInt64 = 0
     private var isLocationProducer = true
     /// 마지막으로 누적 거리에 반영한 포인트 — 2m 미만 GPS 흔들림은 anchor 기준으로 걸러냅니다.
     private var liveDistanceAnchor: HikingPoint?
@@ -399,19 +403,30 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData = HikingSessionData()
         saveSummaryPendingBackup(finished)
 
-        // 걸음수 최종 조회는 비동기 — 완료 전에 요약 "완료"를 눌러도 confirmSummary가 다시 기다립니다.
+        // 걸음수 최종 조회는 비동기 — 세션 ID로 격리해 저장/삭제/새 시작 뒤에 요약을 되살리지 않습니다.
+        let summaryID = finished.sessionID
         Task { @MainActor [weak self] in
-            await self?.finalizeStepCount()
+            await self?.finalizeStepCount(forSummarySessionID: summaryID)
         }
     }
 
     /// 요약 화면의 "완료" — 걸음수 확정 후 저장·전송·초기화합니다.
     func confirmSummary() {
-        guard summarySession != nil else { return }
+        guard let confirming = summarySession else { return }
+        guard !isConfirmingSummary else { return }
+        isConfirmingSummary = true
+        let confirmingID = confirming.sessionID
+        endingEpoch &+= 1
+        let epoch = endingEpoch
+
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.finalizeStepCount()
-            guard let finished = self.summarySession else { return }
+            defer { self.isConfirmingSummary = false }
+
+            await self.finalizeStepCount(forSummarySessionID: confirmingID)
+            guard let finished = self.summarySession,
+                  finished.sessionID == confirmingID else { return }
+
             self.isAwaitingSummaryConfirmation = false
             self.summarySession = nil
 
@@ -423,6 +438,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             }
             self.publishSessionEndedMarker(for: finished.sessionID)
 
+            guard self.endingEpoch == epoch,
+                  WorkoutEndingGate.shouldResetSessionToIdle(liveState: self.sessionData.state)
+            else { return }
             self.resetSessionToIdle()
         }
     }
@@ -430,12 +448,16 @@ final class WorkoutManager: NSObject, ObservableObject {
     /// 요약 화면의 "삭제" — 저장하지 않고 폐기합니다(상대 기기에도 폐기 전달).
     func discardSummary() {
         guard let finished = summarySession else { return }
+        endingEpoch &+= 1
+        isConfirmingSummary = false
         isAwaitingSummaryConfirmation = false
         summarySession = nil
 
         persistDismissedSessionID(finished.sessionID)
         broadcastDiscard()
-        resetSessionToIdle()
+        if WorkoutEndingGate.shouldResetSessionToIdle(liveState: sessionData.state) {
+            resetSessionToIdle()
+        }
     }
 
     func clearPendingRecordsPresentation() {
@@ -1163,6 +1185,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         } else if let pauseStart = pauseBeganAt {
             accumulatedPausedTime += Date().timeIntervalSince(pauseStart)
             pauseBeganAt = nil
+            sessionData.lastUpdated = Date()
+        } else {
+            // 원격 종료도 걸음 조회는 벽시계 끝을 쓰도록 lastUpdated를 맞춥니다.
+            sessionData.lastUpdated = Date()
         }
 
         // 원격 종료 경로에서는 호출 측이 상대 기기 포인트를 먼저 병합한 뒤에 도달합니다.
@@ -1172,24 +1198,42 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         var finishedSession = sessionData
         finishedSession.state = .idle
+        finishedSession.finalizeForPersistence()
+        let endingID = finishedSession.sessionID
+        endingEpoch &+= 1
+        let epoch = endingEpoch
+
+        // B02: 조회 전에 종료 백업(idle·요약 대기)을 남겨, 크래시 시 recording/paused로 되살리지 않습니다.
+        saveRemoteEndingBackup(finishedSession)
         // 라이브 UI는 즉시 idle — 요약 화면(summarySession)은 띄우지 않습니다.
         sessionData = HikingSessionData()
+
+#if os(iOS)
+        // iPhone은 조회 전에도 저장소에 남겨 두면, 조회 중 종료돼도 산행이 남습니다.
+        persistDismissedSessionID(endingID)
+        archiveFinishedSession(finishedSession, presentList: true)
+        clearLiveSessionBackup()
+#endif
 
         Task { @MainActor [weak self] in
             guard let self else { return }
             finishedSession.stepCount = await self.resolvedStepCount(for: finishedSession)
             finishedSession.finalizeForPersistence()
 
-            self.persistDismissedSessionID(finishedSession.sessionID)
-            self.archiveFinishedSession(finishedSession, presentList: true)
+            self.persistDismissedSessionID(endingID)
+            // iPhone: 걸음 보강분 병합 저장(이미 presentList 했음). Watch archive 핸들러는 없음.
+            self.archiveFinishedSession(finishedSession, presentList: false)
 
             if syncRemote {
                 self.broadcastEndSession(finishedSession)
             } else if !self.isApplyingRemoteUpdate {
                 self.transferFullSessionSnapshot(finishedSession)
             }
-            self.publishSessionEndedMarker(for: finishedSession.sessionID)
+            self.publishSessionEndedMarker(for: endingID)
 
+            guard self.endingEpoch == epoch,
+                  WorkoutEndingGate.shouldResetSessionToIdle(liveState: self.sessionData.state)
+            else { return }
             self.resetSessionToIdle()
         }
     }
@@ -1230,6 +1274,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         resumeHikingPrompt = nil
         resumeHikingPromptSuppressedUntil = nil
         isAwaitingSummaryConfirmation = false
+        isConfirmingSummary = false
         summarySession = nil
         sessionData = HikingSessionData()
         workoutStartDate = nil
@@ -1359,6 +1404,23 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         let backup = LiveSessionBackup(
             session: finished,
+            isLocationProducer: isLocationProducer,
+            accumulatedPausedTime: accumulatedPausedTime,
+            workoutStartDate: workoutStartDate,
+            savedAt: Date(),
+            isAwaitingSummaryConfirmation: true
+        )
+        guard let data = try? JSONEncoder.hikingConnectivity.encode(backup) else { return }
+        try? data.write(to: Self.liveSessionBackupURL, options: .atomic)
+    }
+
+    /// 원격 종료 직후·걸음 조회 전 — 상태가 idle인 종료 백업을 남겨 크래시 시 기록 중으로 복원하지 않습니다.
+    private func saveRemoteEndingBackup(_ finished: HikingSessionData) {
+        lastLiveBackupSavedAt = Date()
+        var ended = finished
+        ended.state = .idle
+        let backup = LiveSessionBackup(
+            session: ended,
             isLocationProducer: isLocationProducer,
             accumulatedPausedTime: accumulatedPausedTime,
             workoutStartDate: workoutStartDate,
@@ -2944,17 +3006,25 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// 종료 시점에 시작~종료 구간을 정밀 조회해 요약·백업에 반영합니다.
     /// 위치 생산자가 아니어도(워치→폰 인계·원격 종료) 걸음수가 비어 있으면 HealthKit/만보계로 보강합니다.
-    private func finalizeStepCount() async {
-        if isAwaitingSummaryConfirmation, var summary = summarySession {
-            summary.stepCount = await resolvedStepCount(for: summary)
-            summarySession = summary
-            saveSummaryPendingBackup(summary)
-            return
-        }
-        let steps = await resolvedStepCount(for: sessionData)
-        guard steps != sessionData.stepCount else { return }
-        sessionData.stepCount = steps
-        saveLiveSessionBackupIfNeeded(force: true)
+    /// `forSummarySessionID`가 있으면 그 요약만 갱신하고, 삭제·다른 세션·새 기록에는 쓰지 않습니다.
+    private func finalizeStepCount(forSummarySessionID expectedID: UUID) async {
+        guard isAwaitingSummaryConfirmation,
+              let summary = summarySession,
+              summary.sessionID == expectedID
+        else { return }
+
+        let steps = await resolvedStepCount(for: summary)
+        guard WorkoutEndingGate.shouldApplySummaryStepCount(
+            expectedSessionID: expectedID,
+            currentSummarySessionID: summarySession?.sessionID,
+            isAwaitingSummaryConfirmation: isAwaitingSummaryConfirmation
+        ) else { return }
+
+        var updated = summarySession ?? summary
+        guard updated.sessionID == expectedID else { return }
+        updated.stepCount = steps
+        summarySession = updated
+        saveSummaryPendingBackup(updated)
     }
 
     /// 세션 구간의 최종 걸음수 — 기존값과 CMPedometer/HealthKit 조회값 중 큰 쪽.
@@ -2968,7 +3038,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         else {
             return session.stepCount
         }
-        let endDate = session.effectiveEndedAt
+        // B03: 일시정지 합을 빼는 effectiveEndedAt이 아니라 벽시계 종료를 씁니다.
+        let endDate = session.stepCountQueryEndDate
         guard endDate > startDate else { return session.stepCount }
         guard let queried = await stepCounter.queryStepCount(from: startDate, to: endDate) else {
             return session.stepCount

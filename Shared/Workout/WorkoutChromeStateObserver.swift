@@ -18,6 +18,7 @@ final class WorkoutChromeStateObserver: ObservableObject {
     @Published private(set) var sessionState: HikingSessionState = .idle
     @Published private(set) var startCountdownRemaining: Int?
     @Published private(set) var summarySession: HikingSessionData?
+    @Published private(set) var isConfirmingSummary = false
     @Published private(set) var shouldPresentRecordsList = false
     @Published private(set) var authorizationStatus: CLAuthorizationStatus = .notDetermined
 
@@ -28,6 +29,7 @@ final class WorkoutChromeStateObserver: ObservableObject {
         sessionState = workout.sessionData.state
         startCountdownRemaining = workout.startCountdownRemaining
         summarySession = workout.summarySession
+        isConfirmingSummary = workout.isConfirmingSummary
         shouldPresentRecordsList = workout.shouldPresentRecordsList
         authorizationStatus = workout.authorizationStatus
 
@@ -49,6 +51,13 @@ final class WorkoutChromeStateObserver: ObservableObject {
         workout.$summarySession
             .sink { [weak self] session in
                 self?.summarySession = session
+            }
+            .store(in: &cancellables)
+
+        workout.$isConfirmingSummary
+            .removeDuplicates()
+            .sink { [weak self] confirming in
+                self?.isConfirmingSummary = confirming
             }
             .store(in: &cancellables)
 

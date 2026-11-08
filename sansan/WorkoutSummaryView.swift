@@ -16,10 +16,12 @@ struct WorkoutSummaryView: View {
     let onSave: () -> Void
     let onDiscard: () -> Void
 
+    @ObservedObject private var workout = WorkoutManager.shared
     @Environment(\.chromeCapsuleHeight) private var chromeCapsuleHeight
     @State private var showDiscardConfirmation = false
 
     private static let routeColor = Color(red: 0.12, green: 0.72, blue: 0.45)
+    private var isSaving: Bool { workout.isConfirmingSummary }
 
     private var record: SavedHikingSession {
         SavedHikingSession(session: session)
@@ -149,6 +151,7 @@ struct WorkoutSummaryView: View {
                 systemImage: "checkmark",
                 tint: Self.routeColor,
                 isBold: true,
+                isDisabled: isSaving,
                 action: onSave
             )
         }
@@ -174,6 +177,7 @@ struct WorkoutSummaryView: View {
         systemImage: String,
         tint: Color,
         isBold: Bool,
+        isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -187,6 +191,8 @@ struct WorkoutSummaryView: View {
         .buttonStyle(.glassProminent)
         .tint(tint)
         .buttonBorderShape(.capsule)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.72 : 1)
     }
 }
 

@@ -157,12 +157,23 @@ nonisolated struct HikingSessionData: Codable, Hashable, Sendable {
     }
 
     /// 저장·표시용 종료 시각 — 기록 종료 시점(동기화 시각이 아님).
+    /// 활동 시간(`elapsedTime`) 기준이라 일시정지 합만큼 벽시계보다 이를 수 있습니다.
     var effectiveEndedAt: Date {
         if let started = effectiveStartedAt, elapsedTime > 0 {
             return started.addingTimeInterval(elapsedTime)
         }
         if let lastPoint = points.max(by: { $0.timestamp < $1.timestamp }) {
             return lastPoint.timestamp
+        }
+        return lastUpdated
+    }
+
+    /// 걸음수 HealthKit/만보계 조회 끝 시각 — 벽시계 종료(`lastUpdated`·마지막 포인트).
+    /// `effectiveEndedAt`을 쓰면 일시정지 합만큼 끝 구간이 빠지므로 조회에는 쓰지 않습니다.
+    var stepCountQueryEndDate: Date {
+        let pointEnd = points.max(by: { $0.timestamp < $1.timestamp })?.timestamp
+        if let pointEnd {
+            return max(lastUpdated, pointEnd)
         }
         return lastUpdated
     }

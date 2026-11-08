@@ -149,6 +149,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
 
+        // 2.4km/30분 시드 → 2km 경계 근사 25분. 3km/40분이면 구간 15분(결합 시각 10분이 아님).
         controller.evaluate(
             sessionID: sessionID,
             distanceMeters: 3_000,
@@ -157,7 +158,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
-            ["3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 40분입니다."]
+            ["3킬로미터 지점입니다. 이번 구간 15분, 총 산행 시간 40분입니다."]
         )
     }
 
@@ -170,6 +171,104 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             sessionID: sessionID,
             distanceMeters: 1_000,
             activeElapsed: 400,
+            state: .recording
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+    }
+
+    /// B04 — 900→2200m 한 갱신: 균등 분배, 두 번째 구간 0초 없음(Android와 동일).
+    func testMultiKilometerCatchUpSplitsSegmentsEvenly() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 900,
+            activeElapsed: 500,
+            state: .recording
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 2_200,
+            activeElapsed: 1_200,
+            state: .recording
+        )
+        XCTAssertEqual(
+            controller.spokenPhrasesLog,
+            [
+                "1킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 10분입니다.",
+                "2킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 20분입니다.",
+            ]
+        )
+    }
+
+    /// B05 — 세션 결합 후 OFF로 지나친 km는 ON해도 소급 발화하지 않습니다(처음부터 OFF와 동일).
+    func testToggleOffDuringSessionSeedsWithoutCatchUpSpeech() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 1_000,
+            activeElapsed: 600,
+            state: .recording
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
+
+        KmVoiceGuidancePreferences.isEnabled = false
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 2_200,
+            activeElapsed: 1_200,
+            state: .recording
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
+
+        KmVoiceGuidancePreferences.isEnabled = true
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 2_200,
+            activeElapsed: 1_250,
+            state: .recording
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1, "OFF 동안 넘긴 2km는 소급 발화 없음")
+
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 3_000,
+            activeElapsed: 1_800,
+            state: .recording
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 2)
+        XCTAssertEqual(
+            controller.spokenPhrasesLog.last,
+            "3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 30분입니다."
+        )
+    }
+
+    /// B05 — 처음부터 OFF로 지나친 km도 ON 후 소급 없음.
+    func testToggleOnAfterDisabledStartDoesNotSpeakPastKilometers() {
+        KmVoiceGuidancePreferences.isEnabled = false
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 1_200,
+            activeElapsed: 700,
+            state: .recording
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+
+        KmVoiceGuidancePreferences.isEnabled = true
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 1_200,
+            activeElapsed: 720,
             state: .recording
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)

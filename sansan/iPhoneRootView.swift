@@ -99,6 +99,9 @@ enum iPhoneBottomChromeLayout {
     static func tabContentHeight(forCapsuleHeight capsuleHeight: CGFloat) -> CGFloat {
         capsuleHeight - tabCapsuleInset * 2
     }
+
+    /// 메인/모음 탭 최소 터치 높이(HIG ≥44). 캡슐 시각 높이(`chromeControlHeight`)는 바꾸지 않습니다.
+    static let tabHitMinHeight: CGFloat = 44
     /// 탭 캡슐 아래/위로 이어지는 그라데이션 페이드 추가 높이.
     static let recordsTabHeaderFadeExtension: CGFloat = 72
     /// 페이드 끝단 불투명 구간 비율(0~1). 0.1 = 끝 10%는 바탕색 고정.
@@ -630,8 +633,10 @@ private struct iPhoneMainTabBar: View {
                         .glassEffectID(tab, in: selectionNamespace)
                 }
             }
-            .frame(height: tabContentHeight)
-            .padding(tabCapsuleInset)
+            // 시각 콘텐츠는 기존 inset(34pt)을 유지하고, 터치는 ≥44pt로만 확장합니다.
+            .frame(height: max(tabContentHeight, iPhoneBottomChromeLayout.tabHitMinHeight))
+            .padding(.horizontal, tabCapsuleInset)
+            .frame(height: capsuleHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
             .glassEffectID("navigationTabs", in: selectionNamespace)
         }
@@ -660,7 +665,9 @@ private struct iPhoneMainTabBar: View {
                     .minimumScaleFactor(0.85)
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-            .frame(minWidth: tabItemMinWidth, maxHeight: .infinity)
+            // 아이콘·글자 묶음 시각 크기는 그대로 두고, 히트만 44pt 이상으로 키웁니다.
+            .frame(minWidth: tabItemMinWidth, minHeight: tabContentHeight)
+            .frame(minWidth: tabItemMinWidth, minHeight: iPhoneBottomChromeLayout.tabHitMinHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

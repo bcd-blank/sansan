@@ -69,4 +69,41 @@ enum KmVoiceGuidancePhraseBuilder {
             : (elapsedAtAnnouncedKilometers[previous] ?? 0)
         return max(0, currentActiveElapsed - baseline)
     }
+
+    /// 한 갱신에 여러 km를 넘길 때(Android `KmVoiceCrossing`과 동일) 구간을 균등 분배합니다.
+    /// 두 번째부터 `0초`가 나오지 않고, 총 산행 시간은 km마다 누적됩니다.
+    static func planCatchUpCrossings(
+        pendingKilometers: [Int],
+        baselineElapsed: TimeInterval,
+        currentActiveElapsed: TimeInterval
+    ) -> [(kilometers: Int, segmentSeconds: TimeInterval, totalSeconds: TimeInterval)] {
+        guard !pendingKilometers.isEmpty else { return [] }
+        let delta = max(0, currentActiveElapsed - max(0, baselineElapsed))
+        let perSegment = delta / Double(pendingKilometers.count)
+        return pendingKilometers.enumerated().map { index, kilometers in
+            (
+                kilometers: kilometers,
+                segmentSeconds: perSegment,
+                totalSeconds: max(0, baselineElapsed) + perSegment * Double(index + 1)
+            )
+        }
+    }
+
+    /// 안내 파일 없이 이미 넘긴 km를 시드할 때 — 거리를 비율로 나눠 경계 시각을 근사합니다.
+    /// 전부 ‘지금’으로 찍으면 다음 구간이 결합 시각 기준이 됩니다.
+    static func seedElapsedByDistance(
+        crossedKilometers: Int,
+        distanceMeters: Double,
+        activeElapsed: TimeInterval
+    ) -> [Int: TimeInterval] {
+        guard crossedKilometers >= 1 else { return [:] }
+        let clampedElapsed = max(0, activeElapsed)
+        let distanceForFraction = max(distanceMeters, Double(crossedKilometers) * 1_000)
+        var seeded: [Int: TimeInterval] = [:]
+        for kilometers in 1...crossedKilometers {
+            let fraction = min(1, (Double(kilometers) * 1_000) / distanceForFraction)
+            seeded[kilometers] = clampedElapsed * fraction
+        }
+        return seeded
+    }
 }
