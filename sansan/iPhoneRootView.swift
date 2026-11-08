@@ -36,14 +36,19 @@ enum iPhoneBottomChromeLayout {
     static let tabCapsuleInset: CGFloat = 8
     static let selectionInset: CGFloat = 6
     /// 전 모드 공통 — 기록 중에도 idle과 동일한 탭 폭.
-    static let tabItemMinWidth: CGFloat = 76
-    static let chromeHorizontalPadding: CGFloat = 16
+    /// 72: SE(375)·393에서 좌우 20 inset + ⌀48 컨트롤이 넘치지 않게.
+    static let tabItemMinWidth: CGFloat = 72
+    /// 좌측 탭·우측 종료 대칭 측 여백 (≥16pt, 좌=우).
+    /// 20pt 레이아웃 — glass soft edge 후에도 시각 ≥16. 393에서도 ⌀50을 쓰면
+    /// 폭이 넘쳐 종료가 가장자리로 밀리므로 여유 폭(≥430)에서만 키운다.
+    static let chromeHorizontalPadding: CGFloat = 20
     static let chromeItemSpacing: CGFloat = 8
-    /// 기록 중 1단(더보기·일시정지/재개·종료) 간격 — SE 예산 가드 ≥12.
-    static let workoutControlSpacing: CGFloat = 12
-    /// SE(375)와 넓은 기기(≥393) 분기 기준 논리 폭.
-    static let recordingComfortableWidth: CGFloat = 393
-    /// SE: 일시정지·종료 ⌀48 / 더보기 hit 44. 넓은 기기: ⌀50.
+    /// 기록 중 1단 간격 — 기본 8(SE·393), 넓은 기기 12.
+    static let workoutControlSpacingNarrow: CGFloat = 8
+    static let workoutControlSpacingComfortable: CGFloat = 12
+    /// ⌀50·간격 12는 탭+컨트롤이 좌우 20 inset 안에 들어오는 폭부터.
+    static let recordingComfortableWidth: CGFloat = 430
+    /// 기본(≤429): 일시정지·종료 ⌀48 / 더보기 hit 44. 넓은 기기: ⌀50.
     static let recordingPrimaryDiameterNarrow: CGFloat = 48
     static let recordingPrimaryDiameterComfortable: CGFloat = 50
     static let recordingOverflowHitNarrow: CGFloat = 44
@@ -60,6 +65,12 @@ enum iPhoneBottomChromeLayout {
         width >= recordingComfortableWidth
             ? recordingOverflowHitComfortable
             : recordingOverflowHitNarrow
+    }
+
+    static func workoutControlSpacing(forWidth width: CGFloat) -> CGFloat {
+        width >= recordingComfortableWidth
+            ? workoutControlSpacingComfortable
+            : workoutControlSpacingNarrow
     }
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
@@ -392,7 +403,9 @@ private struct iPhoneBottomChrome: View {
     var onShowEndConfirmation: () -> Void
 
     @State private var showMoreActions = false
-    @State private var chromeWidth: CGFloat = iPhoneBottomChromeLayout.recordingComfortableWidth
+    /// 측정 전엔 SE 예산을 가정(좁은 ⌀·간격). 393으로 두면 첫 프레임에 넓은 컨트롤이
+    /// 들어와 우측 패딩을 잠식해 종료 버튼이 가장자리에 붙는다.
+    @State private var chromeWidth: CGFloat = 375
 
     private let controlHeight = iPhoneBottomChromeLayout.chromeControlHeight
 
@@ -402,6 +415,10 @@ private struct iPhoneBottomChrome: View {
 
     private var recordingOverflowHit: CGFloat {
         iPhoneBottomChromeLayout.recordingOverflowHit(forWidth: chromeWidth)
+    }
+
+    private var workoutControlSpacing: CGFloat {
+        iPhoneBottomChromeLayout.workoutControlSpacing(forWidth: chromeWidth)
     }
 
     var body: some View {
@@ -418,9 +435,18 @@ private struct iPhoneBottomChrome: View {
             rightControls
                 .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: capsuleHeight)
+        // 좌측 탭과 동일 측 여백 — 종료도 우측 대칭.
         .padding(.horizontal, iPhoneBottomChromeLayout.chromeHorizontalPadding)
+        // iOS 26 liquid glass는 부모 opacity만으로 안 사라질 수 있어 합성 후 숨김.
+        // 플로팅 More 시트 옆으로 종료 버튼이 비치지 않게 함.
+        .compositingGroup()
+        .opacity(showMoreActions ? 0 : 1)
+        .allowsHitTesting(!showMoreActions)
+        .accessibilityHidden(showMoreActions)
         .background {
+            // padding 뒤 부착 → proxy.width ≈ 화면/컨테이너 논리 폭 (좌우 16pt 포함).
             GeometryReader { proxy in
                 Color.clear
                     .onAppear { chromeWidth = proxy.size.width }
@@ -488,7 +514,7 @@ private struct iPhoneBottomChrome: View {
         primaryLabel: String,
         primaryAction: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: iPhoneBottomChromeLayout.workoutControlSpacing) {
+        HStack(spacing: workoutControlSpacing) {
             moreButton
             workoutGlassButton(
                 systemImage: primarySystemImage,
