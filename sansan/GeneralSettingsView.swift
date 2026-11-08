@@ -16,6 +16,7 @@ struct GeneralSettingsView: View {
     @ObservedObject private var imageSaveStylePreferences = HikingRecordImageSaveStyleObserver.shared
     @ObservedObject private var mapDisplayPreferences = HikingMapDisplayPreferencesObserver.shared
     @ObservedObject private var heartRatePreferences = HeartRatePreferencesObserver.shared
+    @ObservedObject private var kmVoiceGuidancePreferences = KmVoiceGuidancePreferencesObserver.shared
     @ObservedObject private var flythroughPreferences = HikingFlythroughPreferencesObserver.shared
     @ObservedObject private var themePreferences = AppThemePreferencesObserver.shared
     @ObservedObject private var bodyMetrics = BodyMetricsPreferencesObserver.shared
@@ -24,6 +25,7 @@ struct GeneralSettingsView: View {
     @State private var shareMapOptions = HikingShareExportPreferences.mapOptions
     @State private var imageSaveStyle = HikingRecordImageSavePreferences.style
     @State private var showsSummitMarkers = HikingMapDisplayPreferences.showsSummitMarkers
+    @State private var isKmVoiceGuidanceEnabled = KmVoiceGuidancePreferences.isEnabled
     @State private var isHeartRateFeatureEnabled = HeartRatePreferences.isFeatureEnabled
     @State private var flythroughOrientation = HikingFlythroughPreferences.orientation
     @State private var flythroughMapStyle = HikingFlythroughPreferences.mapStyle
@@ -55,6 +57,9 @@ struct GeneralSettingsView: View {
             }
             .onChange(of: showsSummitMarkers) { _, isOn in
                 mapDisplayPreferences.setShowsSummitMarkers(isOn)
+            }
+            .onChange(of: isKmVoiceGuidanceEnabled) { _, isOn in
+                kmVoiceGuidancePreferences.setEnabled(isOn)
             }
             .onChange(of: flythroughOrientation) { _, value in
                 flythroughPreferences.setOrientation(value)
@@ -160,6 +165,15 @@ struct GeneralSettingsView: View {
                 Text("지도")
             } footer: {
                 Text("기록 중·기록 상세 지도에 경로 근처 산 정상 이름을 표시합니다.")
+            }
+
+            Section {
+                Toggle("1km 음성 안내", isOn: $isKmVoiceGuidanceEnabled)
+                    .accessibilityIdentifier("settings.kmVoiceGuidance.toggle")
+            } header: {
+                Text("기록")
+            } footer: {
+                Text("기록 중 1km마다 방금 구간 소요 시간을 한국어로 안내합니다. Apple Watch로 기록해도 iPhone에서만 말하며, 일시정지 중에는 안내하지 않습니다. 무음 스위치가 켜져 있어도 안내가 재생됩니다.")
             }
 
             Section {
@@ -374,6 +388,8 @@ struct GeneralSettingsView: View {
         shareMapOptions = shareExportPreferences.mapOptions
         imageSaveStyle = imageSaveStylePreferences.style
         showsSummitMarkers = mapDisplayPreferences.showsSummitMarkers
+        kmVoiceGuidancePreferences.syncFromStorage()
+        isKmVoiceGuidanceEnabled = kmVoiceGuidancePreferences.isEnabled
         isHeartRateFeatureEnabled = heartRatePreferences.isFeatureEnabled
         flythroughOrientation = flythroughPreferences.orientation
         flythroughMapStyle = flythroughPreferences.mapStyle

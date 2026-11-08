@@ -1020,10 +1020,18 @@ final class WorkoutManager: NSObject, ObservableObject {
             clearLiveSessionBackup()
 #if os(iOS)
             resetPhoneRecordingFailoverState()
+            KmVoiceGuidanceController.shared.prepareForNewSession(sessionData.sessionID)
 #endif
         } else {
             sessionData.state = .recording
             sessionData.lastUpdated = Date()
+#if os(iOS)
+            KmVoiceGuidanceController.shared.bindSession(
+                sessionData.sessionID,
+                seedFromDistanceMeters: sessionData.totalDistance,
+                seedActiveElapsed: sessionData.elapsedTime
+            )
+#endif
         }
 
         if isLocationProducer, canRecordWithCurrentLocationAuthorization {
@@ -1061,6 +1069,10 @@ final class WorkoutManager: NSObject, ObservableObject {
 #endif
 
         startStepCountingIfNeeded()
+
+#if os(iOS)
+        evaluateKmVoiceGuidanceIfNeeded()
+#endif
 
         publishSessionSnapshot()
         startiPhoneWorkoutKeepAliveIfNeeded()
@@ -1238,10 +1250,24 @@ final class WorkoutManager: NSObject, ObservableObject {
 #endif
         clearLiveSessionBackup()
 #if os(iOS)
+        KmVoiceGuidanceController.shared.clear()
         prepareDashboardMapLocation()
         updateScreenSleepPrevention()
 #endif
     }
+
+#if os(iOS)
+    /// Watch·iPhone 공통 기록 경로에서 iPhone만 1km 음성을 말합니다(Watch는 미발화 → 중복 없음).
+    private func evaluateKmVoiceGuidanceIfNeeded() {
+        guard sessionData.state != .idle else { return }
+        KmVoiceGuidanceController.shared.evaluate(
+            sessionID: sessionData.sessionID,
+            distanceMeters: sessionData.totalDistance,
+            activeElapsed: sessionData.elapsedTime,
+            state: sessionData.state
+        )
+    }
+#endif
 
     private func archiveFinishedSession(_ session: HikingSessionData, presentList: Bool) {
 #if os(iOS)
@@ -1471,6 +1497,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         if backup.session.state == .paused, pauseBeganAt == nil {
             pauseBeganAt = backup.savedAt
         }
+#if os(iOS)
+        KmVoiceGuidanceController.shared.bindSession(
+            backup.session.sessionID,
+            seedFromDistanceMeters: backup.session.totalDistance,
+            seedActiveElapsed: backup.session.elapsedTime
+        )
+#endif
         syncLocalTrackingToState()
     }
 
@@ -1726,6 +1759,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         // 위치 콜백이 끊긴 경우에도 채택 공백 기반 품질 저하를 판정합니다.
         evaluateGPSQualityForAssist()
         evaluateWatchLossFailover()
+        evaluateKmVoiceGuidanceIfNeeded()
 #endif
 #if os(watchOS)
         updateWatchActiveEnergy()
@@ -1825,6 +1859,9 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData.lastUpdated = Date()
 
         saveLiveSessionBackupIfNeeded()
+#if os(iOS)
+        evaluateKmVoiceGuidanceIfNeeded()
+#endif
         publishSessionSnapshot()
         sendLatestPoint(point)
     }
@@ -3227,6 +3264,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             liveDistanceAnchor = HikingSessionMetrics.horizontalDistanceWithAnchor(from: remote.points).anchor
             adoptRemoteRoleIfNeeded(wasIdle: wasIdle)
             syncLocalTrackingToState()
+#if os(iOS)
+            evaluateKmVoiceGuidanceIfNeeded()
+#endif
             return
         }
 
@@ -3274,6 +3314,9 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         adoptRemoteRoleIfNeeded(wasIdle: wasIdle)
         syncLocalTrackingToState()
+#if os(iOS)
+        evaluateKmVoiceGuidanceIfNeeded()
+#endif
     }
 
     /// 원격 스냅샷의 일시정지/재개 마킹을 id 기준으로 합치고, 재개 좌표가 뒤늦게 와도 보강합니다.
