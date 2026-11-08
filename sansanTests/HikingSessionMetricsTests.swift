@@ -147,6 +147,38 @@ final class HikingSessionMetricsTests: XCTestCase {
         XCTAssertEqual(merged.elapsedTime, 120)
     }
 
+    /// 잘린 WC 스냅샷(걸음수 nil) 위에 전체 파일이 오면 걸음수·포인트를 모두 살립니다.
+    func testMergingSameSessionPrefersRemoteStepsWhenLocalMissing() {
+        let sessionID = UUID()
+        let point = HikingPoint(
+            latitude: 37.5,
+            longitude: 127.0,
+            altitude: 100,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        var truncated = HikingSessionData(sessionID: sessionID, points: [point], stepCount: nil)
+        truncated.elapsedTime = 60
+        var full = HikingSessionData(
+            sessionID: sessionID,
+            points: [
+                point,
+                HikingPoint(
+                    latitude: 37.5001,
+                    longitude: 127.0,
+                    altitude: 101,
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_030)
+                )
+            ],
+            stepCount: 1_234
+        )
+        full.elapsedTime = 90
+
+        let merged = truncated.mergingSameSession(with: full)
+        XCTAssertEqual(merged.points.count, 2)
+        XCTAssertEqual(merged.stepCount, 1_234)
+        XCTAssertEqual(merged.elapsedTime, 90)
+    }
+
     /// 완만한 오르막(초당 0.1m 상승)은 임계값 래칫 방식에서도 거의 전부 누적되어야 합니다.
     func testCumulativeGainTracksGradualClimb() {
         let base = Date(timeIntervalSince1970: 1_700_000_000)

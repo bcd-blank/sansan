@@ -56,7 +56,10 @@ final class WatchRecordInbox: ObservableObject {
             || !session.photos.isEmpty
         guard hasContent else { return }
 
+        // 잘린 WC userInfo가 먼저 저장된 뒤 전체 transferFile이 오면 합집합 병합합니다.
+        // (이전에는 이미 있으면 버려 GPS 경로가 비거나 짧아지는 경우가 있었습니다.)
         if HikingRecordStore.shared.records.contains(where: { $0.id == session.sessionID }) {
+            HikingRecordStore.shared.save(session)
             return
         }
 
@@ -114,6 +117,11 @@ final class WatchRecordInbox: ObservableObject {
 
     private func didWriteInboxFile(sessionID: UUID, at url: URL) {
         if HikingRecordStore.shared.records.contains(where: { $0.id == sessionID }) {
+            // 이미 저장된 잘린 스냅샷 위에 전체 파일을 병합한 뒤 inbox 파일을 제거합니다.
+            if let data = try? Data(contentsOf: url),
+               let session = try? HikingSessionData.decoded(from: data) {
+                HikingRecordStore.shared.save(session)
+            }
             try? FileManager.default.removeItem(at: url)
         } else {
             WorkoutManager.shared.acknowledgeWatchInboundSession(sessionID)

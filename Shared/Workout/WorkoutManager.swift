@@ -399,24 +399,32 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData = HikingSessionData()
         saveSummaryPendingBackup(finished)
 
-        finalizeStepCount()
+        // 걸음수 최종 조회는 비동기 — 완료 전에 요약 "완료"를 눌러도 confirmSummary가 다시 기다립니다.
+        Task { @MainActor [weak self] in
+            await self?.finalizeStepCount()
+        }
     }
 
-    /// 요약 화면의 "완료" — 기록을 저장하고 상대 기기로 전송한 뒤 초기화합니다.
+    /// 요약 화면의 "완료" — 걸음수 확정 후 저장·전송·초기화합니다.
     func confirmSummary() {
-        guard let finished = summarySession else { return }
-        isAwaitingSummaryConfirmation = false
-        summarySession = nil
+        guard summarySession != nil else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.finalizeStepCount()
+            guard let finished = self.summarySession else { return }
+            self.isAwaitingSummaryConfirmation = false
+            self.summarySession = nil
 
-        persistDismissedSessionID(finished.sessionID)
-        archiveFinishedSession(finished, presentList: false)
+            self.persistDismissedSessionID(finished.sessionID)
+            self.archiveFinishedSession(finished, presentList: false)
 
-        if !isApplyingRemoteUpdate {
-            broadcastEndSession(finished)
+            if !self.isApplyingRemoteUpdate {
+                self.broadcastEndSession(finished)
+            }
+            self.publishSessionEndedMarker(for: finished.sessionID)
+
+            self.resetSessionToIdle()
         }
-        publishSessionEndedMarker(for: finished.sessionID)
-
-        resetSessionToIdle()
     }
 
     /// 요약 화면의 "삭제" — 저장하지 않고 폐기합니다(상대 기기에도 폐기 전달).
@@ -1136,7 +1144,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
-    /// 상대 기기에서 종료가 전달됐을 때(원격 경로) — 즉시 저장·전송·초기화합니다.
+    /// 상대 기기에서 종료가 전달됐을 때(원격 경로) — 걸음수 보강 후 저장·전송·초기화합니다.
     private func setEnded(syncRemote: Bool) {
         if syncRemote {
             finalizeSessionBeforeEnd()
@@ -1148,19 +1156,30 @@ final class WorkoutManager: NSObject, ObservableObject {
         // 원격 종료 경로에서는 호출 측이 상대 기기 포인트를 먼저 병합한 뒤에 도달합니다.
         postProcessTrackForEnd()
         stopWorkoutTracking()
+        finalizeActiveEnergyEstimateIfNeeded()
 
-        let finishedSession = sessionData
-        persistDismissedSessionID(finishedSession.sessionID)
-        archiveFinishedSession(finishedSession, presentList: true)
+        var finishedSession = sessionData
+        finishedSession.state = .idle
+        // 라이브 UI는 즉시 idle — 요약 화면(summarySession)은 띄우지 않습니다.
+        sessionData = HikingSessionData()
 
-        if syncRemote {
-            broadcastEndSession(finishedSession)
-        } else if !isApplyingRemoteUpdate {
-            transferFullSessionSnapshot(finishedSession)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            finishedSession.stepCount = await self.resolvedStepCount(for: finishedSession)
+            finishedSession.finalizeForPersistence()
+
+            self.persistDismissedSessionID(finishedSession.sessionID)
+            self.archiveFinishedSession(finishedSession, presentList: true)
+
+            if syncRemote {
+                self.broadcastEndSession(finishedSession)
+            } else if !self.isApplyingRemoteUpdate {
+                self.transferFullSessionSnapshot(finishedSession)
+            }
+            self.publishSessionEndedMarker(for: finishedSession.sessionID)
+
+            self.resetSessionToIdle()
         }
-        publishSessionEndedMarker(for: finishedSession.sessionID)
-
-        resetSessionToIdle()
     }
 
     /// GPS·타이머·심박·백그라운드 세션 등 모든 추적을 멈춥니다(세션 데이터는 보존).
@@ -2887,31 +2906,40 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     /// 종료 시점에 시작~종료 구간을 정밀 조회해 요약·백업에 반영합니다.
-    private func finalizeStepCount() {
-        guard isLocationProducer else { return }
-        guard StepCounter.isStepCountingAvailable else { return }
-        guard
-            let startDate = summarySession?.effectiveStartedAt
-                ?? sessionData.effectiveStartedAt
-                ?? workoutStartDate
-        else { return }
-        let endDate = summarySession?.lastUpdated ?? sessionData.lastUpdated
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            guard let steps = await self.stepCounter.queryStepCount(from: startDate, to: endDate) else { return }
-            if self.isAwaitingSummaryConfirmation, var summary = self.summarySession {
-                if steps >= (summary.stepCount ?? 0) {
-                    summary.stepCount = steps
-                    self.summarySession = summary
-                }
-                self.saveSummaryPendingBackup(summary)
-                return
-            }
-            if steps >= (self.sessionData.stepCount ?? 0) {
-                self.sessionData.stepCount = steps
-            }
-            self.saveLiveSessionBackupIfNeeded(force: true)
+    /// 위치 생산자가 아니어도(워치→폰 인계·원격 종료) 걸음수가 비어 있으면 HealthKit/만보계로 보강합니다.
+    private func finalizeStepCount() async {
+        if isAwaitingSummaryConfirmation, var summary = summarySession {
+            summary.stepCount = await resolvedStepCount(for: summary)
+            summarySession = summary
+            saveSummaryPendingBackup(summary)
+            return
         }
+        let steps = await resolvedStepCount(for: sessionData)
+        guard steps != sessionData.stepCount else { return }
+        sessionData.stepCount = steps
+        saveLiveSessionBackupIfNeeded(force: true)
+    }
+
+    /// 세션 구간의 최종 걸음수 — 기존값과 CMPedometer/HealthKit 조회값 중 큰 쪽.
+    private func resolvedStepCount(for session: HikingSessionData) async -> Int? {
+        let existing = session.stepCount ?? 0
+        if !isLocationProducer, existing > 0 {
+            return session.stepCount
+        }
+        guard
+            let startDate = session.effectiveStartedAt ?? workoutStartDate
+        else {
+            return session.stepCount
+        }
+        let endDate = session.effectiveEndedAt
+        guard endDate > startDate else { return session.stepCount }
+        guard let queried = await stepCounter.queryStepCount(from: startDate, to: endDate) else {
+            return session.stepCount
+        }
+        if queried >= existing {
+            return queried
+        }
+        return session.stepCount
     }
 
     // MARK: - 칼로리
