@@ -9,6 +9,7 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @ObservedObject private var auth = AuthManager.shared
     @ObservedObject private var iCloudSync = ICloudRecordSync.shared
     @ObservedObject private var snapshotPreferences = HikingSnapshotPreferencesObserver.shared
@@ -22,6 +23,7 @@ struct GeneralSettingsView: View {
     @ObservedObject private var bodyMetrics = BodyMetricsPreferencesObserver.shared
     @ObservedObject private var recordStore = HikingRecordStore.shared
     @ObservedObject private var profilePhoto = UserProfilePhotoObserver.shared
+    @ObservedObject private var appUpdateStatus = AppUpdateStatusObserver.shared
     @State private var shareMapOptions = HikingShareExportPreferences.mapOptions
     @State private var imageSaveStyle = HikingRecordImageSavePreferences.style
     @State private var showsSummitMarkers = HikingMapDisplayPreferences.showsSummitMarkers
@@ -48,6 +50,9 @@ struct GeneralSettingsView: View {
         formWithPresentations
             .onAppear {
                 syncPreferencesFromStorage()
+            }
+            .task {
+                appUpdateStatus.refreshOnAppear()
             }
             .onChange(of: shareMapOptions) { _, newOptions in
                 shareExportPreferences.setMapOptions(newOptions)
@@ -269,6 +274,12 @@ struct GeneralSettingsView: View {
                     }
                 }
             }
+
+            SettingsInfoSection(
+                status: appUpdateStatus.status,
+                onOpenStore: { openURL($0) },
+                onRetry: { appUpdateStatus.retry() }
+            )
         }
     }
 
