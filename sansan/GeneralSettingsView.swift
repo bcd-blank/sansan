@@ -212,12 +212,12 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                // #64: 세그먼트 → 목록형(메뉴). 라벨 「이미지 저장 방식」 유지.
                 Picker("이미지 저장 방식", selection: $imageSaveStyle) {
                     ForEach(HikingRecordImageSaveStyle.allCases) { style in
                         Text(style.label).tag(style)
                     }
                 }
-                .pickerStyle(.segmented)
             } header: {
                 Text("이미지 저장 방식")
             } footer: {

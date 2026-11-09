@@ -26,65 +26,107 @@ private enum iPhoneMainTab: Int, CaseIterable, Hashable {
     }
 }
 
-/// 하단 글래스 크롬 — 스크롤 여백·오버레이 위치 계산용.
+/// 하단 글래스 크롬 — 9·15차: 모든 폭 한 줄, 시각 ×scale, 터치 ≥44 유지.
 enum iPhoneBottomChromeLayout {
-    /// 탭·기록 시작·기록 중 버튼 공통 터치 높이(idle·recording·paused 동일).
-    static let chromeControlHeight: CGFloat = 50
-    /// 화면 맨 아래에서 탭까지의 여백 — 홈 인디케이터(시스템 제스처 바)를 비키도록 충분히 확보.
+    /// A 기준 필요 폭(좌우 20 포함): 40+148.667+192+12.
+    static let requiredWidth: CGFloat = 392.6666666667
+    static let baseOuter: CGFloat = 64
+    static let baseSide: CGFloat = 20
+    static let baseTabItem: CGFloat = 72
+    static let baseTabInset: CGFloat = 8
+    static let baseSelectionInset: CGFloat = 6
+    static let baseCircleGap: CGFloat = 4
+    static let baseClusterGap: CGFloat = 8
+    static let baseStartWidth: CGFloat = 127
+    static let tabFontMin: CGFloat = 10
+    static let minTouch: CGFloat = 44
+    /// 화면 맨 아래에서 탭까지의 여백 — scale 미적용.
     static let chromeBottomInset: CGFloat = 26
-    static let workoutStackSpacing: CGFloat = 10
-    static let tabCapsuleInset: CGFloat = 8
-    static let selectionInset: CGFloat = 6
-    /// 전 모드 공통 — 기록 중에도 idle과 동일한 탭 폭.
-    /// 72: SE(375)·393에서 좌우 20 inset + ⌀48 컨트롤이 넘치지 않게.
-    static let tabItemMinWidth: CGFloat = 72
-    /// 좌측 탭·우측 종료 대칭 측 여백 (≥16pt, 좌=우).
-    /// 20pt 레이아웃 — glass soft edge 후에도 시각 ≥16. 393에서도 ⌀50을 쓰면
-    /// 폭이 넘쳐 종료가 가장자리로 밀리므로 여유 폭(≥430)에서만 키운다.
-    static let chromeHorizontalPadding: CGFloat = 20
-    static let chromeItemSpacing: CGFloat = 8
-    /// 기록 중 1단 간격 — 기본 8(SE·393), 넓은 기기 12.
-    static let workoutControlSpacingNarrow: CGFloat = 8
-    static let workoutControlSpacingComfortable: CGFloat = 12
-    /// ⌀50·간격 12는 탭+컨트롤이 좌우 20 inset 안에 들어오는 폭부터.
-    static let recordingComfortableWidth: CGFloat = 430
-    /// 기본(≤429): 일시정지·종료 ⌀48 / 더보기 hit 44. 넓은 기기: ⌀50.
-    static let recordingPrimaryDiameterNarrow: CGFloat = 48
-    static let recordingPrimaryDiameterComfortable: CGFloat = 50
-    static let recordingOverflowHitNarrow: CGFloat = 44
-    static let recordingOverflowHitComfortable: CGFloat = 50
     static let scrollEndBuffer: CGFloat = 16
+    static let workoutStackSpacing: CGFloat = 10
+
+    static func scale(forWidth width: CGFloat) -> CGFloat {
+        min(1, width / requiredWidth)
+    }
+
+    /// scale1 기준 시각 높이(64). 좁은 폭에서는 64×scale.
+    static func chromeControlHeight(forWidth width: CGFloat) -> CGFloat {
+        baseOuter * scale(forWidth: width)
+    }
+
+    /// @deprecated 호환 — 폭을 모르는 호출부용 scale1.
+    static let chromeControlHeight: CGFloat = baseOuter
+
+    static func chromeHorizontalPadding(forWidth width: CGFloat) -> CGFloat {
+        baseSide * scale(forWidth: width)
+    }
+
+    static let chromeHorizontalPadding: CGFloat = baseSide
+
+    static func tabItemMinWidth(forWidth width: CGFloat) -> CGFloat {
+        baseTabItem * scale(forWidth: width)
+    }
+
+    static let tabItemMinWidth: CGFloat = baseTabItem
+
+    static func tabCapsuleInset(forWidth width: CGFloat) -> CGFloat {
+        baseTabInset * scale(forWidth: width)
+    }
+
+    static let tabCapsuleInset: CGFloat = baseTabInset
+
+    static func selectionInset(forWidth width: CGFloat) -> CGFloat {
+        baseSelectionInset * scale(forWidth: width)
+    }
+
+    static let selectionInset: CGFloat = baseSelectionInset
 
     static func recordingPrimaryDiameter(forWidth width: CGFloat) -> CGFloat {
-        width >= recordingComfortableWidth
-            ? recordingPrimaryDiameterComfortable
-            : recordingPrimaryDiameterNarrow
+        baseOuter * scale(forWidth: width)
     }
 
     static func recordingOverflowHit(forWidth width: CGFloat) -> CGFloat {
-        width >= recordingComfortableWidth
-            ? recordingOverflowHitComfortable
-            : recordingOverflowHitNarrow
+        max(minTouch, recordingPrimaryDiameter(forWidth: width))
     }
 
     static func workoutControlSpacing(forWidth width: CGFloat) -> CGFloat {
-        width >= recordingComfortableWidth
-            ? workoutControlSpacingComfortable
-            : workoutControlSpacingNarrow
+        baseCircleGap * scale(forWidth: width)
+    }
+
+    static func chromeItemSpacing(forWidth width: CGFloat) -> CGFloat {
+        baseClusterGap * scale(forWidth: width)
+    }
+
+    static let chromeItemSpacing: CGFloat = baseClusterGap
+
+    static func tabLabelSize(forWidth width: CGFloat) -> CGFloat {
+        max(tabFontMin, tabFontMin * scale(forWidth: width))
+    }
+
+    static func startLabelSize(forWidth width: CGFloat) -> CGFloat {
+        15 * scale(forWidth: width)
     }
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
     static var workoutControlsHeight: CGFloat { chromeControlHeight }
 
     /// 플로팅 크롬이 차지하는 세로 공간(오버레이용).
+    static func floatingChromeHeight(forWidth width: CGFloat) -> CGFloat {
+        chromeControlHeight(forWidth: width) + chromeBottomInset
+    }
+
     static var floatingChromeHeight: CGFloat {
         chromeControlHeight + chromeBottomInset
     }
 
     static var chromeHeight: CGFloat { floatingChromeHeight }
 
+    static func scrollBottomClearance(forWidth width: CGFloat) -> CGFloat {
+        // 64×scale + 26 + 16. 안전 영역은 더하지 않음.
+        floatingChromeHeight(forWidth: width) + scrollEndBuffer
+    }
+
     static func scrollBottomClearance(hasWorkoutControls _: Bool = false) -> CGFloat {
-        // 기록 컨트롤이 탭과 같은 행을 공유하므로 크롬 높이는 상태와 무관하게 일정하다.
         floatingChromeHeight + scrollEndBuffer
     }
 
@@ -406,11 +448,12 @@ private struct iPhoneBottomChrome: View {
     var onShowEndConfirmation: () -> Void
 
     @State private var showMoreActions = false
-    /// 측정 전엔 SE 예산을 가정(좁은 ⌀·간격). 393으로 두면 첫 프레임에 넓은 컨트롤이
-    /// 들어와 우측 패딩을 잠식해 종료 버튼이 가장자리에 붙는다.
+    /// 측정 전엔 SE(375) 가정 — scale≈0.955. 넓은 값으로 시작하면 첫 프레임에 넘침.
     @State private var chromeWidth: CGFloat = 375
 
-    private let controlHeight = iPhoneBottomChromeLayout.chromeControlHeight
+    private var controlHeight: CGFloat {
+        iPhoneBottomChromeLayout.chromeControlHeight(forWidth: chromeWidth)
+    }
 
     private var recordingPrimaryDiameter: CGFloat {
         iPhoneBottomChromeLayout.recordingPrimaryDiameter(forWidth: chromeWidth)
@@ -424,24 +467,32 @@ private struct iPhoneBottomChrome: View {
         iPhoneBottomChromeLayout.workoutControlSpacing(forWidth: chromeWidth)
     }
 
+    private var chromeScale: CGFloat {
+        iPhoneBottomChromeLayout.scale(forWidth: chromeWidth)
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: iPhoneBottomChromeLayout.chromeItemSpacing) {
+        HStack(alignment: .center, spacing: iPhoneBottomChromeLayout.chromeItemSpacing(forWidth: chromeWidth)) {
             iPhoneMainTabBar(
                 selection: $selection,
-                capsuleHeight: capsuleHeight,
-                tabItemMinWidth: iPhoneBottomChromeLayout.tabItemMinWidth
+                capsuleHeight: max(capsuleHeight, controlHeight),
+                tabItemMinWidth: iPhoneBottomChromeLayout.tabItemMinWidth(forWidth: chromeWidth),
+                tabLabelSize: iPhoneBottomChromeLayout.tabLabelSize(forWidth: chromeWidth),
+                tabIconSize: 16 * chromeScale,
+                tabCapsuleInset: iPhoneBottomChromeLayout.tabCapsuleInset(forWidth: chromeWidth),
+                selectionInset: iPhoneBottomChromeLayout.selectionInset(forWidth: chromeWidth)
             )
                 .fixedSize(horizontal: true, vertical: false)
 
-            Spacer(minLength: iPhoneBottomChromeLayout.chromeItemSpacing)
+            Spacer(minLength: iPhoneBottomChromeLayout.chromeItemSpacing(forWidth: chromeWidth))
 
             rightControls
                 .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: capsuleHeight)
-        // 좌측 탭과 동일 측 여백 — 종료도 우측 대칭.
-        .padding(.horizontal, iPhoneBottomChromeLayout.chromeHorizontalPadding)
+        .frame(height: max(controlHeight, iPhoneBottomChromeLayout.minTouch))
+        // 좌측 탭과 동일 측 여백 — 종료도 우측 대칭. 좌우도 ×scale.
+        .padding(.horizontal, iPhoneBottomChromeLayout.chromeHorizontalPadding(forWidth: chromeWidth))
         // iOS 26 liquid glass는 부모 opacity만으로 안 사라질 수 있어 합성 후 숨김.
         // 플로팅 More 시트 옆으로 종료 버튼이 비치지 않게 함.
         .compositingGroup()
@@ -538,26 +589,29 @@ private struct iPhoneBottomChrome: View {
 
     private var startButton: some View {
         let title = isStartCountdownActive ? "기록 준비중" : "기록 시작"
+        let label = iPhoneBottomChromeLayout.startLabelSize(forWidth: chromeWidth)
+        let icon = 15 * chromeScale
         return Button(action: onStartWorkout) {
-            HStack(spacing: 8) {
+            HStack(spacing: 8 * chromeScale) {
                 if isStartCountdownActive {
                     ProgressView()
                         .controlSize(.small)
                         .tint(.white)
-                        .frame(width: 15, height: 15)
+                        .frame(width: icon, height: icon)
                 } else {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 15, weight: .bold))
-                        .frame(width: 15, height: 15)
+                        .font(.system(size: label, weight: .bold))
+                        .frame(width: icon, height: icon)
                 }
 
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: label, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 12 * chromeScale)
             .frame(height: controlHeight)
+            .frame(minHeight: iPhoneBottomChromeLayout.minTouch)
         }
         .buttonStyle(.glassProminent)
         .tint(isStartCountdownActive ? .orange : .green)
@@ -616,10 +670,11 @@ private struct iPhoneMainTabBar: View {
     @Binding var selection: iPhoneMainTab
     var capsuleHeight: CGFloat
     var tabItemMinWidth: CGFloat = iPhoneBottomChromeLayout.tabItemMinWidth
+    var tabLabelSize: CGFloat = 10
+    var tabIconSize: CGFloat = 16
+    var tabCapsuleInset: CGFloat = iPhoneBottomChromeLayout.tabCapsuleInset
+    var selectionInset: CGFloat = iPhoneBottomChromeLayout.selectionInset
     @Namespace private var selectionNamespace
-
-    private let tabCapsuleInset = iPhoneBottomChromeLayout.tabCapsuleInset
-    private let selectionInset = iPhoneBottomChromeLayout.selectionInset
 
     private var tabContentHeight: CGFloat {
         iPhoneBottomChromeLayout.tabContentHeight(forCapsuleHeight: capsuleHeight)
@@ -633,7 +688,7 @@ private struct iPhoneMainTabBar: View {
                         .glassEffectID(tab, in: selectionNamespace)
                 }
             }
-            // 시각 콘텐츠는 기존 inset(34pt)을 유지하고, 터치는 ≥44pt로만 확장합니다.
+            // 시각 높이는 scale, 터치는 ≥44pt.
             .frame(height: max(tabContentHeight, iPhoneBottomChromeLayout.tabHitMinHeight))
             .padding(.horizontal, tabCapsuleInset)
             .frame(height: capsuleHeight)
@@ -641,7 +696,7 @@ private struct iPhoneMainTabBar: View {
             .glassEffectID("navigationTabs", in: selectionNamespace)
         }
         .fixedSize(horizontal: true, vertical: false)
-        .frame(height: capsuleHeight)
+        .frame(height: max(capsuleHeight, iPhoneBottomChromeLayout.tabHitMinHeight))
     }
 
     @ViewBuilder
@@ -654,13 +709,13 @@ private struct iPhoneMainTabBar: View {
                 selection = tab
             }
         } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: 2 * (tabIconSize / 16)) {
                 Image(systemName: tab.systemImage)
-                    .font(.system(size: 16, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: tabIconSize, weight: isSelected ? .semibold : .medium))
                     .symbolVariant(isSelected ? .fill : .none)
 
                 Text(tab.title)
-                    .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: tabLabelSize, weight: isSelected ? .semibold : .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
@@ -676,7 +731,7 @@ private struct iPhoneMainTabBar: View {
             if isSelected {
                 Capsule()
                     .fill(Color.primary.opacity(0.1))
-                    .padding(selectionInset - tabCapsuleInset)
+                    .padding(max(0, selectionInset - tabCapsuleInset))
                     .matchedGeometryEffect(id: "tabSelectionHighlight", in: selectionNamespace)
             }
         }
