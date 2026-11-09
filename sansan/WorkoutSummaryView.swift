@@ -208,13 +208,24 @@ struct WorkoutSummaryView: View {
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.body.weight(isBold ? .bold : .semibold))
-                .labelStyle(.titleAndIcon)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity)
-                .frame(height: controlHeight)
+        // 메인 「기록 시작」과 동일 스케일·프레임 — glass 높이가 탭 기하를 넘지 않게 맞춤.
+        let scale = iPhoneBottomChromeLayout.scale(forWidth: chromeWidth)
+        let labelSize = iPhoneBottomChromeLayout.startLabelSize(forWidth: chromeWidth)
+        let icon = 15 * scale
+        return Button(action: action) {
+            HStack(spacing: 8 * scale) {
+                Image(systemName: systemImage)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .frame(width: icon, height: icon)
+                Text(title)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .padding(.horizontal, 12 * scale)
+            .frame(maxWidth: .infinity)
+            .frame(height: controlHeight)
+            .frame(minHeight: iPhoneBottomChromeLayout.minTouch)
         }
         .buttonStyle(.glassProminent)
         .tint(tint)
