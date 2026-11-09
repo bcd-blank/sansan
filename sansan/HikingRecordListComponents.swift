@@ -589,18 +589,20 @@ struct RecordThumbnailView: View {
         .task(id: store.snapshotRevision(for: record.id)) {
             guard let path = record.listThumbnailFileURL?.path else {
                 thumbnailImage = nil
-                // 기록 종료 직후 생성이 실패한 기록 — 목록에 보이면 자동으로 다시 생성합니다.
+                // 기록 종료·Watch 동기화 직후 생성이 실패한 기록 — 목록에 보이면 자동 복구.
                 await store.ensureSnapshotExists(for: record.id)
                 return
             }
             let loaded = await Task.detached(priority: .utility) {
                 UIImage(contentsOfFile: path)
             }.value
-            thumbnailImage = loaded
-            if loaded == nil {
-                // PNG 파일이 삭제·유실된 경우도 자동 복구합니다.
-                await store.ensureSnapshotExists(for: record.id)
+            if let loaded, !HikingRouteSnapshotImageQuality.isEffectivelyBlank(loaded) {
+                thumbnailImage = loaded
+                return
             }
+            thumbnailImage = nil
+            // 단색·유실 PNG는 설정 "다시 생성" 없이 자동 복구합니다.
+            await store.ensureSnapshotExists(for: record.id)
         }
     }
 }

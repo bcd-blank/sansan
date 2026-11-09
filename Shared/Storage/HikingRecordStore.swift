@@ -426,13 +426,16 @@ final class HikingRecordStore: ObservableObject {
             showsPinnedThumbnails: false
         )
         // 지도 타일이 늦게 붙는 경우가 있어 짧게 다시 시도합니다.
+        // Watch 동기화 직후(백그라운드)에는 SwiftUI Metal 캡처가 단색으로 "성공"할 수 있어
+        // 빈 이미지는 버리고 MKMapSnapshotter 폴백을 강제합니다.
         var image: UIImage?
         for attempt in 0..<3 {
             if attempt > 0 {
                 try? await Task.sleep(for: .seconds(1.5 * Double(attempt)))
             }
             guard let latestRecord = records.first(where: { $0.id == recordID }) else { return }
-            image = await HikingRouteSnapshotGenerator.generate(
+            let preferSwiftUI = attempt == 0 && Self.isAppForegroundActive
+            let candidate = await HikingRouteSnapshotGenerator.generate(
                 record: latestRecord,
                 style: .routeOnly,
                 mapOptions: listThumbnailMapOptions,
@@ -440,10 +443,13 @@ final class HikingRecordStore: ObservableObject {
                 pixelScale: 2,
                 reservesLegalAttributionStrip: false,
                 allowLiveDetailCapture: false,
-                preferSwiftUIMapTiles: true,
+                preferSwiftUIMapTiles: preferSwiftUI,
                 listThumbnailOnly: true
             )
-            if image != nil { break }
+            if let candidate, !HikingRouteSnapshotImageQuality.isEffectivelyBlank(candidate) {
+                image = candidate
+                break
+            }
         }
         guard let image, let pngData = image.pngData() else { return }
         guard let root = UserDataPaths.activeUserRoot else { return }
@@ -465,19 +471,41 @@ final class HikingRecordStore: ObservableObject {
         }
     }
 
-    /// 목록에 썸네일 PNG가 없는 기록이 보이면 자동 생성합니다(기록 종료 직후 생성 실패 자가 복구).
+    /// 목록에 썸네일 PNG가 없거나 비어 있으면 자동 생성합니다(Watch 동기화·백그라운드 실패 자가 복구).
     private var snapshotEnsureInFlightIDs: Set<UUID> = []
+    private var isEnsuringMissingListThumbnails = false
+
+    private static var isAppForegroundActive: Bool {
+        UIApplication.shared.applicationState == .active
+    }
+
+    func needsListThumbnail(for record: SavedHikingSession) -> Bool {
+        guard record.session.points.count >= 2 else { return false }
+        guard let url = record.listThumbnailFileURL else { return true }
+        guard let image = UIImage(contentsOfFile: url.path) else { return true }
+        return HikingRouteSnapshotImageQuality.isEffectivelyBlank(image)
+    }
 
     func ensureSnapshotExists(for recordID: UUID) async {
         guard let record = records.first(where: { $0.id == recordID }) else { return }
-        guard record.session.points.count >= 2 else { return }
-        if record.listThumbnailFileURL != nil {
-            return
-        }
+        guard needsListThumbnail(for: record) else { return }
         guard !snapshotEnsureInFlightIDs.contains(recordID) else { return }
         snapshotEnsureInFlightIDs.insert(recordID)
         defer { snapshotEnsureInFlightIDs.remove(recordID) }
         await generateAndAttachSnapshot(for: recordID, tracksGlobalProgress: false)
+    }
+
+    /// 목록·포그라운드 진입 시 빠진/빈 썸네일을 일괄 복구합니다. GPS·지표는 건드리지 않습니다.
+    func ensureMissingListThumbnails() async {
+        guard !isEnsuringMissingListThumbnails else { return }
+        isEnsuringMissingListThumbnails = true
+        defer { isEnsuringMissingListThumbnails = false }
+
+        let targets = records.filter(needsListThumbnail(for:))
+        guard !targets.isEmpty else { return }
+        for record in targets {
+            await ensureSnapshotExists(for: record.id)
+        }
     }
 
     /// 공유·사진 저장용 합성 이미지 (경로 + 기록 요약).

@@ -60,6 +60,8 @@ final class WatchRecordInbox: ObservableObject {
         // (이전에는 이미 있으면 버려 GPS 경로가 비거나 짧아지는 경우가 있었습니다.)
         if HikingRecordStore.shared.records.contains(where: { $0.id == session.sessionID }) {
             HikingRecordStore.shared.save(session)
+            // 잘린 스냅샷 병합 후에도 목록 썸네일이 비면 포그라운드/목록에서 재생성합니다.
+            Task { await HikingRecordStore.shared.ensureSnapshotExists(for: session.sessionID) }
             return
         }
 
@@ -101,7 +103,10 @@ final class WatchRecordInbox: ObservableObject {
             finished.finalizeForPersistence()
             HikingRecordStore.shared.save(finished)
             WorkoutManager.shared.acknowledgeWatchInboundSession(finished.sessionID)
+            // save()가 백그라운드에서 빈 썸네일을 남길 수 있어, 가져오기 직후 다시 보장합니다.
+            await HikingRecordStore.shared.ensureSnapshotExists(for: finished.sessionID)
         }
+        await HikingRecordStore.shared.ensureMissingListThumbnails()
     }
 
     func refreshCountFromDisk() {
@@ -121,6 +126,7 @@ final class WatchRecordInbox: ObservableObject {
             if let data = try? Data(contentsOf: url),
                let session = try? HikingSessionData.decoded(from: data) {
                 HikingRecordStore.shared.save(session)
+                Task { await HikingRecordStore.shared.ensureSnapshotExists(for: sessionID) }
             }
             try? FileManager.default.removeItem(at: url)
         } else {
