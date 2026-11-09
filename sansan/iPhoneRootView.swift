@@ -233,6 +233,7 @@ struct iPhoneRootView: View {
             .onAppear {
                 applyAppStoreScreenshotModeIfNeeded()
                 exportLayoutPreviewCardIfNeeded()
+                WorkoutManager.shared.presentLayoutPreviewSummaryIfNeeded()
             }
 #endif
             .environment(\.chromeCapsuleHeight, chromeCapsuleHeight)
@@ -384,6 +385,7 @@ struct iPhoneRootView: View {
         switch ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] {
         case "recording", "recordingMore": return .recording
         case "paused": return .paused
+        // summary는 fullScreenCover로 별도 표시 — 하단 크롬은 idle 유지.
         default: return nil
         }
 #else
