@@ -2,15 +2,17 @@
 //  KmVoiceGuidanceController.swift
 //  Shared
 //
-//  iPhone 전용 1km 음성 안내.
-//  Watch 기록도 iPhone이 미러 거리로 안내하며, Watch에서는 말하지 않아 중복을 막습니다.
+//  1km 음성 안내 (iPhone · Watch).
+//  발화 소유권은 KmVoiceGuidanceOwnership — Watch 연결 시 Watch, 미연결 시 iPhone.
+//  announced 상태는 기기 간 동기화해 km당 1회만 말한다.
 //
-
-#if os(iOS)
 
 import AVFoundation
 import Foundation
 import os
+#if os(watchOS)
+import WatchKit
+#endif
 
 @MainActor
 final class KmVoiceGuidanceController: NSObject {
@@ -23,6 +25,9 @@ final class KmVoiceGuidanceController: NSObject {
 
     /// 시뮬레이터·디버그 검증용으로 최근 말한 문구를 남깁니다.
     private(set) var spokenPhrasesLog: [String] = []
+
+    /// 발화 직후 WorkoutManager가 상대 기기에 상태를 푸시할 때 사용.
+    var onAnnouncedStateChanged: ((KmVoiceAnnouncedState) -> Void)?
 
     private let synthesizer = AVSpeechSynthesizer()
     private var sessionID: UUID?
@@ -109,13 +114,52 @@ final class KmVoiceGuidanceController: NSObject {
         synthesizer.stopSpeaking(at: .immediate)
     }
 
+    func currentAnnouncedState() -> KmVoiceAnnouncedState? {
+        guard let sessionID else { return nil }
+        return KmVoiceAnnouncedState(
+            sessionID: sessionID,
+            announcedKilometers: announcedKilometers.sorted(),
+            elapsedAtAnnouncedKilometers: Dictionary(
+                uniqueKeysWithValues: elapsedAtAnnouncedKilometers.map { (String($0.key), $0.value) }
+            )
+        )
+    }
+
+    /// 상대 기기가 이미 말한 km를 병합합니다(발화하지 않음).
+    func mergeRemoteAnnouncedState(_ remote: KmVoiceAnnouncedState) {
+        guard sessionID == nil || sessionID == remote.sessionID else { return }
+        sessionID = remote.sessionID
+        var changed = false
+        for kilometers in remote.announcedKilometers where !announcedKilometers.contains(kilometers) {
+            announcedKilometers.insert(kilometers)
+            changed = true
+        }
+        for (key, value) in remote.elapsedAtAnnouncedKilometers {
+            guard let kilometers = Int(key) else { continue }
+            if let existing = elapsedAtAnnouncedKilometers[kilometers] {
+                if value < existing {
+                    elapsedAtAnnouncedKilometers[kilometers] = value
+                    changed = true
+                }
+            } else {
+                elapsedAtAnnouncedKilometers[kilometers] = value
+                changed = true
+            }
+        }
+        if changed {
+            persist()
+        }
+    }
+
     /// 거리·활동 경과가 갱신될 때 호출. 일시정지 중이면 return.
     /// 토글 OFF여도 세션을 묶고 지난 km는 무발화 시드해, 다시 켤 때 소급 발화가 나지 않게 합니다.
+    /// `shouldSpeak == false`(상대 기기가 소유)면 발화·시드 모두 하지 않아 소유 기기 동기화를 기다립니다.
     func evaluate(
         sessionID evaluateSessionID: UUID,
         distanceMeters: Double,
         activeElapsed: TimeInterval,
-        state: HikingSessionState
+        state: HikingSessionState,
+        shouldSpeak: Bool
     ) {
         guard state == .recording else { return }
 
@@ -131,13 +175,28 @@ final class KmVoiceGuidanceController: NSObject {
         )
         guard !pending.isEmpty else { return }
 
-        let speakEnabled = KmVoiceGuidancePreferences.isEnabled
+        let preferenceOn = KmVoiceGuidancePreferences.isEnabled
+        if !preferenceOn {
+            applyPendingCrossings(
+                pending,
+                activeElapsed: activeElapsed,
+                speakEnabled: false
+            )
+            persist()
+            return
+        }
+
+        guard shouldSpeak else { return }
+
         applyPendingCrossings(
             pending,
             activeElapsed: activeElapsed,
-            speakEnabled: speakEnabled
+            speakEnabled: true
         )
         persist()
+        if let state = currentAnnouncedState() {
+            onAnnouncedStateChanged?(state)
+        }
     }
 
     /// 다중 km 도약 시 Android와 같이 구간을 균등 분배합니다. OFF면 발화 없이 시드만 합니다.
@@ -195,6 +254,9 @@ final class KmVoiceGuidanceController: NSObject {
         spokenPhrasesLog.append(phrase)
         Self.logger.notice("speak: \(phrase, privacy: .public)")
         activateAudioSessionForSpeech()
+#if os(watchOS)
+        WKInterfaceDevice.current().play(.notification)
+#endif
         let utterance = AVSpeechUtterance(string: phrase)
         utterance.voice = AVSpeechSynthesisVoice(language: "ko-KR")
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
@@ -258,6 +320,13 @@ final class KmVoiceGuidanceController: NSObject {
     }
 }
 
+/// WatchConnectivity로 동기화하는 안내 완료 상태.
+struct KmVoiceAnnouncedState: Codable, Equatable, Sendable {
+    var sessionID: UUID
+    var announcedKilometers: [Int]
+    var elapsedAtAnnouncedKilometers: [String: TimeInterval]
+}
+
 extension KmVoiceGuidanceController: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(
         _ synthesizer: AVSpeechSynthesizer,
@@ -279,5 +348,3 @@ extension KmVoiceGuidanceController: AVSpeechSynthesizerDelegate {
         }
     }
 }
-
-#endif

@@ -181,6 +181,9 @@ final class WorkoutManager: NSObject, ObservableObject {
     private static let maxWatchWorkoutSessionRestartAttempts = 3
     #endif
 
+    /// 이번 세션을 Apple Watch에서 시작했는지(1km 음성 소유권·핸드오프).
+    private var recordingStartedOnWatch = false
+
     /// Watch → iPhone 심박 스냅샷 전송 간격(초). Apple Watch 심박 갱신(~5초)에 맞춥니다.
     private static let heartRateSnapshotMinInterval: TimeInterval = 1
     private static let publishedHeartRateSampleLimit = 60
@@ -253,6 +256,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         loadPersistedDismissedSessionID()
         configureLocationManager()
         authorizationStatus = locationManager.authorizationStatus
+        configureKmVoiceGuidanceHooks()
 #if os(watchOS)
         configureWatchConnectivity()
         Task { await self.restoreLiveSessionBackupIfNeeded() }
@@ -274,6 +278,17 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 #endif
+
+    private func configureKmVoiceGuidanceHooks() {
+        KmVoiceGuidanceController.shared.onAnnouncedStateChanged = { [weak self] state in
+            self?.publishKmVoiceAnnouncedState(state)
+        }
+#if os(iOS)
+        KmVoiceGuidancePreferencesObserver.shared.onEnabledChanged = { [weak self] isOn in
+            self?.publishKmVoiceGuidancePreference(isOn)
+        }
+#endif
+    }
 
     private func prepareHeartRateMonitoringEarlyIfNeeded() async {
 #if os(iOS)
@@ -1074,22 +1089,23 @@ final class WorkoutManager: NSObject, ObservableObject {
 #if os(watchOS)
             isAssistingLocation = false
             assistPoints = []
+            recordingStartedOnWatch = asLocationProducer
+#else
+            recordingStartedOnWatch = false
 #endif
             clearLiveSessionBackup()
 #if os(iOS)
             resetPhoneRecordingFailoverState()
-            KmVoiceGuidanceController.shared.prepareForNewSession(sessionData.sessionID)
 #endif
+            KmVoiceGuidanceController.shared.prepareForNewSession(sessionData.sessionID)
         } else {
             sessionData.state = .recording
             sessionData.lastUpdated = Date()
-#if os(iOS)
             KmVoiceGuidanceController.shared.bindSession(
                 sessionData.sessionID,
                 seedFromDistanceMeters: sessionData.totalDistance,
                 seedActiveElapsed: sessionData.elapsedTime
             )
-#endif
         }
 
         if isLocationProducer, canRecordWithCurrentLocationAuthorization {
@@ -1128,9 +1144,10 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         startStepCountingIfNeeded()
 
-#if os(iOS)
         evaluateKmVoiceGuidanceIfNeeded()
-#endif
+        if syncRemote {
+            publishRecordingStartedOnWatchFlag()
+        }
 
         publishSessionSnapshot()
         startiPhoneWorkoutKeepAliveIfNeeded()
@@ -1330,25 +1347,109 @@ final class WorkoutManager: NSObject, ObservableObject {
         didYieldRecordingToPhone = false
 #endif
         clearLiveSessionBackup()
-#if os(iOS)
+        recordingStartedOnWatch = false
         KmVoiceGuidanceController.shared.clear()
+#if os(iOS)
         prepareDashboardMapLocation()
         updateScreenSleepPrevention()
 #endif
     }
 
-#if os(iOS)
-    /// Watch·iPhone 공통 기록 경로에서 iPhone만 1km 음성을 말합니다(Watch는 미발화 → 중복 없음).
+    /// Watch 연결 시 Watch가, 미연결 시 iPhone이 1km 음성을 말합니다.
     private func evaluateKmVoiceGuidanceIfNeeded() {
         guard sessionData.state != .idle else { return }
+#if os(watchOS)
+        let yielded = didYieldRecordingToPhone
+#else
+        let yielded = false
+#endif
+        let shouldSpeak = KmVoiceGuidanceOwnership.shouldSpeakLocally(
+            recordingStartedOnWatch: recordingStartedOnWatch,
+            isCounterpartReachable: isWatchReachable,
+            watchYieldedToPhone: yielded
+        )
         KmVoiceGuidanceController.shared.evaluate(
             sessionID: sessionData.sessionID,
             distanceMeters: sessionData.totalDistance,
             activeElapsed: sessionData.elapsedTime,
-            state: sessionData.state
+            state: sessionData.state,
+            shouldSpeak: shouldSpeak
         )
     }
+
+    private func publishKmVoiceAnnouncedState(_ state: KmVoiceAnnouncedState) {
+        guard let wcSession, canSyncWithWatch else { return }
+        guard let data = try? JSONEncoder.hikingConnectivity.encode(state) else { return }
+        var payload: [String: Any] = [
+            HikingConnectivityKeys.command: HikingSessionCommand.kmVoiceAnnouncedSync.rawValue,
+            HikingConnectivityKeys.kmVoiceAnnouncedState: data,
+        ]
+        payload[HikingConnectivityKeys.recordingStartedOnWatch] = recordingStartedOnWatch
+        if wcSession.isReachable {
+            wcSession.sendMessage(payload, replyHandler: nil) { [weak self] _ in
+                self?.wcSession?.transferUserInfo(payload)
+            }
+        } else {
+            wcSession.transferUserInfo(payload)
+        }
+    }
+
+    private func publishKmVoiceGuidancePreference(_ isEnabled: Bool) {
+        guard let wcSession, canSyncWithWatch else { return }
+        let payload: [String: Any] = [
+            HikingConnectivityKeys.command: HikingSessionCommand.kmVoiceGuidancePreferenceSync.rawValue,
+            HikingConnectivityKeys.kmVoiceGuidanceEnabled: isEnabled,
+        ]
+        if wcSession.isReachable {
+            wcSession.sendMessage(payload, replyHandler: nil) { [weak self] _ in
+                self?.wcSession?.transferUserInfo(payload)
+            }
+        } else {
+            wcSession.transferUserInfo(payload)
+        }
+    }
+
+    private func publishRecordingStartedOnWatchFlag() {
+        guard let wcSession, canSyncWithWatch else { return }
+        let payload: [String: Any] = [
+            HikingConnectivityKeys.recordingStartedOnWatch: recordingStartedOnWatch,
+            HikingConnectivityKeys.command: HikingSessionCommand.kmVoiceAnnouncedSync.rawValue,
+        ]
+        if let state = KmVoiceGuidanceController.shared.currentAnnouncedState(),
+           let data = try? JSONEncoder.hikingConnectivity.encode(state) {
+            var full = payload
+            full[HikingConnectivityKeys.kmVoiceAnnouncedState] = data
+            if wcSession.isReachable {
+                wcSession.sendMessage(full, replyHandler: nil) { [weak self] _ in
+                    self?.wcSession?.transferUserInfo(full)
+                }
+            } else {
+                wcSession.transferUserInfo(full)
+            }
+            return
+        }
+        if wcSession.isReachable {
+            wcSession.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+        } else {
+            wcSession.transferUserInfo(payload)
+        }
+    }
+
+    private func applyKmVoiceConnectivityPayload(_ message: [String: Any]) {
+        if let started = message[HikingConnectivityKeys.recordingStartedOnWatch] as? Bool {
+            recordingStartedOnWatch = started
+        }
+        if let enabled = message[HikingConnectivityKeys.kmVoiceGuidanceEnabled] as? Bool {
+            KmVoiceGuidancePreferences.isEnabled = enabled
+#if os(iOS)
+            KmVoiceGuidancePreferencesObserver.shared.syncFromStorage()
 #endif
+        }
+        if let data = message[HikingConnectivityKeys.kmVoiceAnnouncedState] as? Data,
+           let state = try? JSONDecoder.hikingConnectivity.decode(KmVoiceAnnouncedState.self, from: data) {
+            KmVoiceGuidanceController.shared.mergeRemoteAnnouncedState(state)
+        }
+    }
 
     private func archiveFinishedSession(_ session: HikingSessionData, presentList: Bool) {
 #if os(iOS)
@@ -1595,13 +1696,11 @@ final class WorkoutManager: NSObject, ObservableObject {
         if backup.session.state == .paused, pauseBeganAt == nil {
             pauseBeganAt = backup.savedAt
         }
-#if os(iOS)
         KmVoiceGuidanceController.shared.bindSession(
             backup.session.sessionID,
             seedFromDistanceMeters: backup.session.totalDistance,
             seedActiveElapsed: backup.session.elapsedTime
         )
-#endif
         syncLocalTrackingToState()
     }
 
@@ -1857,8 +1956,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         // 위치 콜백이 끊긴 경우에도 채택 공백 기반 품질 저하를 판정합니다.
         evaluateGPSQualityForAssist()
         evaluateWatchLossFailover()
-        evaluateKmVoiceGuidanceIfNeeded()
 #endif
+        evaluateKmVoiceGuidanceIfNeeded()
 #if os(watchOS)
         updateWatchActiveEnergy()
         // 손목 내림 시 iPhone 동기화 빈도만 줄입니다. GPS·심박·포인트 저장은 계속됩니다.
@@ -1957,9 +2056,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData.lastUpdated = Date()
 
         saveLiveSessionBackupIfNeeded()
-#if os(iOS)
         evaluateKmVoiceGuidanceIfNeeded()
-#endif
         publishSessionSnapshot()
         sendLatestPoint(point)
     }
@@ -2538,7 +2635,18 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         if isWatchReachable {
             requestSessionSyncFromCounterpart()
+            if sessionData.state != .idle {
+                publishRecordingStartedOnWatchFlag()
+                if let state = KmVoiceGuidanceController.shared.currentAnnouncedState() {
+                    publishKmVoiceAnnouncedState(state)
+                }
+#if os(iOS)
+                publishKmVoiceGuidancePreference(KmVoiceGuidancePreferences.isEnabled)
+#endif
+            }
         }
+        // 연결/끊김에 따라 발화 소유권이 바뀌므로 즉시 재평가.
+        evaluateKmVoiceGuidanceIfNeeded()
 #if os(iOS)
         evaluateWatchLossFailover()
         if sessionData.state == .recording {
@@ -3159,6 +3267,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         case .startRecording:
             if sessionData.state == .idle {
                 beginWorkout(syncRemote: false, asLocationProducer: false)
+#if os(iOS)
+                // Watch가 시작한 세션을 iPhone이 미러링.
+                recordingStartedOnWatch = true
+#endif
             } else if sessionData.state == .paused {
                 setResumed(syncRemote: false)
             }
@@ -3202,7 +3314,12 @@ final class WorkoutManager: NSObject, ObservableObject {
         case .phoneTookOverRecording:
 #if os(watchOS)
             adoptPhoneLocationProducerTakeover()
+            // 인계 후 Watch는 말하지 않음 — 소유권 재평가.
+            evaluateKmVoiceGuidanceIfNeeded()
 #endif
+        case .kmVoiceAnnouncedSync, .kmVoiceGuidancePreferenceSync:
+            // 페이로드는 didReceiveMessage/UserInfo에서 applyKmVoiceConnectivityPayload로 처리.
+            break
         }
     }
 
@@ -3258,6 +3375,18 @@ final class WorkoutManager: NSObject, ObservableObject {
         switch sessionData.state {
         case .recording, .paused:
             isLocationProducer = false
+#if os(iOS)
+            // idle iPhone이 Watch 세션을 받아들임 → Watch 시작으로 본다.
+            recordingStartedOnWatch = true
+#else
+            // idle Watch가 iPhone 세션을 받아들임 → Phone 시작.
+            recordingStartedOnWatch = false
+#endif
+            KmVoiceGuidanceController.shared.bindSession(
+                sessionData.sessionID,
+                seedFromDistanceMeters: sessionData.totalDistance,
+                seedActiveElapsed: sessionData.elapsedTime
+            )
         case .idle:
             break
         }
@@ -3371,9 +3500,7 @@ final class WorkoutManager: NSObject, ObservableObject {
             liveDistanceAnchor = HikingSessionMetrics.horizontalDistanceWithAnchor(from: remote.points).anchor
             adoptRemoteRoleIfNeeded(wasIdle: wasIdle)
             syncLocalTrackingToState()
-#if os(iOS)
             evaluateKmVoiceGuidanceIfNeeded()
-#endif
             return
         }
 
@@ -3421,9 +3548,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         adoptRemoteRoleIfNeeded(wasIdle: wasIdle)
         syncLocalTrackingToState()
-#if os(iOS)
         evaluateKmVoiceGuidanceIfNeeded()
-#endif
     }
 
     /// 원격 스냅샷의 일시정지/재개 마킹을 id 기준으로 합치고, 재개 좌표가 뒤늦게 와도 보강합니다.
@@ -3541,6 +3666,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         sessionData.currentAltitude = point.altitude
         sessionData.lastUpdated = Date()
         saveLiveSessionBackupIfNeeded()
+        // Phone→Watch 실시간 포인트에서도 Watch가 1km 소유권이면 말해야 함.
+        evaluateKmVoiceGuidanceIfNeeded()
     }
 
     private func syncLocalTrackingToState() {
@@ -3745,6 +3872,11 @@ extension WorkoutManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in
             markWatchSyncActivity()
+            if message[HikingConnectivityKeys.kmVoiceAnnouncedState] != nil
+                || message[HikingConnectivityKeys.kmVoiceGuidanceEnabled] != nil
+                || message[HikingConnectivityKeys.recordingStartedOnWatch] != nil {
+                applyKmVoiceConnectivityPayload(message)
+            }
             if let command = HikingSessionCommand(dictionary: message) {
                 handleRemoteCommand(command)
                 return
@@ -3766,6 +3898,11 @@ extension WorkoutManager: WCSessionDelegate {
     ) {
         Task { @MainActor in
             markWatchSyncActivity()
+            if message[HikingConnectivityKeys.kmVoiceAnnouncedState] != nil
+                || message[HikingConnectivityKeys.kmVoiceGuidanceEnabled] != nil
+                || message[HikingConnectivityKeys.recordingStartedOnWatch] != nil {
+                applyKmVoiceConnectivityPayload(message)
+            }
             if let command = HikingSessionCommand(dictionary: message) {
                 handleRemoteCommand(command)
                 if command == .requestSync, let data = try? sessionData.encoded() {
@@ -3816,6 +3953,15 @@ extension WorkoutManager: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         Task { @MainActor in
             markWatchSyncActivity()
+            if userInfo[HikingConnectivityKeys.kmVoiceAnnouncedState] != nil
+                || userInfo[HikingConnectivityKeys.kmVoiceGuidanceEnabled] != nil
+                || userInfo[HikingConnectivityKeys.recordingStartedOnWatch] != nil {
+                applyKmVoiceConnectivityPayload(userInfo)
+                if let command = HikingSessionCommand(dictionary: userInfo),
+                   command == .kmVoiceAnnouncedSync || command == .kmVoiceGuidancePreferenceSync {
+                    return
+                }
+            }
             if let command = HikingSessionCommand(dictionary: userInfo), command == .stopRecording {
 #if os(iOS)
                 handleReceivedStopRecordingUserInfo(userInfo)
