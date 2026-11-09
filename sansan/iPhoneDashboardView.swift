@@ -685,18 +685,23 @@ private struct StatCard: View {
                 .lineLimit(1)
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Spacer(minLength: 0)
+
                 Text(value)
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .monospacedDigit()
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
+                    .allowsTightening(true)
 
                 if !unit.isEmpty {
                     Text(unit)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(tint)
+                        .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
