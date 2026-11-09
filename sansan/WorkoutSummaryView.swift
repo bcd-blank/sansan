@@ -68,11 +68,11 @@ struct WorkoutSummaryView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .overlay(alignment: .bottom) {
+            // fullScreenCover 안에서도 메인 탭과 같이 화면 맨 아래 기준으로 26pt.
             actionBar
                 .padding(.bottom, iPhoneBottomChromeLayout.chromeBottomInset)
+                .ignoresSafeArea(.container, edges: .bottom)
         }
-        // 메인 탭 스택과 동일 — 하단 inset 26은 화면 맨 아래 기준(safe area 미가산).
-        .ignoresSafeArea(.container, edges: .bottom)
         .background {
             GeometryReader { proxy in
                 Color.clear
@@ -81,7 +81,9 @@ struct WorkoutSummaryView: View {
                         chromeWidth = width
                     }
             }
+            .ignoresSafeArea(.container, edges: .bottom)
         }
+        .ignoresSafeArea(.container, edges: .bottom)
         .interactiveDismissDisabled(true)
     }
 
