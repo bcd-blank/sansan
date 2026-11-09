@@ -58,6 +58,8 @@ struct AppShellView: View {
             // 메인 UI가 빈 화면처럼 보이는 회귀를 막습니다.
             WorkoutManager.shared.refreshLocationTrackingIfNeeded()
             WorkoutManager.shared.syncPendingWatchSessions()
+            // Watch 동기화 직후 백그라운드에서 실패한 목록 썸네일을 포그라운드에서 다시 만듭니다.
+            Task { await HikingRecordStore.shared.ensureMissingListThumbnails() }
         }
         .overlay {
             RecordPersistFailureAlertHost()

@@ -90,6 +90,7 @@ struct HikingRecordsListView: View {
             if !store.hasCompletedInitialLoad {
                 Task { await store.reloadForCurrentUserOffMain() }
             }
+            Task { await store.ensureMissingListThumbnails() }
 #if DEBUG
             applyAppStoreScreenshotModeIfNeeded()
 #endif

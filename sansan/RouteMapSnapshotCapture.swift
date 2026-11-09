@@ -415,7 +415,11 @@ enum RouteMapSnapshotCapture {
         scale: CGFloat,
         reservesLegalAttributionStrip: Bool
     ) async -> RouteMapSnapshotResult? {
-        guard let window = KeyWindow.foregroundWindow else { return nil }
+        // 백그라운드·비활성 장면에서는 Metal 타일이 비어 단색 PNG가 고착되므로
+        // MKMapSnapshotter 폴백으로 넘깁니다(Watch 동기화 직후 흔한 경로).
+        guard KeyWindow.isForegroundActive,
+              let window = KeyWindow.foregroundWindow
+        else { return nil }
 
         let size = mapViewSize
         guard let container = makeOnScreenCaptureContainer(in: window, size: size) else { return nil }
@@ -919,40 +923,8 @@ enum RouteMapSnapshotCapture {
         mapView.setVisibleMapRect(routeRect, animated: false)
     }
 
-    /// Metal 지도가 아직 그려지지 않았을 때 drawHierarchy가 검정으로 나오는 경우를 걸러냅니다.
     private static func isImageEffectivelyBlank(_ image: UIImage) -> Bool {
-        guard let cgImage = image.cgImage else { return true }
-
-        let sampleWidth = min(cgImage.width, 24)
-        let sampleHeight = min(cgImage.height, 24)
-        guard sampleWidth > 0, sampleHeight > 0 else { return true }
-
-        var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
-        guard let context = CGContext(
-            data: &pixels,
-            width: sampleWidth,
-            height: sampleHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: sampleWidth * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return true }
-
-        context.draw(
-            cgImage,
-            in: CGRect(x: 0, y: 0, width: sampleWidth, height: sampleHeight)
-        )
-
-        var luminanceTotal = 0
-        let pixelCount = sampleWidth * sampleHeight
-        for index in 0..<pixelCount {
-            let offset = index * 4
-            luminanceTotal += (Int(pixels[offset])
-                + Int(pixels[offset + 1])
-                + Int(pixels[offset + 2])) / 3
-        }
-
-        return luminanceTotal / max(pixelCount, 1) < 24
+        HikingRouteSnapshotImageQuality.isEffectivelyBlank(image)
     }
 
     /// 표기 스트립 크롭 후에도 종횡비를 유지합니다(세로 늘림 방지).
@@ -1082,6 +1054,12 @@ private final class DisplayLinkFrameWaiter {
 
 @MainActor
 private enum KeyWindow {
+    static var isForegroundActive: Bool {
+        UIApplication.shared.connectedScenes.contains {
+            ($0 as? UIWindowScene)?.activationState == .foregroundActive
+        }
+    }
+
     static var foregroundWindow: UIWindow? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first

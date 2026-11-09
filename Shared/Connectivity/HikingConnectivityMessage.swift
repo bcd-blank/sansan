@@ -19,6 +19,12 @@ enum HikingConnectivityKeys {
     static let latestPoint = "latestPoint"
     /// `sendMessage` — Watch 실시간 심박 샘플(JSON Data).
     static let heartRateSample = "heartRateSample"
+    /// `sendMessage` / `transferUserInfo` — 1km 음성 announced 상태(JSON Data).
+    static let kmVoiceAnnouncedState = "kmVoiceAnnouncedState"
+    /// `sendMessage` / `updateApplicationContext` — 1km 음성 안내 ON/OFF.
+    static let kmVoiceGuidanceEnabled = "kmVoiceGuidanceEnabled"
+    /// `sendMessage` / `transferUserInfo` — 이번 세션을 Watch에서 시작했는지.
+    static let recordingStartedOnWatch = "recordingStartedOnWatch"
 }
 
 /// 실시간 제어 메시지(iPhone ↔ Watch).
@@ -37,6 +43,10 @@ enum HikingSessionCommand: String, Codable, Sendable {
     case stopLocationAssist
     /// 워치 연결이 끊겨 iPhone이 위치 기록을 이어받음 — 워치는 미러로 전환.
     case phoneTookOverRecording
+    /// 1km 음성 announced 상태 동기화(페이로드에 `kmVoiceAnnouncedState` 포함).
+    case kmVoiceAnnouncedSync
+    /// 1km 음성 안내 토글 동기화(페이로드에 `kmVoiceGuidanceEnabled` 포함).
+    case kmVoiceGuidancePreferenceSync
 }
 
 /// WatchConnectivity로 주고받는 메시지 봉투.

@@ -30,19 +30,22 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             sessionID: sessionID,
             distanceMeters: 1_000,
             activeElapsed: 720,
-            state: .recording
+            state: .recording,
+            shouldSpeak: true
         )
         controller.evaluate(
             sessionID: sessionID,
             distanceMeters: 2_000,
             activeElapsed: 1_500,
-            state: .recording
+            state: .recording,
+            shouldSpeak: true
         )
         controller.evaluate(
             sessionID: sessionID,
             distanceMeters: 3_050,
             activeElapsed: 2_100,
-            state: .recording
+            state: .recording,
+            shouldSpeak: true
         )
 
         XCTAssertEqual(
@@ -65,6 +68,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_200,
             activeElapsed: 600,
             state: .paused
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
 
@@ -73,6 +78,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_200,
             activeElapsed: 600,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
     }
@@ -87,18 +94,24 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_050,
             activeElapsed: 500,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         controller.evaluate(
             sessionID: sessionID,
             distanceMeters: 990,
             activeElapsed: 520,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         controller.evaluate(
             sessionID: sessionID,
             distanceMeters: 1_080,
             activeElapsed: 540,
             state: .recording
+        ,
+            shouldSpeak: true
         )
 
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
@@ -113,6 +126,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_000,
             activeElapsed: 600,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
 
@@ -128,6 +143,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_100,
             activeElapsed: 700,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         // 디스크의 announced {1} 복구 → 재안내 없음
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
@@ -146,6 +163,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 2_400,
             activeElapsed: 1_800,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
 
@@ -155,6 +174,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 3_000,
             activeElapsed: 2_400,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
@@ -172,6 +193,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_000,
             activeElapsed: 400,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
     }
@@ -187,6 +210,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 900,
             activeElapsed: 500,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
 
@@ -195,6 +220,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 2_200,
             activeElapsed: 1_200,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
@@ -216,6 +243,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_000,
             activeElapsed: 600,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
 
@@ -225,6 +254,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 2_200,
             activeElapsed: 1_200,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
 
@@ -234,6 +265,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 2_200,
             activeElapsed: 1_250,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 1, "OFF 동안 넘긴 2km는 소급 발화 없음")
 
@@ -242,6 +275,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 3_000,
             activeElapsed: 1_800,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertEqual(controller.spokenPhrasesLog.count, 2)
         XCTAssertEqual(
@@ -261,6 +296,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_200,
             activeElapsed: 700,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
 
@@ -270,8 +307,64 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
             distanceMeters: 1_200,
             activeElapsed: 720,
             state: .recording
+        ,
+            shouldSpeak: true
         )
         XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+    }
+
+
+    func testNonOwnerDoesNotSpeakOrMarkAnnounced() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 1_000,
+            activeElapsed: 600,
+            state: .recording,
+            shouldSpeak: false
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.announcedKilometers ?? [], [])
+
+        controller.mergeRemoteAnnouncedState(
+            KmVoiceAnnouncedState(
+                sessionID: sessionID,
+                announcedKilometers: [1],
+                elapsedAtAnnouncedKilometers: ["1": 600]
+            )
+        )
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 1_050,
+            activeElapsed: 620,
+            state: .recording,
+            shouldSpeak: true
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+    }
+
+    func testHandoffPhoneSpeaksAfterWatchAnnouncedMerge() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+        controller.mergeRemoteAnnouncedState(
+            KmVoiceAnnouncedState(
+                sessionID: sessionID,
+                announcedKilometers: [1],
+                elapsedAtAnnouncedKilometers: ["1": 700]
+            )
+        )
+        controller.evaluate(
+            sessionID: sessionID,
+            distanceMeters: 2_000,
+            activeElapsed: 1_400,
+            state: .recording,
+            shouldSpeak: true
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1)
+        XCTAssertTrue(controller.spokenPhrasesLog[0].hasPrefix("2킬로미터"))
     }
 
     func testPreferencesDefaultOn() {
