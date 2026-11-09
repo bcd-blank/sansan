@@ -17,11 +17,24 @@ struct WorkoutSummaryView: View {
     let onDiscard: () -> Void
 
     @ObservedObject private var workout = WorkoutManager.shared
-    @Environment(\.chromeCapsuleHeight) private var chromeCapsuleHeight
     @State private var showDiscardConfirmation = false
+    /// 메인/기록 하단 크롬과 동일 — 폭 측정 전엔 SE(375) 가정.
+    @State private var chromeWidth: CGFloat = 375
 
     private static let routeColor = Color(red: 0.12, green: 0.72, blue: 0.45)
     private var isSaving: Bool { workout.isConfirmingSummary }
+
+    private var controlHeight: CGFloat {
+        iPhoneBottomChromeLayout.chromeControlHeight(forWidth: chromeWidth)
+    }
+
+    private var horizontalPadding: CGFloat {
+        iPhoneBottomChromeLayout.chromeHorizontalPadding(forWidth: chromeWidth)
+    }
+
+    private var floatingChromeHeight: CGFloat {
+        iPhoneBottomChromeLayout.floatingChromeHeight(forWidth: chromeWidth)
+    }
 
     private var record: SavedHikingSession {
         SavedHikingSession(session: session)
@@ -47,15 +60,30 @@ struct WorkoutSummaryView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                // 플로팅 액션 바와 메인 탭과 동일한 하단 여유.
+                .padding(.bottom, floatingChromeHeight + iPhoneBottomChromeLayout.scrollEndBuffer)
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("기록 요약")
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) {
-                actionBar
-            }
         }
+        .overlay(alignment: .bottom) {
+            // fullScreenCover 안에서도 메인 탭과 같이 화면 맨 아래 기준으로 26pt.
+            actionBar
+                .padding(.bottom, iPhoneBottomChromeLayout.chromeBottomInset)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { chromeWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in
+                        chromeWidth = width
+                    }
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
         .interactiveDismissDisabled(true)
     }
 
@@ -133,10 +161,10 @@ struct WorkoutSummaryView: View {
         .padding(.top, 4)
     }
 
-    // MARK: - 하단 액션
+    // MARK: - 하단 액션 (메인 탭 기하와 동일)
 
     private var actionBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: iPhoneBottomChromeLayout.chromeItemSpacing(forWidth: chromeWidth)) {
             summaryActionButton(
                 title: "삭제",
                 systemImage: "trash",
@@ -155,9 +183,9 @@ struct WorkoutSummaryView: View {
                 action: onSave
             )
         }
-        .frame(height: chromeCapsuleHeight)
-        .padding(.horizontal, iPhoneBottomChromeLayout.chromeHorizontalPadding)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .frame(height: max(controlHeight, iPhoneBottomChromeLayout.minTouch))
+        .padding(.horizontal, horizontalPadding)
         .confirmationDialog(
             "이 기록을 삭제할까요?",
             isPresented: $showDiscardConfirmation,
@@ -180,13 +208,24 @@ struct WorkoutSummaryView: View {
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.body.weight(isBold ? .bold : .semibold))
-                .labelStyle(.titleAndIcon)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity)
-                .frame(height: iPhoneBottomChromeLayout.chromeControlHeight)
+        // 메인 「기록 시작」과 동일 스케일·프레임 — glass 높이가 탭 기하를 넘지 않게 맞춤.
+        let scale = iPhoneBottomChromeLayout.scale(forWidth: chromeWidth)
+        let labelSize = iPhoneBottomChromeLayout.startLabelSize(forWidth: chromeWidth)
+        let icon = 15 * scale
+        return Button(action: action) {
+            HStack(spacing: 8 * scale) {
+                Image(systemName: systemImage)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .frame(width: icon, height: icon)
+                Text(title)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .padding(.horizontal, 12 * scale)
+            .frame(maxWidth: .infinity)
+            .frame(height: controlHeight)
+            .frame(minHeight: iPhoneBottomChromeLayout.minTouch)
         }
         .buttonStyle(.glassProminent)
         .tint(tint)

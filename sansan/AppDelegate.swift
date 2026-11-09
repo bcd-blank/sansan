@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         configureNavigationBarAppearance()
         // 스플래시 이미지를 미리 로드해 SwiftUI 첫 프레임에서 검정 공백을 줄입니다.
         _ = UIImage(named: "LaunchScreenFull")
+        // #73 DEBUG: -UITestSkipHealthAuth / -UITestSeedRecords (release no-op)
+        UITestSupport.applyIfNeeded()
         return true
     }
 

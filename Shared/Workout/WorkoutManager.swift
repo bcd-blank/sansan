@@ -745,6 +745,42 @@ final class WorkoutManager: NSObject, ObservableObject {
         locationManager.requestWhenInUseAuthorization()
     }
 
+#if DEBUG
+    /// `SANSAN_LAYOUT_PREVIEW=summary` — 저장 화면 하단 크롬 기하 점검용 더미 요약.
+    /// 디스크에 저장하지 않으며 Release 경로에 없습니다.
+    func presentLayoutPreviewSummaryIfNeeded() {
+        guard ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] == "summary" else { return }
+        guard summarySession == nil else { return }
+        let started = Date().addingTimeInterval(-1_800)
+        let p0 = HikingPoint(
+            latitude: 37.5665,
+            longitude: 126.9780,
+            altitude: 40,
+            timestamp: started
+        )
+        let p1 = HikingPoint(
+            latitude: 37.5700,
+            longitude: 126.9850,
+            altitude: 120,
+            timestamp: started.addingTimeInterval(1_800)
+        )
+        var finished = HikingSessionData(
+            state: .idle,
+            startedAt: started,
+            totalDistance: 2_400,
+            elapsedTime: 1_800,
+            currentAltitude: 120,
+            points: [p0, p1],
+            stepCount: 3_200,
+            activeEnergyKilocalories: 180,
+            elevationGainMeters: 80
+        )
+        finished.finalizeForPersistence()
+        isAwaitingSummaryConfirmation = true
+        summarySession = finished
+    }
+#endif
+
 #if os(iOS)
     /// 백그라운드 기록용 항상 허용 — 안내 후 UI에서 호출합니다.
     func requestAlwaysLocationAuthorization() {

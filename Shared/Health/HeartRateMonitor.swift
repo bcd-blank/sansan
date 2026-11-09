@@ -33,6 +33,10 @@ final class HeartRateMonitor {
     }
 
     func requestAuthorization() async throws {
+#if DEBUG && os(iOS)
+        // #73: UITestSkipHealthAuth — HealthKit 권한 시트 스킵 (release 미포함)
+        if CommandLine.arguments.contains("-UITestSkipHealthAuth") { return }
+#endif
         guard let healthStore = resolvedHealthStore() else { return }
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
         var readTypes: Set<HKObjectType> = [heartRateType]

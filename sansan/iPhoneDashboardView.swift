@@ -666,6 +666,7 @@ private struct TrailPhotoLiveMarker: View {
     }
 }
 
+/// 메인 화면 메트릭 카드 — 기록 상세 `RecordSummaryMetricCard`와 동일 토큰·구조.
 private struct StatCard: View {
     let title: String
     let value: String
@@ -673,34 +674,75 @@ private struct StatCard: View {
     let icon: String
     let tint: Color
 
+    /// 메인 그리드는 상세 `layoutScale` 환경이 없어 1.0(기준 토큰) 사용.
+    private let layoutScale: CGFloat = 1
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
+        let pad = HikingRecordCardLayout.cardPadding.recordScaled(layoutScale)
+        let rowGap = HikingRecordCardLayout.cardRowSpacing.recordScaled(layoutScale)
+        let iconBox = HikingRecordCardLayout.compactIconBox.recordScaled(layoutScale)
+        let iconRadius = 6.recordScaled(layoutScale)
 
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: rowGap) {
+            HStack(spacing: 5.recordScaled(layoutScale)) {
+                RoundedRectangle(cornerRadius: iconRadius, style: .continuous)
+                    .fill(tint.opacity(0.12))
+                    .frame(width: iconBox, height: iconBox)
+                    .overlay {
+                        Image(systemName: icon)
+                            .font(.system(
+                                size: HikingRecordCardLayout.compactIconSymbol.recordScaled(layoutScale),
+                                weight: .semibold
+                            ))
+                            .foregroundStyle(tint)
+                    }
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(.system(.title3, design: .rounded).weight(.bold))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.7)
+                Text(title)
+                    .font(.system(
+                        size: HikingRecordCardLayout.cardLabelSize.recordScaled(layoutScale),
+                        weight: .semibold
+                    ))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 3.recordScaled(layoutScale)) {
+                Spacer(minLength: 0)
+
+                Text(value)
+                    .font(.system(
+                        size: HikingRecordCardLayout.cardPrimarySize.recordScaled(layoutScale),
+                        weight: .bold,
+                        design: .rounded
+                    ))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .allowsTightening(true)
 
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(tint)
+                        .font(.system(
+                            size: HikingRecordCardLayout.cardSuffixSize.recordScaled(layoutScale),
+                            weight: .medium
+                        ))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(pad)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: HikingRecordCardLayout.cardMinHeight.recordScaled(layoutScale),
+            alignment: .topLeading
+        )
+        .background(
+            HikingRecordCardLayout.groupedCardFill,
+            in: RoundedRectangle(cornerRadius: HikingRecordCardLayout.cardCornerRadius, style: .continuous)
+        )
     }
 }
 
