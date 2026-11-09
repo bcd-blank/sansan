@@ -647,6 +647,8 @@ final class HikingRecordStore: ObservableObject {
         if !pending.isEmpty {
             persist()
         }
+        // 포그라운드 진입이 로드보다 먼저면 빈 목록으로 ensure가 끝나므로, 로드 직후 한 번 더 복구합니다.
+        Task { await ensureMissingListThumbnails() }
         scheduleDisplayCacheBackfillIfNeeded()
         scheduleStorageMaintenance()
     }
