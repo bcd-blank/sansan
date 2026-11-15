@@ -1,0 +1,16 @@
+{
+  "id": "share-summary-overlay",
+  "confirmed": "2026-11-15",
+  "source": "docs/share-overlay/measurements.json",
+  "dominantColor": {
+    "saturationClampPercent": { "min": 25, "max": 45 },
+    "lightnessPercent": 26,
+    "lightnessWeakContrastPercent": 22,
+    "fallbackWhenExtractedSaturationBelowPercent": 20,
+    "fallbackHex": "#306458"
+  },
+  "overlay": {
+    "opacity": 0.56,
+    "blendMode": "multiply"
+  }
+}

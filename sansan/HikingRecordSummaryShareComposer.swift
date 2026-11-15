@@ -2,7 +2,8 @@
 //  HikingRecordSummaryShareComposer.swift
 //  sansan
 //
-//  9:16 지도 한 장 위에 기록 정보를 흰 글자로 올리고, 타이틀과 정보 뒤에만 음영을 둡니다.
+//  9:16 지도 한 장 위에 기록 정보를 흰 글자로 올리고, 타이틀과 정보 뒤에만
+//  지도 도미넌트 컬러(multiply 56%) 음영을 둡니다.
 //
 
 #if os(iOS)
@@ -96,9 +97,29 @@ private struct SummaryMapSharePage: View {
     let record: SavedHikingSession
     let mapImage: UIImage
     var showsPinnedThumbnails: Bool = false
+    /// Dominant-color (or fallback) fill for text-area scrims — color + multiply only.
+    private let overlayFill: Color
+
+    init(
+        record: SavedHikingSession,
+        mapImage: UIImage,
+        showsPinnedThumbnails: Bool = false
+    ) {
+        self.record = record
+        self.mapImage = mapImage
+        self.showsPinnedThumbnails = showsPinnedThumbnails
+        self.overlayFill = Color(ShareSummaryOverlayColor.uiColor(from: mapImage))
+    }
 
     private var showsWeather: Bool {
         HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
+    }
+
+    /// Keeps prior gradient shape; remaps stop strength so the solid peak is token opacity (56%).
+    private func scrimStop(relativeOpacity: Double, priorPeak: Double) -> Color {
+        let peak = ShareSummaryOverlayTokens.overlayOpacity
+        let opacity = peak * (relativeOpacity / priorPeak)
+        return overlayFill.opacity(opacity)
     }
 
     var body: some View {
@@ -126,15 +147,16 @@ private struct SummaryMapSharePage: View {
     private var topScrim: some View {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.62), location: 0),
-                .init(color: .black.opacity(0.46), location: 0.55),
-                .init(color: .black.opacity(0.20), location: 0.78),
-                .init(color: .black.opacity(0.05), location: 0.92),
+                .init(color: scrimStop(relativeOpacity: 0.62, priorPeak: 0.62), location: 0),
+                .init(color: scrimStop(relativeOpacity: 0.46, priorPeak: 0.62), location: 0.55),
+                .init(color: scrimStop(relativeOpacity: 0.20, priorPeak: 0.62), location: 0.78),
+                .init(color: scrimStop(relativeOpacity: 0.05, priorPeak: 0.62), location: 0.92),
                 .init(color: .clear, location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
+        .blendMode(.multiply)
         .frame(height: summaryHeaderClearance(
             canvasWidth: mapImage.size.width,
             hasMemo: !(record.memo?.isEmpty ?? true),
@@ -149,16 +171,17 @@ private struct SummaryMapSharePage: View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: .black.opacity(0.04), location: 0.10),
-                .init(color: .black.opacity(0.20), location: 0.18),
-                .init(color: .black.opacity(0.40), location: 0.28),
-                .init(color: .black.opacity(0.48), location: 0.38),
-                .init(color: .black.opacity(0.50), location: 0.52),
-                .init(color: .black.opacity(0.50), location: 1)
+                .init(color: scrimStop(relativeOpacity: 0.04, priorPeak: 0.50), location: 0.10),
+                .init(color: scrimStop(relativeOpacity: 0.20, priorPeak: 0.50), location: 0.18),
+                .init(color: scrimStop(relativeOpacity: 0.40, priorPeak: 0.50), location: 0.28),
+                .init(color: scrimStop(relativeOpacity: 0.48, priorPeak: 0.50), location: 0.38),
+                .init(color: scrimStop(relativeOpacity: 0.50, priorPeak: 0.50), location: 0.52),
+                .init(color: scrimStop(relativeOpacity: 0.50, priorPeak: 0.50), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
+        .blendMode(.multiply)
         .frame(height: mapImage.size.height * 0.56)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .allowsHitTesting(false)
