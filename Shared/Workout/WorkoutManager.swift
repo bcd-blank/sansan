@@ -412,6 +412,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         guard sessionData.state == .recording || sessionData.state == .paused else { return }
 
         finalizeSessionBeforeEnd()
+        announceKmVoiceRecordingEndIfNeeded(
+            distanceMeters: sessionData.totalDistance,
+            activeElapsed: sessionData.elapsedTime
+        )
         postProcessTrackForEnd()
         stopWorkoutTracking()
         finalizeActiveEnergyEstimateIfNeeded()
@@ -1089,7 +1093,8 @@ final class WorkoutManager: NSObject, ObservableObject {
         isLocationProducer = asLocationProducer
         authorizationStatus = locationManager.authorizationStatus
 
-        if sessionData.state == .idle {
+        let isBrandNewSession = sessionData.state == .idle
+        if isBrandNewSession {
             persistDismissedSessionID(nil)
             let startDate = Date()
             sessionData = HikingSessionData(
@@ -1163,6 +1168,10 @@ final class WorkoutManager: NSObject, ObservableObject {
         startStepCountingIfNeeded()
 
         evaluateKmVoiceGuidanceIfNeeded()
+        if isBrandNewSession {
+            // recordingStartedOnWatch 설정 이후에 호출해 시작 소유권이 맞습니다.
+            announceKmVoiceRecordingStartIfNeeded()
+        }
         if syncRemote {
             publishRecordingStartedOnWatchFlag()
         }
@@ -1261,6 +1270,11 @@ final class WorkoutManager: NSObject, ObservableObject {
             // 원격 종료도 걸음 조회는 벽시계 끝을 쓰도록 lastUpdated를 맞춥니다.
             sessionData.lastUpdated = Date()
         }
+
+        announceKmVoiceRecordingEndIfNeeded(
+            distanceMeters: sessionData.totalDistance,
+            activeElapsed: sessionData.elapsedTime
+        )
 
         // 원격 종료 경로에서는 호출 측이 상대 기기 포인트를 먼저 병합한 뒤에 도달합니다.
         postProcessTrackForEnd()
@@ -1373,25 +1387,45 @@ final class WorkoutManager: NSObject, ObservableObject {
 #endif
     }
 
-    /// Watch 연결 시 Watch가, 미연결 시 iPhone이 1km 음성을 말합니다.
-    private func evaluateKmVoiceGuidanceIfNeeded() {
-        guard sessionData.state != .idle else { return }
+    /// Watch 연결 시 Watch가, 미연결 시 iPhone이 음성안내(시작·1km·종료)를 말합니다.
+    private func kmVoiceShouldSpeakLocally() -> Bool {
 #if os(watchOS)
         let yielded = didYieldRecordingToPhone
 #else
         let yielded = false
 #endif
-        let shouldSpeak = KmVoiceGuidanceOwnership.shouldSpeakLocally(
+        return KmVoiceGuidanceOwnership.shouldSpeakLocally(
             recordingStartedOnWatch: recordingStartedOnWatch,
             isCounterpartReachable: isWatchReachable,
             watchYieldedToPhone: yielded
         )
+    }
+
+    private func announceKmVoiceRecordingStartIfNeeded() {
+        KmVoiceGuidanceController.shared.announceRecordingStart(
+            shouldSpeak: kmVoiceShouldSpeakLocally()
+        )
+    }
+
+    private func announceKmVoiceRecordingEndIfNeeded(
+        distanceMeters: Double,
+        activeElapsed: TimeInterval
+    ) {
+        KmVoiceGuidanceController.shared.announceRecordingEnd(
+            distanceMeters: distanceMeters,
+            activeElapsed: activeElapsed,
+            shouldSpeak: kmVoiceShouldSpeakLocally()
+        )
+    }
+
+    private func evaluateKmVoiceGuidanceIfNeeded() {
+        guard sessionData.state != .idle else { return }
         KmVoiceGuidanceController.shared.evaluate(
             sessionID: sessionData.sessionID,
             distanceMeters: sessionData.totalDistance,
             activeElapsed: sessionData.elapsedTime,
             state: sessionData.state,
-            shouldSpeak: shouldSpeak
+            shouldSpeak: kmVoiceShouldSpeakLocally()
         )
     }
 

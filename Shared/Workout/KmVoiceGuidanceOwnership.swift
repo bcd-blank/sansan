@@ -2,8 +2,8 @@
 //  KmVoiceGuidanceOwnership.swift
 //  Shared
 //
-//  1km 음성 안내 — 기기별 발화 소유권.
-//  Watch 연결 시 Watch, 미연결 시 iPhone. km당 1회.
+//  음성안내 — 기기별 발화 소유권(시작·1km·종료).
+//  Watch 연결 시 Watch, 미연결 시 iPhone. 큐당 1회.
 //
 
 import Foundation

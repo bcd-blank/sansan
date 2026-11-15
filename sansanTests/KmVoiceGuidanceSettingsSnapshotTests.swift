@@ -2,7 +2,7 @@
 //  KmVoiceGuidanceSettingsSnapshotTests.swift
 //  sansanTests
 //
-//  일반설정 「1km 음성 안내」 화면을 호스팅해 PNG로 저장합니다.
+//  일반설정 「음성안내」 화면을 호스팅해 PNG로 저장합니다.
 //
 
 #if os(iOS)
@@ -32,7 +32,7 @@ final class KmVoiceGuidanceSettingsSnapshotTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.6))
         host.view.layoutIfNeeded()
 
-        // 「1km 음성 안내」가 보이도록 스크롤합니다.
+        // 「음성안내」가 보이도록 스크롤합니다.
         if let scrollView = firstScrollView(in: host.view) {
             let targetY = min(
                 max(0, scrollView.contentSize.height - scrollView.bounds.height),

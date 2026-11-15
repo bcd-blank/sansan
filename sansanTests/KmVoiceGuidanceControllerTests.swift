@@ -51,9 +51,9 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         XCTAssertEqual(
             controller.spokenPhrasesLog,
             [
-                "1킬로미터 지점입니다. 이번 구간 12분, 총 산행 시간 12분입니다.",
-                "2킬로미터 지점입니다. 이번 구간 13분, 총 산행 시간 25분입니다.",
-                "3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 35분입니다.",
+                "1킬로미터 지점입니다. 이번 구간 12분 0초, 총 산행 시간 12분 0초입니다.",
+                "2킬로미터 지점입니다. 이번 구간 13분 0초, 총 산행 시간 25분 0초입니다.",
+                "3킬로미터 지점입니다. 이번 구간 10분 0초, 총 산행 시간 35분 0초입니다.",
             ]
         )
     }
@@ -179,7 +179,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
-            ["3킬로미터 지점입니다. 이번 구간 15분, 총 산행 시간 40분입니다."]
+            ["3킬로미터 지점입니다. 이번 구간 15분 0초, 총 산행 시간 40분 0초입니다."]
         )
     }
 
@@ -226,8 +226,8 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         XCTAssertEqual(
             controller.spokenPhrasesLog,
             [
-                "1킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 10분입니다.",
-                "2킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 20분입니다.",
+                "1킬로미터 지점입니다. 이번 구간 10분 0초, 총 산행 시간 10분 0초입니다.",
+                "2킬로미터 지점입니다. 이번 구간 10분 0초, 총 산행 시간 20분 0초입니다.",
             ]
         )
     }
@@ -281,7 +281,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         XCTAssertEqual(controller.spokenPhrasesLog.count, 2)
         XCTAssertEqual(
             controller.spokenPhrasesLog.last,
-            "3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 30분입니다."
+            "3킬로미터 지점입니다. 이번 구간 10분 0초, 총 산행 시간 30분 0초입니다."
         )
     }
 
@@ -371,6 +371,127 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         let key = "sansan.kmVoiceGuidance.isEnabled"
         UserDefaults.standard.removeObject(forKey: key)
         XCTAssertTrue(KmVoiceGuidancePreferences.isEnabled)
+    }
+
+    func testAnnounceRecordingStartWhenEnabledAndOwner() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingStart(shouldSpeak: true)
+        XCTAssertEqual(
+            controller.spokenPhrasesLog,
+            ["기록을 시작합니다"]
+        )
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceStart, true)
+
+        controller.announceRecordingStart(shouldSpeak: true)
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1, "시작 안내는 세션당 1회")
+    }
+
+    func testAnnounceRecordingStartSuppressedWhenToggleOff() {
+        KmVoiceGuidancePreferences.isEnabled = false
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingStart(shouldSpeak: true)
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceStart, true)
+
+        KmVoiceGuidancePreferences.isEnabled = true
+        controller.announceRecordingStart(shouldSpeak: true)
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty, "OFF로 시작했으면 중도 ON해도 시작 안내 없음")
+    }
+
+    func testAnnounceRecordingStartWaitsWhenNonOwner() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingStart(shouldSpeak: false)
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceStart, false)
+
+        controller.mergeRemoteAnnouncedState(
+            KmVoiceAnnouncedState(
+                sessionID: sessionID,
+                announcedKilometers: [],
+                elapsedAtAnnouncedKilometers: [:],
+                didAnnounceStart: true
+            )
+        )
+        controller.announceRecordingStart(shouldSpeak: true)
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceStart, true)
+    }
+
+    func testAnnounceRecordingEndIncludesDistanceAndTime() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingEnd(
+            distanceMeters: 2_350,
+            activeElapsed: 12 * 60 + 34,
+            shouldSpeak: true
+        )
+        XCTAssertEqual(
+            controller.spokenPhrasesLog,
+            ["기록을 종료합니다. 총 거리 2.35킬로미터, 시간 12분 34초입니다."]
+        )
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceEnd, true)
+
+        controller.announceRecordingEnd(
+            distanceMeters: 3_000,
+            activeElapsed: 20 * 60,
+            shouldSpeak: true
+        )
+        XCTAssertEqual(controller.spokenPhrasesLog.count, 1, "종료 안내는 세션당 1회")
+    }
+
+    func testAnnounceRecordingEndSuppressedWhenToggleOff() {
+        KmVoiceGuidancePreferences.isEnabled = false
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingEnd(
+            distanceMeters: 1_000,
+            activeElapsed: 600,
+            shouldSpeak: true
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceEnd, true)
+    }
+
+    func testAnnounceRecordingEndWaitsWhenNonOwnerThenMerges() {
+        let sessionID = UUID()
+        let controller = KmVoiceGuidanceController.shared
+        controller.prepareForNewSession(sessionID)
+
+        controller.announceRecordingEnd(
+            distanceMeters: 1_500,
+            activeElapsed: 900,
+            shouldSpeak: false
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
+        XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceEnd, false)
+
+        controller.mergeRemoteAnnouncedState(
+            KmVoiceAnnouncedState(
+                sessionID: sessionID,
+                announcedKilometers: [],
+                elapsedAtAnnouncedKilometers: [:],
+                didAnnounceEnd: true
+            )
+        )
+        controller.announceRecordingEnd(
+            distanceMeters: 1_500,
+            activeElapsed: 900,
+            shouldSpeak: true
+        )
+        XCTAssertTrue(controller.spokenPhrasesLog.isEmpty)
     }
 }
 

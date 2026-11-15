@@ -10,6 +10,7 @@ import XCTest
 @testable import sansan
 
 final class KmVoiceGuidanceOwnershipTests: XCTestCase {
+    /// 시작·종료·1km 모두 동일 소유권 게이트를 씁니다.
     func testPhoneSilentWhenWatchReachable() {
         XCTAssertFalse(
             KmVoiceGuidanceOwnership.shouldSpeakLocally(
@@ -32,6 +33,30 @@ final class KmVoiceGuidanceOwnershipTests: XCTestCase {
                 isCounterpartReachable: false
             )
         )
+        XCTAssertTrue(
+            KmVoiceGuidanceOwnership.shouldSpeakLocally(
+                recordingStartedOnWatch: true,
+                isCounterpartReachable: false
+            )
+        )
+    }
+
+    func testStartAndEndOwnershipMatchesKilometerAlerts() {
+        // iPhone 시작 + Watch reachable → iPhone 침묵(Watch가 시작/종료 말함)
+        XCTAssertFalse(
+            KmVoiceGuidanceOwnership.shouldSpeakLocally(
+                recordingStartedOnWatch: false,
+                isCounterpartReachable: true
+            )
+        )
+        // iPhone 시작 + Watch unreachable → iPhone이 시작/종료 말함
+        XCTAssertTrue(
+            KmVoiceGuidanceOwnership.shouldSpeakLocally(
+                recordingStartedOnWatch: false,
+                isCounterpartReachable: false
+            )
+        )
+        // Watch 시작 + Watch unreachable(핸드오프) → iPhone이 이어받음
         XCTAssertTrue(
             KmVoiceGuidanceOwnership.shouldSpeakLocally(
                 recordingStartedOnWatch: true,

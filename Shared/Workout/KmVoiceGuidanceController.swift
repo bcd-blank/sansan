@@ -2,9 +2,9 @@
 //  KmVoiceGuidanceController.swift
 //  Shared
 //
-//  1km 음성 안내 (iPhone · Watch).
+//  음성안내 (iPhone · Watch) — 시작/종료 + 1km.
 //  발화 소유권은 KmVoiceGuidanceOwnership — Watch 연결 시 Watch, 미연결 시 iPhone.
-//  announced 상태는 기기 간 동기화해 km당 1회만 말한다.
+//  announced 상태는 기기 간 동기화해 큐당 1회만 말한다.
 //
 
 import AVFoundation
@@ -33,6 +33,8 @@ final class KmVoiceGuidanceController: NSObject {
     private var sessionID: UUID?
     private var announcedKilometers: Set<Int> = []
     private var elapsedAtAnnouncedKilometers: [Int: TimeInterval] = [:]
+    private var didAnnounceStart = false
+    private var didAnnounceEnd = false
     private var didConfigureAudioSession = false
 
     private nonisolated static var persistenceURL: URL {
@@ -48,6 +50,8 @@ final class KmVoiceGuidanceController: NSObject {
         var sessionID: UUID
         var announcedKilometers: [Int]
         var elapsedAtAnnouncedKilometers: [String: TimeInterval]
+        var didAnnounceStart: Bool?
+        var didAnnounceEnd: Bool?
     }
 
     private override init() {
@@ -60,6 +64,8 @@ final class KmVoiceGuidanceController: NSObject {
         sessionID = newSessionID
         announcedKilometers = []
         elapsedAtAnnouncedKilometers = [:]
+        didAnnounceStart = false
+        didAnnounceEnd = false
         spokenPhrasesLog = []
         persist()
     }
@@ -81,12 +87,16 @@ final class KmVoiceGuidanceController: NSObject {
                     return (km, value)
                 }
             )
+            didAnnounceStart = persisted.didAnnounceStart ?? false
+            didAnnounceEnd = persisted.didAnnounceEnd ?? false
             return
         }
 
         sessionID = bindSessionID
         announcedKilometers = []
         elapsedAtAnnouncedKilometers = [:]
+        didAnnounceStart = false
+        didAnnounceEnd = false
         spokenPhrasesLog = []
         seedAlreadyCrossedKilometers(
             distanceMeters: seedFromDistanceMeters,
@@ -99,6 +109,8 @@ final class KmVoiceGuidanceController: NSObject {
         sessionID = nil
         announcedKilometers = []
         elapsedAtAnnouncedKilometers = [:]
+        didAnnounceStart = false
+        didAnnounceEnd = false
         spokenPhrasesLog = []
         clearPersisted()
         synthesizer.stopSpeaking(at: .immediate)
@@ -110,6 +122,8 @@ final class KmVoiceGuidanceController: NSObject {
         sessionID = nil
         announcedKilometers = []
         elapsedAtAnnouncedKilometers = [:]
+        didAnnounceStart = false
+        didAnnounceEnd = false
         spokenPhrasesLog = []
         synthesizer.stopSpeaking(at: .immediate)
     }
@@ -121,11 +135,13 @@ final class KmVoiceGuidanceController: NSObject {
             announcedKilometers: announcedKilometers.sorted(),
             elapsedAtAnnouncedKilometers: Dictionary(
                 uniqueKeysWithValues: elapsedAtAnnouncedKilometers.map { (String($0.key), $0.value) }
-            )
+            ),
+            didAnnounceStart: didAnnounceStart,
+            didAnnounceEnd: didAnnounceEnd
         )
     }
 
-    /// 상대 기기가 이미 말한 km를 병합합니다(발화하지 않음).
+    /// 상대 기기가 이미 말한 km·시작/종료를 병합합니다(발화하지 않음).
     func mergeRemoteAnnouncedState(_ remote: KmVoiceAnnouncedState) {
         guard sessionID == nil || sessionID == remote.sessionID else { return }
         sessionID = remote.sessionID
@@ -146,9 +162,67 @@ final class KmVoiceGuidanceController: NSObject {
                 changed = true
             }
         }
+        if remote.didAnnounceStart && !didAnnounceStart {
+            didAnnounceStart = true
+            changed = true
+        }
+        if remote.didAnnounceEnd && !didAnnounceEnd {
+            didAnnounceEnd = true
+            changed = true
+        }
         if changed {
             persist()
         }
+    }
+
+    /// 기록 시작 큐. 토글 OFF면 무발화로 완료 처리해 중도 ON 시 시작 안내가 나가지 않게 합니다.
+    /// `shouldSpeak == false`면 마킹하지 않고 소유 기기 동기화를 기다립니다.
+    func announceRecordingStart(shouldSpeak: Bool) {
+        guard sessionID != nil, !didAnnounceStart else { return }
+
+        let preferenceOn = KmVoiceGuidancePreferences.isEnabled
+        if !preferenceOn {
+            didAnnounceStart = true
+            persist()
+            publishAnnouncedStateIfPossible()
+            return
+        }
+
+        guard shouldSpeak else { return }
+
+        didAnnounceStart = true
+        persist()
+        speak(KmVoiceGuidancePhraseBuilder.recordingStartPhrase)
+        publishAnnouncedStateIfPossible()
+    }
+
+    /// 기록 종료 큐. 토글 OFF·비소유는 시작과 동일한 게이트.
+    func announceRecordingEnd(
+        distanceMeters: Double,
+        activeElapsed: TimeInterval,
+        shouldSpeak: Bool
+    ) {
+        guard sessionID != nil, !didAnnounceEnd else { return }
+
+        let preferenceOn = KmVoiceGuidancePreferences.isEnabled
+        if !preferenceOn {
+            didAnnounceEnd = true
+            persist()
+            publishAnnouncedStateIfPossible()
+            return
+        }
+
+        guard shouldSpeak else { return }
+
+        didAnnounceEnd = true
+        persist()
+        speak(
+            KmVoiceGuidancePhraseBuilder.recordingEndPhrase(
+                distanceMeters: distanceMeters,
+                totalSeconds: activeElapsed
+            )
+        )
+        publishAnnouncedStateIfPossible()
     }
 
     /// 거리·활동 경과가 갱신될 때 호출. 일시정지 중이면 return.
@@ -194,9 +268,7 @@ final class KmVoiceGuidanceController: NSObject {
             speakEnabled: true
         )
         persist()
-        if let state = currentAnnouncedState() {
-            onAnnouncedStateChanged?(state)
-        }
+        publishAnnouncedStateIfPossible()
     }
 
     /// 다중 km 도약 시 Android와 같이 구간을 균등 분배합니다. OFF면 발화 없이 시드만 합니다.
@@ -248,6 +320,12 @@ final class KmVoiceGuidanceController: NSObject {
         Self.logger.notice(
             "seeded announced km 1...\(crossed) without speaking (late bind / restore)"
         )
+    }
+
+    private func publishAnnouncedStateIfPossible() {
+        if let state = currentAnnouncedState() {
+            onAnnouncedStateChanged?(state)
+        }
     }
 
     private func speak(_ phrase: String) {
@@ -304,7 +382,9 @@ final class KmVoiceGuidanceController: NSObject {
             announcedKilometers: announcedKilometers.sorted(),
             elapsedAtAnnouncedKilometers: Dictionary(
                 uniqueKeysWithValues: elapsedAtAnnouncedKilometers.map { (String($0.key), $0.value) }
-            )
+            ),
+            didAnnounceStart: didAnnounceStart,
+            didAnnounceEnd: didAnnounceEnd
         )
         guard let data = try? JSONEncoder().encode(state) else { return }
         try? data.write(to: Self.persistenceURL, options: .atomic)
@@ -325,6 +405,42 @@ struct KmVoiceAnnouncedState: Codable, Equatable, Sendable {
     var sessionID: UUID
     var announcedKilometers: [Int]
     var elapsedAtAnnouncedKilometers: [String: TimeInterval]
+    var didAnnounceStart: Bool
+    var didAnnounceEnd: Bool
+
+    init(
+        sessionID: UUID,
+        announcedKilometers: [Int],
+        elapsedAtAnnouncedKilometers: [String: TimeInterval],
+        didAnnounceStart: Bool = false,
+        didAnnounceEnd: Bool = false
+    ) {
+        self.sessionID = sessionID
+        self.announcedKilometers = announcedKilometers
+        self.elapsedAtAnnouncedKilometers = elapsedAtAnnouncedKilometers
+        self.didAnnounceStart = didAnnounceStart
+        self.didAnnounceEnd = didAnnounceEnd
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionID
+        case announcedKilometers
+        case elapsedAtAnnouncedKilometers
+        case didAnnounceStart
+        case didAnnounceEnd
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionID = try container.decode(UUID.self, forKey: .sessionID)
+        announcedKilometers = try container.decode([Int].self, forKey: .announcedKilometers)
+        elapsedAtAnnouncedKilometers = try container.decode(
+            [String: TimeInterval].self,
+            forKey: .elapsedAtAnnouncedKilometers
+        )
+        didAnnounceStart = try container.decodeIfPresent(Bool.self, forKey: .didAnnounceStart) ?? false
+        didAnnounceEnd = try container.decodeIfPresent(Bool.self, forKey: .didAnnounceEnd) ?? false
+    }
 }
 
 extension KmVoiceGuidanceController: AVSpeechSynthesizerDelegate {

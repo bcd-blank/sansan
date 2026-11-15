@@ -2,7 +2,7 @@
 //  KmVoiceGuidancePreferences.swift
 //  Shared
 //
-//  일반설정 「1km 음성 안내」 — 기본값 ON.
+//  일반설정 「음성안내」 — 기본값 ON.
 //
 
 import Combine
@@ -20,7 +20,7 @@ enum KmVoiceGuidancePreferences {
 #endif
     }
 
-    /// 기록 중 1km마다 음성 안내. 키가 없으면 기본 ON.
+    /// 기록 시작·종료·1km 음성 안내. 키가 없으면 기본 ON.
     nonisolated static var isEnabled: Bool {
         get {
             let key = storageKey(for: enabledBaseKey)

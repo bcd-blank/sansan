@@ -7,22 +7,22 @@ import XCTest
 @testable import sansan
 
 final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
-    func testPhraseMatchesAndroidTemplate() {
+    func testPhraseIncludesMinutesAndSeconds() {
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.phrase(
                 kilometers: 2,
                 segmentSeconds: 24 * 60,
                 totalSeconds: 42 * 60
             ),
-            "2킬로미터 지점입니다. 이번 구간 24분, 총 산행 시간 42분입니다."
+            "2킬로미터 지점입니다. 이번 구간 24분 0초, 총 산행 시간 42분 0초입니다."
         )
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.phrase(
                 kilometers: 3,
                 segmentSeconds: 23 * 60,
-                totalSeconds: 3_900
+                totalSeconds: 3_912
             ),
-            "3킬로미터 지점입니다. 이번 구간 23분, 총 산행 시간 1시간 5분입니다."
+            "3킬로미터 지점입니다. 이번 구간 23분 0초, 총 산행 시간 1시간 5분 12초입니다."
         )
     }
 
@@ -32,14 +32,18 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
         XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDuration(40.6), "41초")
     }
 
-    func testMinutesAreRounded() {
+    func testMinutesIncludeSeconds() {
         XCTAssertEqual(
-            KmVoiceGuidancePhraseBuilder.formatDuration(14 * 60 + 30),
-            "15분"
+            KmVoiceGuidancePhraseBuilder.formatDuration(12 * 60 + 34),
+            "12분 34초"
         )
         XCTAssertEqual(
-            KmVoiceGuidancePhraseBuilder.formatDuration(14 * 60 + 29),
-            "14분"
+            KmVoiceGuidancePhraseBuilder.formatDuration(14 * 60 + 30),
+            "14분 30초"
+        )
+        XCTAssertEqual(
+            KmVoiceGuidancePhraseBuilder.formatDuration(14 * 60),
+            "14분 0초"
         )
     }
 
@@ -48,18 +52,43 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
         XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDuration(7_200), "2시간")
     }
 
-    func testHourAndMinutes() {
+    func testHourMinutesAndSeconds() {
         XCTAssertEqual(
-            KmVoiceGuidancePhraseBuilder.formatDuration(3_900),
-            "1시간 5분"
+            KmVoiceGuidancePhraseBuilder.formatDuration(3_912),
+            "1시간 5분 12초"
+        )
+        XCTAssertEqual(
+            KmVoiceGuidancePhraseBuilder.formatDuration(3_600 + 5),
+            "1시간 0분 5초"
         )
     }
 
-    func testNearHourRoundsToExactHour() {
+    func testRecordingStartAndEndPhrases() {
         XCTAssertEqual(
-            KmVoiceGuidancePhraseBuilder.formatDuration(59 * 60 + 30),
-            "1시간"
+            KmVoiceGuidancePhraseBuilder.recordingStartPhrase,
+            "기록을 시작합니다"
         )
+        XCTAssertEqual(
+            KmVoiceGuidancePhraseBuilder.recordingEndPhrase(
+                distanceMeters: 1_250,
+                totalSeconds: 12 * 60 + 34
+            ),
+            "기록을 종료합니다. 총 거리 1.25킬로미터, 시간 12분 34초입니다."
+        )
+        XCTAssertEqual(
+            KmVoiceGuidancePhraseBuilder.recordingEndPhrase(
+                distanceMeters: 850,
+                totalSeconds: 3_912
+            ),
+            "기록을 종료합니다. 총 거리 850미터, 시간 1시간 5분 12초입니다."
+        )
+    }
+
+    func testFormatDistance() {
+        XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDistance(0), "0미터")
+        XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDistance(999), "999미터")
+        XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDistance(1_000), "1킬로미터")
+        XCTAssertEqual(KmVoiceGuidancePhraseBuilder.formatDistance(2_350), "2.35킬로미터")
     }
 
     func testNewlyCrossedKilometersSkipsAlreadyAnnounced() {
@@ -112,10 +141,10 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.phrase(
                 kilometers: 1,
-                segmentSeconds: 720,
-                totalSeconds: 720
+                segmentSeconds: 754,
+                totalSeconds: 754
             ),
-            "1킬로미터 지점입니다. 이번 구간 12분, 총 산행 시간 12분입니다."
+            "1킬로미터 지점입니다. 이번 구간 12분 34초, 총 산행 시간 12분 34초입니다."
         )
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.phrase(
@@ -123,7 +152,7 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
                 segmentSeconds: 780,
                 totalSeconds: 1_500
             ),
-            "2킬로미터 지점입니다. 이번 구간 13분, 총 산행 시간 25분입니다."
+            "2킬로미터 지점입니다. 이번 구간 13분 0초, 총 산행 시간 25분 0초입니다."
         )
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.phrase(
@@ -131,7 +160,7 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
                 segmentSeconds: 600,
                 totalSeconds: 2_100
             ),
-            "3킬로미터 지점입니다. 이번 구간 10분, 총 산행 시간 35분입니다."
+            "3킬로미터 지점입니다. 이번 구간 10분 0초, 총 산행 시간 35분 0초입니다."
         )
     }
 

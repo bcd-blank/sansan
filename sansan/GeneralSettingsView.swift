@@ -173,12 +173,12 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle("1km 음성 안내", isOn: $isKmVoiceGuidanceEnabled)
+                Toggle("음성안내", isOn: $isKmVoiceGuidanceEnabled)
                     .accessibilityIdentifier("settings.kmVoiceGuidance.toggle")
             } header: {
                 Text("기록")
             } footer: {
-                Text("기록 중 1km마다 「이번 구간」과 「총 산행 시간」(일시정지 제외, 화면 소요 시간과 동일)을 한국어로 안내합니다. Apple Watch로 기록해도 iPhone에서만 말하며, 일시정지 중에는 안내하지 않습니다. 무음 스위치가 켜져 있어도 안내가 재생됩니다.")
+                Text("기록 시작·종료와 1km마다 「이번 구간」·「총 산행 시간」(일시정지 제외, 화면 소요 시간과 동일)을 한국어로 안내합니다. Watch에서 시작한 기록은 Watch가 말하고, iPhone에서 시작한 기록은 Watch가 연결되어 있으면 Watch가·없으면 iPhone이 말합니다. 일시정지 중에는 1km 안내를 하지 않습니다. 무음 스위치가 켜져 있어도 안내가 재생됩니다.")
             }
 
             Section {
