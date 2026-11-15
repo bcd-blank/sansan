@@ -32,6 +32,12 @@ final class WatchRecordInbox: ObservableObject {
         return directory
     }
 
+    /// 라이브 미러 복원 전에 — inbox에 이미 같은 세션이 있으면 재개하지 않습니다.
+    nonisolated static func containsSessionOnDisk(_ sessionID: UUID) -> Bool {
+        let fileURL = directoryURL.appendingPathComponent("\(sessionID.uuidString).json")
+        return FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
     /// WC 콜백 — JSON 디코드 없이 파일만 보관해 메인 진입을 막지 않습니다.
     nonisolated static func enqueueEncodedSession(_ data: Data) {
         guard !data.isEmpty else { return }

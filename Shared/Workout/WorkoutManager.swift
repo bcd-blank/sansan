@@ -124,6 +124,12 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var watchConnectivityRetryTask: Task<Void, Never>?
 #if os(iOS)
     private var didPrepareAfterMainScreen = false
+    /// Watch 미러 백업 — 디스크만으로 기록 UI를 켜지 않고 WC 확인 후 처리합니다.
+    private var deferredMirrorBackup: LiveSessionBackup?
+    private var deferredMirrorBackupSince: Date?
+    private var deferredMirrorSettleTask: Task<Void, Never>?
+    /// Watch가 재부착할 시간을 준 뒤, 여전히 idle·unreachable이면 완료 기록으로 확정합니다.
+    private static let deferredMirrorSettleGrace: TimeInterval = 90
 #endif
 
     #if os(iOS)
@@ -269,12 +275,14 @@ final class WorkoutManager: NSObject, ObservableObject {
     func prepareAfterMainScreenReady() async {
         guard !didPrepareAfterMainScreen else { return }
         didPrepareAfterMainScreen = true
-        await restoreLiveSessionBackupIfNeeded()
+        // WC를 먼저 붙여 inbox/stop이 미러 백업 재개보다 앞서 도착할 여지를 둡니다.
         configureWatchConnectivity()
+        await restoreLiveSessionBackupIfNeeded()
         Task { await prepareHeartRateMonitoringEarlyIfNeeded() }
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(700))
             self?.kickWatchConnectivityHandshake()
+            self?.resolveDeferredMirrorBackupIfNeeded()
         }
     }
 #endif
@@ -483,6 +491,13 @@ final class WorkoutManager: NSObject, ObservableObject {
     /// Watch에서 받은 완료 세션이 라이브 기록으로 되살아나지 않게 하고, 상대 기기에 수신을 알립니다.
     func acknowledgeWatchInboundSession(_ sessionID: UUID) {
         persistDismissedSessionID(sessionID)
+        clearDeferredMirrorBackup(matching: sessionID)
+        // 미러 백업 복원으로 이미 기록 UI가 켜진 뒤 inbox/transfer가 도착한 경우 —
+        // dismissed만 남기면 "계속하기"가 유지되므로 라이브 세션을 즉시 idle로 내립니다.
+        if sessionData.sessionID == sessionID, sessionData.state != .idle {
+            stopWorkoutTracking()
+            resetSessionToIdle()
+        }
         publishSessionEndedMarker(for: sessionID)
     }
 #endif
@@ -615,6 +630,9 @@ final class WorkoutManager: NSObject, ObservableObject {
                 if self.isWatchReachable {
                     self.requestSessionSyncFromCounterpart()
                 }
+#if os(iOS)
+                self.resolveDeferredMirrorBackupIfNeeded()
+#endif
                 if self.isWatchLinkEstablished, self.isWatchReachable {
                     return
                 }
@@ -1469,11 +1487,16 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func handleReceivedStopRecordingUserInfo(_ userInfo: [String: Any]) {
+        let finishedPayload = userInfo[HikingConnectivityKeys.sessionTransfer] as? Data
+        let remoteSnapshot = HikingSessionData(userInfo: userInfo)
+        let carriesFinished = (finishedPayload?.isEmpty == false)
+            || (remoteSnapshot.map { shouldPublish($0) } ?? false)
+
         if sessionData.state != .idle,
-           let remoteSnapshot = HikingSessionData(userInfo: userInfo),
+           let remoteSnapshot,
            remoteSnapshot.sessionID == sessionData.sessionID {
             mergeFinalSessionFromRemote(remoteSnapshot)
-            if !shouldEndRecordingForRemoteWatchStop() {
+            if !shouldEndRecordingForRemoteWatchStop(stopCarriesFinishedSession: carriesFinished) {
                 detachWatchAndContinueRecording()
                 return
             }
@@ -1481,9 +1504,9 @@ final class WorkoutManager: NSObject, ObservableObject {
             return
         }
 
-        if let data = userInfo[HikingConnectivityKeys.sessionTransfer] as? Data {
+        if let data = finishedPayload {
             WatchRecordInbox.enqueueEncodedSession(data)
-        } else if let remoteSnapshot = HikingSessionData(userInfo: userInfo) {
+        } else if let remoteSnapshot {
             archiveWatchFinishedSessionIfNeeded(remoteSnapshot)
         }
 
@@ -1496,7 +1519,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         if sessionData.state != .idle, remote.sessionID == sessionData.sessionID {
             mergeFinalSessionFromRemote(remote)
 #if os(iOS)
-            if !shouldEndRecordingForRemoteWatchStop() {
+            if !shouldEndRecordingForRemoteWatchStop(stopCarriesFinishedSession: shouldPublish(remote)) {
                 detachWatchAndContinueRecording()
                 return
             }
@@ -1639,11 +1662,24 @@ final class WorkoutManager: NSObject, ObservableObject {
             return
         }
 
-        // 미러 백업(상대 기기가 위치 생산자) — 이 기기는 기록 소유자가 아니므로 요약·저장으로
-        // 확정하지 않고 진행 중 상태로 복원합니다. 이후 WC 동기화가 최신 상태(계속 기록 중이면
-        // 실시간 갱신, 상대가 종료했으면 요약 전환·폐기)를 따라갑니다.
+        // 미러 백업(Watch가 위치 생산자) — 디스크만으로 기록 UI를 켜면 Watch 저장/종료 후
+        // iPhone을 열 때 "계속하기"가 됩니다. WC 스냅샷·inbox로 재부착/완료 처리합니다.
         if !backup.isLocationProducer {
+#if os(iOS)
+            let alreadySettled = isMirrorSessionAlreadySettled(backup.session.sessionID)
+            switch WatchEndResumePolicy.mirrorBackupAction(
+                sessionID: backup.session.sessionID,
+                dismissedSessionID: dismissedSessionID,
+                isAlreadySavedOrInboxed: alreadySettled
+            ) {
+            case .clearOnly:
+                clearLiveSessionBackup()
+            case .deferForWatchSync:
+                deferMirrorBackupForWatchSync(backup)
+            }
+#else
             resumeLiveSessionFromBackup(backup)
+#endif
             return
         }
 
@@ -1668,6 +1704,85 @@ final class WorkoutManager: NSObject, ObservableObject {
         persistDismissedSessionID(finished.sessionID)
         archiveRestoredBackupSession(finished)
     }
+
+#if os(iOS)
+    private func isMirrorSessionAlreadySettled(_ sessionID: UUID) -> Bool {
+        // Shared 타겟은 HikingRecordStore를 직접 참조하지 않습니다.
+        // 이미 저장된 세션은 inbox enqueue 병합으로 합쳐지고, dismissed로도 차단됩니다.
+        WatchRecordInbox.containsSessionOnDisk(sessionID)
+    }
+
+    private func deferMirrorBackupForWatchSync(_ backup: LiveSessionBackup) {
+        deferredMirrorBackup = backup
+        deferredMirrorBackupSince = Date()
+        deferredMirrorSettleTask?.cancel()
+        deferredMirrorSettleTask = Task { @MainActor [weak self] in
+            // WC handshake·inbox 전달 여유를 둔 뒤 한 번 더 확정합니다.
+            try? await Task.sleep(for: .seconds(Self.deferredMirrorSettleGrace))
+            self?.resolveDeferredMirrorBackupIfNeeded(forceSettleWhenUnreachable: true)
+        }
+        // 백업 파일은 유지 — 확정/재부착 전 크래시에도 데이터를 잃지 않습니다.
+        Self.diagnosticLogger.notice(
+            "deferred Watch-mirror backup session=\(backup.session.sessionID.uuidString, privacy: .public)"
+        )
+    }
+
+    private func clearDeferredMirrorBackup(matching sessionID: UUID? = nil) {
+        if let sessionID, deferredMirrorBackup?.session.sessionID != sessionID {
+            return
+        }
+        deferredMirrorBackup = nil
+        deferredMirrorBackupSince = nil
+        deferredMirrorSettleTask?.cancel()
+        deferredMirrorSettleTask = nil
+        clearLiveSessionBackup()
+    }
+
+    /// WC 재부착·inbox 수신 후, 또는 grace 만료 시 지연 미러 백업을 정리합니다.
+    func resolveDeferredMirrorBackupIfNeeded(forceSettleWhenUnreachable: Bool = false) {
+        guard let backup = deferredMirrorBackup else { return }
+
+        if sessionData.state != .idle {
+            // 이미 WC 스냅샷으로 라이브 미러가 붙었으면 백업만 정리합니다.
+            if sessionData.sessionID == backup.session.sessionID {
+                clearDeferredMirrorBackup(matching: backup.session.sessionID)
+            }
+            return
+        }
+
+        let settled = isMirrorSessionAlreadySettled(backup.session.sessionID)
+            || dismissedSessionID == backup.session.sessionID
+        let deferElapsed = Date().timeIntervalSince(deferredMirrorBackupSince ?? backup.savedAt)
+        let shouldSettle = WatchEndResumePolicy.shouldSettleDeferredMirrorBackup(
+            liveState: sessionData.state,
+            isWatchReachable: isWatchReachable,
+            isAlreadySavedOrInboxed: settled,
+            deferElapsed: deferElapsed,
+            settleGrace: Self.deferredMirrorSettleGrace
+        ) || (forceSettleWhenUnreachable && !isWatchReachable && !settled && deferElapsed >= Self.deferredMirrorSettleGrace)
+
+        guard shouldSettle || settled else { return }
+
+        if settled {
+            clearDeferredMirrorBackup(matching: backup.session.sessionID)
+            return
+        }
+
+        var finished = backup.session
+        finished.state = .idle
+        if let started = finished.effectiveStartedAt,
+           let lastPoint = finished.points.last {
+            finished.elapsedTime = max(
+                lastPoint.timestamp.timeIntervalSince(started) - backup.accumulatedPausedTime,
+                0
+            )
+        }
+        finished.finalizeForPersistence()
+        persistDismissedSessionID(finished.sessionID)
+        archiveWatchFinishedSessionIfNeeded(finished)
+        clearDeferredMirrorBackup(matching: backup.session.sessionID)
+    }
+#endif
 
     /// 백업된 세션을 진행 중 상태 그대로 복원합니다(기록 재개 또는 미러 복원).
     private func resumeLiveSessionFromBackup(_ backup: LiveSessionBackup) {
@@ -2460,12 +2575,19 @@ final class WorkoutManager: NSObject, ObservableObject {
         promotePhoneToLocationProducer()
     }
 
-    /// 워치가 도달 가능한 동안의 종료만 기록 종료로 받아들입니다.
-    /// 꺼진 워치에서 늦게 도착한 종료·저장은 배터리 방전으로 보고 무시합니다.
-    private func shouldEndRecordingForRemoteWatchStop() -> Bool {
-        guard sessionData.state == .recording || sessionData.state == .paused else { return false }
-        if isWatchDetachedForRecording || isPhoneRecordingFailoverActive { return false }
-        return isWatchReachable
+    /// Watch stop을 기록 종료로 받아들일지 — 폰 인계 중의 늦은 stop은 무시하고,
+    /// Watch 소유·완료 페이로드 종료는 unreachable이어도 종료로 봅니다.
+    private func shouldEndRecordingForRemoteWatchStop(
+        stopCarriesFinishedSession: Bool = false
+    ) -> Bool {
+        WatchEndResumePolicy.shouldAcceptWatchStopAsEnd(
+            liveState: sessionData.state,
+            isWatchDetachedForRecording: isWatchDetachedForRecording,
+            isPhoneRecordingFailoverActive: isPhoneRecordingFailoverActive,
+            isWatchReachable: isWatchReachable,
+            isWatchOwnedSession: recordingStartedOnWatch || !isLocationProducer,
+            stopCarriesFinishedSession: stopCarriesFinishedSession
+        )
     }
 
     private func resetWatchLossMonitor() {
@@ -2649,6 +2771,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         evaluateKmVoiceGuidanceIfNeeded()
 #if os(iOS)
         evaluateWatchLossFailover()
+        resolveDeferredMirrorBackupIfNeeded()
         if sessionData.state == .recording {
             enableHeartRateMonitoringIfWatchAvailable()
             startHeartRateCollectionIfNeeded()
@@ -3285,7 +3408,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         case .stopRecording:
 #if os(iOS)
             if sessionData.state == .recording || sessionData.state == .paused,
-               !shouldEndRecordingForRemoteWatchStop() {
+               !shouldEndRecordingForRemoteWatchStop(stopCarriesFinishedSession: false) {
                 detachWatchAndContinueRecording()
                 break
             }
@@ -3467,7 +3590,8 @@ final class WorkoutManager: NSObject, ObservableObject {
            sessionData.state != .idle,
            remote.sessionID == sessionData.sessionID {
 #if os(iOS)
-            if !shouldEndRecordingForRemoteWatchStop() {
+            let carriesFinished = shouldPublish(remote)
+            if !shouldEndRecordingForRemoteWatchStop(stopCarriesFinishedSession: carriesFinished) {
                 mergeFinalSessionFromRemote(remote)
                 detachWatchAndContinueRecording()
                 return
