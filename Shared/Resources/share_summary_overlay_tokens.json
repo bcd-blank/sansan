@@ -11,6 +11,8 @@
   },
   "overlay": {
     "opacity": 0.56,
-    "blendMode": "multiply"
+    "opacityNote": "Flat/sample target; in-app gradients keep prior stop opacities.",
+    "blendMode": "multiply",
+    "preserveExistingGradientStopOpacities": true
   }
 }

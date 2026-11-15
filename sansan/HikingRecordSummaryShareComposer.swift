@@ -115,13 +115,6 @@ private struct SummaryMapSharePage: View {
         HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
     }
 
-    /// Keeps prior gradient shape; remaps stop strength so the solid peak is token opacity (56%).
-    private func scrimStop(relativeOpacity: Double, priorPeak: Double) -> Color {
-        let peak = ShareSummaryOverlayTokens.overlayOpacity
-        let opacity = peak * (relativeOpacity / priorPeak)
-        return overlayFill.opacity(opacity)
-    }
-
     var body: some View {
         ZStack {
             Image(uiImage: mapImage)
@@ -144,13 +137,14 @@ private struct SummaryMapSharePage: View {
     }
 
     /// 타이틀을 덮고, 경로가 시작되는 지점에서 투명해진다.
+    /// Stop locations / opacities / height unchanged — only fill color + multiply.
     private var topScrim: some View {
         LinearGradient(
             stops: [
-                .init(color: scrimStop(relativeOpacity: 0.62, priorPeak: 0.62), location: 0),
-                .init(color: scrimStop(relativeOpacity: 0.46, priorPeak: 0.62), location: 0.55),
-                .init(color: scrimStop(relativeOpacity: 0.20, priorPeak: 0.62), location: 0.78),
-                .init(color: scrimStop(relativeOpacity: 0.05, priorPeak: 0.62), location: 0.92),
+                .init(color: overlayFill.opacity(0.62), location: 0),
+                .init(color: overlayFill.opacity(0.46), location: 0.55),
+                .init(color: overlayFill.opacity(0.20), location: 0.78),
+                .init(color: overlayFill.opacity(0.05), location: 0.92),
                 .init(color: .clear, location: 1)
             ],
             startPoint: .top,
@@ -167,16 +161,17 @@ private struct SummaryMapSharePage: View {
     }
 
     /// 거리 숫자까지 진하게 덮고, 그 위에서 경로 쪽으로 사라진다.
+    /// Stop locations / opacities / height unchanged — only fill color + multiply.
     private var bottomScrim: some View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: scrimStop(relativeOpacity: 0.04, priorPeak: 0.50), location: 0.10),
-                .init(color: scrimStop(relativeOpacity: 0.20, priorPeak: 0.50), location: 0.18),
-                .init(color: scrimStop(relativeOpacity: 0.40, priorPeak: 0.50), location: 0.28),
-                .init(color: scrimStop(relativeOpacity: 0.48, priorPeak: 0.50), location: 0.38),
-                .init(color: scrimStop(relativeOpacity: 0.50, priorPeak: 0.50), location: 0.52),
-                .init(color: scrimStop(relativeOpacity: 0.50, priorPeak: 0.50), location: 1)
+                .init(color: overlayFill.opacity(0.04), location: 0.10),
+                .init(color: overlayFill.opacity(0.20), location: 0.18),
+                .init(color: overlayFill.opacity(0.40), location: 0.28),
+                .init(color: overlayFill.opacity(0.48), location: 0.38),
+                .init(color: overlayFill.opacity(0.50), location: 0.52),
+                .init(color: overlayFill.opacity(0.50), location: 1)
             ],
             startPoint: .top,
             endPoint: .bottom
