@@ -158,7 +158,8 @@ nonisolated struct HikingRouteWeatherSnapshot: Codable, Equatable, Hashable, Sen
         return kept
     }
 
-    /// 요약 이미지처럼 칸 수가 제한될 때, 처음·끝과 날씨 변화를 남기고 그 사이를 솎아냅니다.
+    /// 요약 이미지 칸 제한: 처음·끝 유지, 사이는 고르게 솎음
+    /// (`round(i · (n-1) / (max-1))`, changePoints 붕괴 없음 — S/weather.overflow).
     static func timelineFitting(
         _ points: [HikingWeatherHourPoint],
         maximumCount: Int
@@ -167,34 +168,7 @@ nonisolated struct HikingRouteWeatherSnapshot: Codable, Equatable, Hashable, Sen
         guard maximumCount >= 1 else { return [] }
         guard ordered.count > maximumCount else { return ordered }
         if maximumCount == 1 { return [ordered[0]] }
-
-        var chosen: Set<Int> = [0, ordered.count - 1]
-        for index in 1..<ordered.count {
-            let previous = conditionLabel(for: ordered[index - 1].wmoCode)
-            let current = conditionLabel(for: ordered[index].wmoCode)
-            if current != previous {
-                chosen.insert(index)
-            }
-        }
-        if chosen.count > maximumCount {
-            let must = chosen.sorted().map { ordered[$0] }
-            return evenlyThin(must, maximumCount: maximumCount)
-        }
-
-        let ranked = (1..<(ordered.count - 1))
-            .filter { !chosen.contains($0) }
-            .sorted { lhs, rhs in
-                let left = abs(ordered[lhs].temperatureCelsius - ordered[lhs - 1].temperatureCelsius)
-                let right = abs(ordered[rhs].temperatureCelsius - ordered[rhs - 1].temperatureCelsius)
-                if left == right { return lhs < rhs }
-                return left > right
-            }
-        for index in ranked {
-            if chosen.count >= maximumCount { break }
-            chosen.insert(index)
-        }
-        let kept = chosen.sorted().map { ordered[$0] }
-        return changePoints(from: kept)
+        return evenlyThin(ordered, maximumCount: maximumCount)
     }
 
     private static func evenlyThin(
@@ -206,21 +180,22 @@ nonisolated struct HikingRouteWeatherSnapshot: Codable, Equatable, Hashable, Sen
         }
         let lastIndex = points.count - 1
         var result: [HikingWeatherHourPoint] = []
+        var seenDates = Set<Date>()
         for slot in 0..<maximumCount {
             let index = Int((Double(slot) * Double(lastIndex) / Double(maximumCount - 1)).rounded())
-            let point = points[min(index, lastIndex)]
-            if result.last?.date != point.date {
+            let point = points[min(max(index, 0), lastIndex)]
+            if seenDates.insert(point.date).inserted {
                 result.append(point)
             }
         }
         if result.last?.date != points[lastIndex].date {
-            if result.isEmpty {
+            if result.count < maximumCount {
                 result.append(points[lastIndex])
-            } else {
+            } else if !result.isEmpty {
                 result[result.count - 1] = points[lastIndex]
             }
         }
-        return changePoints(from: result)
+        return result
     }
 
     var symbolName: String {

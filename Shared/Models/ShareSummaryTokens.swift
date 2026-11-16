@@ -7,6 +7,7 @@
 //
 
 import CoreGraphics
+import CoreText
 import Foundation
 
 #if canImport(UIKit)
@@ -164,11 +165,21 @@ enum ShareSummaryTokens {
     static let graphLegendBlockGap: CGFloat = 16
     static let graphGapAbove: CGFloat = 8
 
-    // MARK: Attribution
+    // MARK: Attribution (§13)
 
-    static let attributionHeight: CGFloat = 10.7
+    /// 「지도」 / TileJSON text size.
+    static let attributionFontSize: CGFloat = 10
+    static let attributionLineHeight: CGFloat = 12
+    static let attributionWeight: CGFloat = 500
+    /// Apple logo glyph height (iOS).
+    static let attributionLogoHeight: CGFloat = 9
+    static let attributionLogoGap: CGFloat = 2
     static let attributionGapAboveCard: CGFloat = 8
     static let attributionX: CGFloat = 40
+    static let attributionMaxWidth: CGFloat = 350
+    static let attributionHaloBlur: CGFloat = 1.5
+    /// Legacy alias — line box height.
+    static var attributionHeight: CGFloat { attributionLineHeight }
 
     // MARK: Weather
 
@@ -215,24 +226,30 @@ enum ShareSummaryTokens {
             return 0
         }
         let scale = ptScale(for: canvasWidth)
-        let width = (canvasWidth - headerInset * 2 * scale)
+        let width = max(canvasWidth - headerInset * 2 * scale, 1)
         let font = UIFont.systemFont(ofSize: memoFontSize * scale, weight: .medium)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        paragraph.minimumLineHeight = memoLineHeight * scale
-        paragraph.maximumLineHeight = memoLineHeight * scale
-        let bounds = (raw as NSString).boundingRect(
-            with: CGSize(width: max(width, 1), height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [
-                .font: font,
-                .paragraphStyle: paragraph,
-                .kern: memoTracking * scale
-            ],
-            context: nil
-        )
         let line = memoLineHeight * scale
-        let counted = Int(ceil(bounds.height / max(line, 1)))
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = line
+        paragraph.maximumLineHeight = line
+        paragraph.lineBreakMode = .byWordWrapping
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .paragraphStyle: paragraph,
+            .kern: memoTracking * scale
+        ]
+        let ns = NSAttributedString(string: raw, attributes: attrs)
+        // Count wrapped lines via typesetter (framesetter/boundingRect under-count Hangul).
+        let typesetter = CTTypesetterCreateWithAttributedString(ns as CFAttributedString)
+        var offset = 0
+        var counted = 0
+        while offset < ns.length && counted < memoMaxLines {
+            let breakCount = CTTypesetterSuggestLineBreak(typesetter, offset, Double(width))
+            if breakCount <= 0 { break }
+            offset += breakCount
+            counted += 1
+        }
+        if offset < ns.length { counted = memoMaxLines }
         return min(memoMaxLines, max(1, counted))
     }
 #endif

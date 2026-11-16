@@ -173,21 +173,23 @@ final class HikingRouteWeatherServiceTests: XCTestCase {
         XCTAssertEqual(fitted.map(\.temperatureCelsius), [15, 17])
     }
 
-    func testTimelineFittingKeepsEndsAndAConditionChange() {
+    func testTimelineFittingKeepsEndsAndThinsEvenly() {
         let start = Date(timeIntervalSince1970: 1_776_240_000)
-        let points = (0..<12).map { index in
+        // Matching weather-8 review fixture: 8 → 6 via round(i·7/5) = [0,1,3,4,6,7]
+        let codes = [0, 0, 2, 3, 61, 3, 0, 45]
+        let temps = [12.0, 14.0, 14.0, 13.0, 11.0, 10.0, 9.0, 8.0]
+        let points = (0..<8).map { index in
             HikingWeatherHourPoint(
                 date: start.addingTimeInterval(hour * Double(index)),
-                wmoCode: index == 6 ? 80 : 0,
-                temperatureCelsius: 15 + Double(index)
+                wmoCode: codes[index],
+                temperatureCelsius: temps[index]
             )
         }
 
-        let fitted = HikingRouteWeatherSnapshot.timelineFitting(points, maximumCount: 5)
+        let fitted = HikingRouteWeatherSnapshot.timelineFitting(points, maximumCount: 6)
 
-        XCTAssertLessThanOrEqual(fitted.count, 5)
-        XCTAssertEqual(fitted.first?.temperatureCelsius, 15)
-        XCTAssertEqual(fitted.last?.temperatureCelsius, 26)
-        XCTAssertTrue(fitted.contains { $0.wmoCode == 80 })
+        XCTAssertEqual(fitted.map(\.temperatureCelsius), [12, 14, 13, 11, 9, 8])
+        XCTAssertEqual(fitted.first?.wmoCode, 0)
+        XCTAssertEqual(fitted.last?.wmoCode, 45)
     }
 }

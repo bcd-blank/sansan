@@ -98,6 +98,7 @@ private struct SummaryMapSharePage: View {
     }
 
     private var headerBlock: some View {
+        // Gaps are separate spacers — never pad inside a fixed line-box frame (findings 3–4).
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 16 * s) {
                 summaryLogo
@@ -112,20 +113,26 @@ private struct SummaryMapSharePage: View {
             }
             .frame(height: ShareSummaryTokens.headerRow1Height * s, alignment: .center)
 
+            Color.clear.frame(height: ShareSummaryTokens.headerTitleGap * s)
+
             Text(record.exportCardTitle)
                 .font(.system(size: ShareSummaryTokens.headerTitleSize * s, weight: .bold))
                 .tracking(-0.2 * s)
                 .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.top, ShareSummaryTokens.headerTitleGap * s)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: ShareSummaryTokens.headerTitleLineHeight * s, alignment: .center)
 
             if let memo = record.memo?.trimmingCharacters(in: .whitespacesAndNewlines), !memo.isEmpty {
-                ShareSummaryMemoText(text: memo, scale: s, lineCount: max(memoLineCount, 1))
-                    .padding(.top, ShareSummaryTokens.memoGapFromTitle * s)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Color.clear.frame(height: ShareSummaryTokens.memoGapFromTitle * s)
+                let memoWidth = mapImage.size.width - ShareSummaryTokens.headerInset * 2 * s
+                ShareSummaryMemoText(
+                    text: memo,
+                    scale: s,
+                    lineCount: max(memoLineCount, 1),
+                    width: memoWidth
+                )
             }
         }
         .padding(.top, ShareSummaryTokens.headerTop * s)
@@ -141,16 +148,29 @@ private struct SummaryMapSharePage: View {
             .frame(height: height)
     }
 
-    /// Apple logo + 「지도」 only — snapshot legal mark is covered by the card hinter (S10).
+    /// Apple Maps credit between map and card (§13 / S10).
+    /// MKMapSnapshotter does not bake legal marks into the image — we draw them.
     private var mapsAttribution: some View {
-        HStack(alignment: .center, spacing: 2 * s) {
+        HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
             Image(systemName: "apple.logo")
-                .font(.system(size: ShareSummaryTokens.attributionHeight * s, weight: .regular))
+                .font(.system(size: ShareSummaryTokens.attributionLogoHeight * s, weight: .medium))
+                .frame(
+                    width: ShareSummaryTokens.attributionLogoHeight * s,
+                    height: ShareSummaryTokens.attributionLogoHeight * s
+                )
             Text("지도")
-                .font(.system(size: ShareSummaryTokens.attributionHeight * s, weight: .regular))
+                .font(.system(size: ShareSummaryTokens.attributionFontSize * s, weight: .medium))
+                .tracking(0)
         }
         .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
-        .frame(height: ShareSummaryTokens.attributionHeight * s)
+        .shadow(
+            color: Color(ShareSummaryTokens.mapPaperUIColor),
+            radius: ShareSummaryTokens.attributionHaloBlur * s,
+            x: 0,
+            y: 0
+        )
+        .frame(height: ShareSummaryTokens.attributionLineHeight * s, alignment: .center)
+        .frame(maxWidth: ShareSummaryTokens.attributionMaxWidth * s, alignment: .leading)
         .padding(.leading, ShareSummaryTokens.attributionX * s)
         .padding(
             .bottom,
@@ -159,40 +179,56 @@ private struct SummaryMapSharePage: View {
     }
 }
 
-// MARK: - Memo (exact line height 17)
+// MARK: - Memo (exact lh 17)
+// ImageRenderer cannot flatten UIViewRepresentable — bake UILabel into a UIImage instead.
 
 private struct ShareSummaryMemoText: View {
     let text: String
     let scale: CGFloat
     let lineCount: Int
+    let width: CGFloat
 
     var body: some View {
-        let height = CGFloat(min(ShareSummaryTokens.memoMaxLines, lineCount)) * ShareSummaryTokens.memoLineHeight * scale
-        Text(attributed)
-            .lineLimit(ShareSummaryTokens.memoMaxLines)
-            .truncationMode(.tail)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: height, alignment: .topLeading)
-            .fixedSize(horizontal: false, vertical: true)
+        let lines = min(ShareSummaryTokens.memoMaxLines, max(lineCount, 1))
+        let height = CGFloat(lines) * ShareSummaryTokens.memoLineHeight * scale
+        Image(uiImage: Self.render(text: text, width: width, height: height, scale: scale))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: width, height: height, alignment: .topLeading)
     }
 
-    private var attributed: AttributedString {
+    private static func render(text: String, width: CGFloat, height: CGFloat, scale: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = UIScreen.main.scale
+        format.opaque = false
+        let size = CGSize(width: max(width, 1), height: max(height, 1))
         let font = UIFont.systemFont(ofSize: ShareSummaryTokens.memoFontSize * scale, weight: .medium)
+        let lineHeight = ShareSummaryTokens.memoLineHeight * scale
         let paragraph = NSMutableParagraphStyle()
-        paragraph.minimumLineHeight = ShareSummaryTokens.memoLineHeight * scale
-        paragraph.maximumLineHeight = ShareSummaryTokens.memoLineHeight * scale
-        paragraph.lineBreakMode = .byTruncatingTail
+        paragraph.minimumLineHeight = lineHeight
+        paragraph.maximumLineHeight = lineHeight
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.alignment = .left
         let ns = NSAttributedString(
             string: text,
             attributes: [
                 .font: font,
                 .foregroundColor: ShareSummaryTokens.mapTextUIColor,
                 .kern: ShareSummaryTokens.memoTracking * scale,
-                .paragraphStyle: paragraph
+                .paragraphStyle: paragraph,
+                .baselineOffset: (lineHeight - font.lineHeight) / 2
             ]
         )
-        return AttributedString(ns)
+        // UILabel gives real maxLines + tail ellipsis. NSString.draw + truncatingTail collapses to 1 line.
+        let label = UILabel(frame: CGRect(origin: .zero, size: size))
+        label.numberOfLines = ShareSummaryTokens.memoMaxLines
+        label.lineBreakMode = .byTruncatingTail
+        label.attributedText = ns
+        label.backgroundColor = .clear
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { ctx in
+            label.layer.render(in: ctx.cgContext)
+        }
     }
 }
 
@@ -236,6 +272,7 @@ private struct ShareSummaryWeatherCard: View {
                             width: ShareSummaryTokens.weatherColumnWidth * s,
                             height: ShareSummaryTokens.weatherIconSize * s
                         )
+                        .clipped()
                     Text(hour.formattedTemperature)
                         .font(.system(size: ShareSummaryTokens.weatherTempSize * s, weight: .semibold))
                         .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
@@ -488,44 +525,87 @@ private struct SummaryInfoCard: View {
                 .font(.system(size: ShareSummaryTokens.labelSize * scale, weight: .medium))
                 .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
                 .frame(height: ShareSummaryTokens.labelLineHeight * scale, alignment: .center)
+            // Line box stays full metric lh — never shrink the box with the value (finding 1→2 cascade).
             content()
-                .frame(height: ShareSummaryTokens.metricLineHeight * scale, alignment: .leading)
+                .frame(height: ShareSummaryTokens.metricLineHeight * scale, alignment: .center)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: ShareSummaryTokens.cardColumnWidth * scale, alignment: .leading)
     }
 
+    /// Scale only this column when its measured width overflows 106pt (S1).
+    private func metricOverflowScale(neededWidth: CGFloat) -> CGFloat {
+        let available = ShareSummaryTokens.cardColumnWidth * scale
+        guard neededWidth > available, neededWidth > 0 else { return 1 }
+        return max(ShareSummaryTokens.metricMinScale, available / neededWidth)
+    }
+
+    private func metricTextWidth(
+        _ text: String,
+        size: CGFloat,
+        weight: UIFont.Weight,
+        tracking: CGFloat
+    ) -> CGFloat {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .kern: tracking
+        ]
+        return ceil((text as NSString).size(withAttributes: attrs).width)
+    }
+
     private func metricValue(_ value: String, unit: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.metricUnitGap * scale) {
+        let valueSize = ShareSummaryTokens.metricSize * scale
+        let unitSize = ShareSummaryTokens.metricUnitSize * scale
+        let gap = ShareSummaryTokens.metricUnitGap * scale
+        let natural = metricTextWidth(value, size: valueSize, weight: .light, tracking: -0.5 * scale)
+            + gap
+            + metricTextWidth(unit, size: unitSize, weight: .regular, tracking: 0)
+        let fit = metricOverflowScale(neededWidth: natural)
+        return HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.metricUnitGap * scale * fit) {
             Text(value)
-                .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
-                .tracking(-0.5 * scale)
+                .font(.system(size: valueSize * fit, weight: .light))
+                .tracking(-0.5 * scale * fit)
                 .monospacedDigit()
                 .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
             Text(unit)
-                .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
+                .font(.system(size: unitSize * fit, weight: .regular))
                 .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
         }
         .lineLimit(1)
-        .minimumScaleFactor(ShareSummaryTokens.metricMinScale)
     }
 
     private func durationMetric(_ compact: String) -> some View {
         let parts = durationParts(compact)
+        var natural: CGFloat = 0
+        for (index, part) in parts.enumerated() {
+            if index > 0 {
+                natural += durationGap(before: parts[index - 1], current: part) * scale
+            }
+            let size = (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale
+            let tracking = part.isUnit ? 0 : -0.5 * scale
+            natural += metricTextWidth(
+                part.text,
+                size: size,
+                weight: part.isUnit ? .regular : .light,
+                tracking: tracking
+            )
+        }
+        let fit = metricOverflowScale(neededWidth: natural)
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
             ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
                 if index > 0 {
                     Color.clear.frame(
-                        width: durationGap(before: parts[index - 1], current: part) * scale,
+                        width: durationGap(before: parts[index - 1], current: part) * scale * fit,
                         height: 1
                     )
                 }
                 Text(part.text)
                     .font(.system(
-                        size: (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale,
+                        size: (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale * fit,
                         weight: part.isUnit ? .regular : .light
                     ))
-                    .tracking(part.isUnit ? 0 : -0.5 * scale)
+                    .tracking(part.isUnit ? 0 : -0.5 * scale * fit)
                     .monospacedDigit()
                     .foregroundStyle(
                         part.isUnit
@@ -535,7 +615,6 @@ private struct SummaryInfoCard: View {
             }
         }
         .lineLimit(1)
-        .minimumScaleFactor(ShareSummaryTokens.metricMinScale)
     }
 
     private func durationGap(before: DurationPart, current: DurationPart) -> CGFloat {
