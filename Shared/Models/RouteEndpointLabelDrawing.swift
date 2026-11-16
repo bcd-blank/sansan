@@ -118,8 +118,7 @@ enum RouteEndpointLabelDrawing {
     ) -> CGPoint {
         let capsuleWidth = capsuleSize(for: kind, contentScale: contentScale).width
         let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
-        let dotRadius = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale / 2
-        let offsetX = dotRadius + gap + capsuleWidth / 2
+        let offsetX = gap + capsuleWidth / 2
 
         return CGPoint(
             x: routePoint.x + (placesLabelOnLeadingSide ? -offsetX : offsetX),

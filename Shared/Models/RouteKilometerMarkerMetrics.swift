@@ -13,10 +13,10 @@ import UIKit
 #endif
 
 enum RouteKilometerMarkerMetrics {
-    /// White fill + accent stroke km point.
-    static let routeDotDiameter: CGFloat = 8
+    /// Outer visual diameter of the km point (S6: Ø10 = white Ø6 + 2pt accent ring).
+    static let routeDotDiameter: CGFloat = 10
     static let routeDotBorderWidth: CGFloat = 2
-    /// Gap between route point and label capsule (pt).
+    /// Km-dot **center** → capsule near edge (S7).
     static let labelGap: CGFloat = 10
     /// Inner gap between "1km" and "16:50" inside the combined capsule.
     static let combinedInnerGap: CGFloat = 5
@@ -40,6 +40,11 @@ enum RouteKilometerMarkerMetrics {
         case let (nil, t?): return t
         case (nil, nil): return nil
         }
+    }
+
+    /// Time-only capsule uses medium (500) so gray text stays readable (S9).
+    static func timeLabelWeight(hasDistance: Bool) -> UIFont.Weight {
+        hasDistance ? .regular : .medium
     }
 #endif
 }

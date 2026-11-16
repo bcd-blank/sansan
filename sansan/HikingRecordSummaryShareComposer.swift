@@ -18,8 +18,8 @@ enum HikingRecordSummaryShareComposer {
         mapOptions: HikingShareMapExportOptions
     ) async -> UIImage? {
         let width = HikingRecordShareDeviceMetrics.fullScreenBounds.width
-        let canvas = CGSize(width: width, height: width * ShareSummaryTokens.canvasAspect)
         let scale = HikingRecordShareDeviceMetrics.nativeScale
+        let canvas = ShareSummaryTokens.canvasSize(widthPoints: width, pixelScale: scale)
         let s = ShareSummaryTokens.ptScale(for: canvas.width)
         let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvas.width)
         var captureOptions = mapOptions
@@ -34,7 +34,8 @@ enum HikingRecordSummaryShareComposer {
             insetLeft: ShareSummaryTokens.mapSideInset * s,
             insetRight: ShareSummaryTokens.mapSideInset * s,
             routeFillFraction: 1,
-            appearance: .shareSummary
+            appearance: .shareSummary,
+            fadeSolidEndY: ShareSummaryTokens.fadeSolidEnd(memoLineCount: memoLines) * s
         ) else { return nil }
 
         let page = SummaryMapSharePage(
@@ -60,7 +61,6 @@ private struct SummaryMapSharePage: View {
     let memoLineCount: Int
 
     private var s: CGFloat { ShareSummaryTokens.ptScale(for: mapImage.size.width) }
-    private var headerBottom: CGFloat { ShareSummaryTokens.headerBottom(memoLineCount: memoLineCount) * s }
 
     private var showsWeather: Bool {
         HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
@@ -72,14 +72,21 @@ private struct SummaryMapSharePage: View {
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
 
-            paperFade
-                .allowsHitTesting(false)
+            // Fade is baked under the route in the snapshot (finding 2). Header sits above.
 
             headerBlock
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             mapsAttribution
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+
+            // Sharp white hinter so MapKit legal marks cannot peek past the card corner (finding 3).
+            Color.white
+                .frame(height: ShareSummaryTokens.cardHeight * s)
+                .padding(.horizontal, ShareSummaryTokens.cardInset * s)
+                .padding(.bottom, ShareSummaryTokens.cardInset * s)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .allowsHitTesting(false)
 
             SummaryInfoCard(record: record, scale: s)
                 .padding(.horizontal, ShareSummaryTokens.cardInset * s)
@@ -88,25 +95,6 @@ private struct SummaryMapSharePage: View {
         }
         .frame(width: mapImage.size.width, height: mapImage.size.height)
         .clipped()
-    }
-
-    private var paperFade: some View {
-        let solidEnd = headerBottom + ShareSummaryTokens.routeClearance * s
-        let fadeEnd = solidEnd + ShareSummaryTokens.fadeTail * s
-        let h = mapImage.size.height
-        let solidLoc = min(solidEnd / h, 0.98)
-        let fadeLoc = min(fadeEnd / h, 1)
-        let paper = Color(ShareSummaryTokens.mapPaperUIColor)
-        return LinearGradient(
-            stops: [
-                .init(color: paper.opacity(ShareSummaryTokens.fadeSolidOpacity), location: 0),
-                .init(color: paper.opacity(ShareSummaryTokens.fadeSolidOpacity), location: solidLoc),
-                .init(color: paper.opacity(0), location: fadeLoc)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var headerBlock: some View {
@@ -135,14 +123,7 @@ private struct SummaryMapSharePage: View {
                 .frame(height: ShareSummaryTokens.headerTitleLineHeight * s, alignment: .center)
 
             if let memo = record.memo?.trimmingCharacters(in: .whitespacesAndNewlines), !memo.isEmpty {
-                Text(memo)
-                    .font(.system(size: ShareSummaryTokens.memoFontSize * s, weight: .medium))
-                    .tracking(ShareSummaryTokens.memoTracking * s)
-                    .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
-                    .lineLimit(ShareSummaryTokens.memoMaxLines)
-                    .truncationMode(.tail)
-                    .multilineTextAlignment(.leading)
-                    .lineSpacing((ShareSummaryTokens.memoLineHeight - ShareSummaryTokens.memoFontSize) * s)
+                ShareSummaryMemoText(text: memo, scale: s, lineCount: max(memoLineCount, 1))
                     .padding(.top, ShareSummaryTokens.memoGapFromTitle * s)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -160,12 +141,58 @@ private struct SummaryMapSharePage: View {
             .frame(height: height)
     }
 
+    /// Apple logo + 「지도」 only — snapshot legal mark is covered by the card hinter (S10).
     private var mapsAttribution: some View {
-        Text("지도")
-            .font(.system(size: 10.7 * s, weight: .regular))
-            .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
-            .padding(.leading, ShareSummaryTokens.headerInset * s)
-            .padding(.bottom, (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + 8) * s)
+        HStack(alignment: .center, spacing: 2 * s) {
+            Image(systemName: "apple.logo")
+                .font(.system(size: ShareSummaryTokens.attributionHeight * s, weight: .regular))
+            Text("지도")
+                .font(.system(size: ShareSummaryTokens.attributionHeight * s, weight: .regular))
+        }
+        .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
+        .frame(height: ShareSummaryTokens.attributionHeight * s)
+        .padding(.leading, ShareSummaryTokens.attributionX * s)
+        .padding(
+            .bottom,
+            (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + ShareSummaryTokens.attributionGapAboveCard) * s
+        )
+    }
+}
+
+// MARK: - Memo (exact line height 17)
+
+private struct ShareSummaryMemoText: View {
+    let text: String
+    let scale: CGFloat
+    let lineCount: Int
+
+    var body: some View {
+        let height = CGFloat(min(ShareSummaryTokens.memoMaxLines, lineCount)) * ShareSummaryTokens.memoLineHeight * scale
+        Text(attributed)
+            .lineLimit(ShareSummaryTokens.memoMaxLines)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: height, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var attributed: AttributedString {
+        let font = UIFont.systemFont(ofSize: ShareSummaryTokens.memoFontSize * scale, weight: .medium)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = ShareSummaryTokens.memoLineHeight * scale
+        paragraph.maximumLineHeight = ShareSummaryTokens.memoLineHeight * scale
+        paragraph.lineBreakMode = .byTruncatingTail
+        let ns = NSAttributedString(
+            string: text,
+            attributes: [
+                .font: font,
+                .foregroundColor: ShareSummaryTokens.mapTextUIColor,
+                .kern: ShareSummaryTokens.memoTracking * scale,
+                .paragraphStyle: paragraph
+            ]
+        )
+        return AttributedString(ns)
     }
 }
 
@@ -287,12 +314,17 @@ private struct SummaryInfoCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ShareSummaryTokens.cardBlockGap * scale) {
             heroRow
+                .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
+
             divider
+
             metricsRow
+                .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
             metaRow
+                .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
             chartBlock
+                .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
         }
-        .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
         .padding(.top, ShareSummaryTokens.cardPaddingTop * scale)
         .padding(.bottom, ShareSummaryTokens.cardPaddingBottom * scale)
         .frame(height: ShareSummaryTokens.cardHeight * scale, alignment: .top)
@@ -306,12 +338,13 @@ private struct SummaryInfoCard: View {
     }
 
     private var heroRow: some View {
-        HStack(alignment: .center, spacing: 12 * scale) {
-            VStack(alignment: .leading, spacing: 4 * scale) {
+        ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("거리")
                     .font(.system(size: ShareSummaryTokens.labelSize * scale, weight: .medium))
                     .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
-                HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
+                    .frame(height: ShareSummaryTokens.labelLineHeight * scale, alignment: .center)
+                HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.heroUnitGap * scale) {
                     Text(record.distanceValueText)
                         .font(.system(size: ShareSummaryTokens.heroSize * scale, weight: .light))
                         .tracking(-1.4 * scale)
@@ -321,120 +354,125 @@ private struct SummaryInfoCard: View {
                         .font(.system(size: ShareSummaryTokens.heroUnitSize * scale, weight: .regular))
                         .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
                 }
+                .frame(height: ShareSummaryTokens.heroLineHeight * scale, alignment: .center)
             }
-            Spacer(minLength: 8 * scale)
+
             timeline
+                .padding(.top, (ShareSummaryTokens.timelineFirstRowTop - ShareSummaryTokens.cardPaddingTop) * scale)
+                .padding(.leading, (ShareSummaryTokens.timelineDotX - ShareSummaryTokens.cardInset - ShareSummaryTokens.cardPaddingH) * scale)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var timeline: some View {
         let start = timeLabel(record.startedScheduleParts)
         let end = timeLabel(record.endedScheduleParts)
         let dot = ShareSummaryTokens.timelineDot * scale
-        return HStack(alignment: .center, spacing: 8 * scale) {
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(Color(ShareSummaryTokens.accentUIColor))
-                    .frame(width: dot, height: dot)
+        let line = ShareSummaryTokens.timelineLine * scale
+        let row = ShareSummaryTokens.timeLineHeight * scale
+        let gap = ShareSummaryTokens.timelineRowGap * scale
+        return VStack(alignment: .leading, spacing: 0) {
+            timelineRow(dot: dot, text: start, rowHeight: row, fill: Color(ShareSummaryTokens.accentUIColor))
+            Color.clear.frame(height: gap)
+            HStack(spacing: ShareSummaryTokens.timelineTimeGap * scale) {
                 Rectangle()
                     .fill(Color(ShareSummaryTokens.trackUIColor))
-                    .frame(width: max(1 * scale, 1), height: ShareSummaryTokens.timelineLine * scale)
-                Circle()
-                    .fill(Color(ShareSummaryTokens.inkUIColor))
-                    .frame(width: dot, height: dot)
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(start)
-                    .font(.system(size: ShareSummaryTokens.timeSize * scale, weight: .regular))
-                    .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
-                    .monospacedDigit()
+                    .frame(width: max(1 * scale, 1), height: line)
+                    .frame(width: dot, alignment: .center)
                 Spacer(minLength: 0)
-                Text(end)
-                    .font(.system(size: ShareSummaryTokens.timeSize * scale, weight: .regular))
-                    .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
-                    .monospacedDigit()
             }
-            .frame(height: ShareSummaryTokens.timelineLine * scale + dot * 2)
+            Color.clear.frame(height: gap)
+            timelineRow(dot: dot, text: end, rowHeight: row, fill: Color(ShareSummaryTokens.inkUIColor))
         }
+    }
+
+    private func timelineRow(dot: CGFloat, text: String, rowHeight: CGFloat, fill: Color) -> some View {
+        HStack(alignment: .center, spacing: ShareSummaryTokens.timelineTimeGap * scale) {
+            Circle()
+                .fill(fill)
+                .frame(width: dot, height: dot)
+            Text(text)
+                .font(.system(size: ShareSummaryTokens.timeSize * scale, weight: .regular))
+                .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                .monospacedDigit()
+                .lineLimit(1)
+                .frame(height: rowHeight, alignment: .center)
+        }
+        .frame(height: rowHeight, alignment: .center)
     }
 
     private var metricsRow: some View {
         HStack(alignment: .top, spacing: ShareSummaryTokens.cardColumnGap * scale) {
             metricColumn(label: "시간") {
-                let parts = durationParts(record.formattedDurationCompact)
-                HStack(alignment: .firstTextBaseline, spacing: 1 * scale) {
-                    ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                        Text(part.text)
-                            .font(.system(
-                                size: (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale,
-                                weight: part.isUnit ? .regular : .light
-                            ))
-                            .tracking(part.isUnit ? 0 : -0.5 * scale)
-                            .monospacedDigit()
-                            .foregroundStyle(
-                                part.isUnit
-                                    ? Color(ShareSummaryTokens.ink2UIColor)
-                                    : Color(ShareSummaryTokens.inkUIColor)
-                            )
-                    }
-                }
+                durationMetric(record.formattedDurationCompact)
             }
             metricColumn(label: "상승") {
-                HStack(alignment: .firstTextBaseline, spacing: 2 * scale) {
-                    Text(record.elevationValueText)
-                        .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
-                        .tracking(-0.5 * scale)
-                        .monospacedDigit()
-                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
-                    Text("m")
-                        .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
-                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
-                }
+                metricValue(record.elevationValueText, unit: "m")
             }
             metricColumn(label: "평균속도") {
-                HStack(alignment: .firstTextBaseline, spacing: 2 * scale) {
-                    Text(record.averageSpeedValueText)
-                        .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
-                        .tracking(-0.5 * scale)
-                        .monospacedDigit()
-                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
-                    Text(record.averageSpeedUnitText)
-                        .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
-                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
-                }
+                metricValue(record.averageSpeedValueText, unit: record.averageSpeedUnitText)
             }
         }
     }
 
     private var metaRow: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.cardColumnGap * scale) {
             metaItem(value: record.stepCountValueText, unit: "걸음")
+                .frame(width: ShareSummaryTokens.cardColumnWidth * scale, alignment: .leading)
             metaItem(value: record.caloriesValueText, unit: "kcal")
+                .frame(width: ShareSummaryTokens.cardColumnWidth * scale, alignment: .leading)
             metaItem(value: "\(maxElevation)", unit: "m", label: "고도")
+                .frame(width: ShareSummaryTokens.cardColumnWidth * scale, alignment: .leading)
         }
     }
 
     private var chartBlock: some View {
-        VStack(alignment: .leading, spacing: 8 * scale) {
-            if let heartStats {
-                HStack(spacing: 4 * scale) {
-                    Text("심박")
-                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
-                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
-                    Text("\(heartStats.average)")
-                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .medium))
-                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
-                        .monospacedDigit()
-                    Text("\(heartStats.minimum)–\(heartStats.maximum)")
-                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
-                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
-                        .monospacedDigit()
-                    Spacer(minLength: 0)
-                }
-            }
+        VStack(alignment: .leading, spacing: ShareSummaryTokens.graphGapAbove * scale) {
+            legendRow
             SummaryChartCanvas(elevation: elevationSamples, heartRate: heartSamples, scale: scale)
                 .frame(height: ShareSummaryTokens.graphHeight * scale)
         }
+    }
+
+    private var legendRow: some View {
+        HStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 1 * scale, style: .continuous)
+                .fill(Color(ShareSummaryTokens.accentUIColor))
+                .frame(
+                    width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                    height: ShareSummaryTokens.graphLegendElevHeight * scale
+                )
+            Text("고도")
+                .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
+                .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                .padding(.leading, ShareSummaryTokens.graphLegendGap * scale)
+
+            if let heartStats {
+                Color.clear.frame(width: ShareSummaryTokens.graphLegendBlockGap * scale)
+                RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
+                    .fill(Color(ShareSummaryTokens.hrUIColor))
+                    .frame(
+                        width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                        height: ShareSummaryTokens.graphLegendHRHeight * scale
+                    )
+                Text("심박")
+                    .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
+                    .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                    .padding(.leading, ShareSummaryTokens.graphLegendGap * scale)
+                Text("\(heartStats.average)")
+                    .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .medium))
+                    .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    .monospacedDigit()
+                    .padding(.leading, 4 * scale)
+                Text("\(heartStats.minimum)–\(heartStats.maximum)")
+                    .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
+                    .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                    .monospacedDigit()
+                    .padding(.leading, 4 * scale)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(height: ShareSummaryTokens.legendLineHeight * scale, alignment: .center)
     }
 
     private var divider: some View {
@@ -445,17 +483,70 @@ private struct SummaryInfoCard: View {
     }
 
     private func metricColumn<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4 * scale) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(label)
                 .font(.system(size: ShareSummaryTokens.labelSize * scale, weight: .medium))
                 .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                .frame(height: ShareSummaryTokens.labelLineHeight * scale, alignment: .center)
             content()
+                .frame(height: ShareSummaryTokens.metricLineHeight * scale, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: ShareSummaryTokens.cardColumnWidth * scale, alignment: .leading)
+    }
+
+    private func metricValue(_ value: String, unit: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.metricUnitGap * scale) {
+            Text(value)
+                .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
+                .tracking(-0.5 * scale)
+                .monospacedDigit()
+                .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+            Text(unit)
+                .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
+                .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(ShareSummaryTokens.metricMinScale)
+    }
+
+    private func durationMetric(_ compact: String) -> some View {
+        let parts = durationParts(compact)
+        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    Color.clear.frame(
+                        width: durationGap(before: parts[index - 1], current: part) * scale,
+                        height: 1
+                    )
+                }
+                Text(part.text)
+                    .font(.system(
+                        size: (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale,
+                        weight: part.isUnit ? .regular : .light
+                    ))
+                    .tracking(part.isUnit ? 0 : -0.5 * scale)
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        part.isUnit
+                            ? Color(ShareSummaryTokens.ink2UIColor)
+                            : Color(ShareSummaryTokens.inkUIColor)
+                    )
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(ShareSummaryTokens.metricMinScale)
+    }
+
+    private func durationGap(before: DurationPart, current: DurationPart) -> CGFloat {
+        if before.isUnit && !current.isUnit {
+            return ShareSummaryTokens.metricUnitTrailing
+        }
+        return ShareSummaryTokens.metricUnitGap
     }
 
     private func metaItem(value: String, unit: String, label: String? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 3 * scale) {
+        HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.metaUnitGap * scale) {
             if let label {
                 Text(label)
                     .font(.system(size: ShareSummaryTokens.metaSize * scale, weight: .regular))
@@ -469,6 +560,7 @@ private struct SummaryInfoCard: View {
                 .font(.system(size: ShareSummaryTokens.metaSize * scale, weight: .regular))
                 .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
         }
+        .frame(height: ShareSummaryTokens.metaLineHeight * scale, alignment: .center)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

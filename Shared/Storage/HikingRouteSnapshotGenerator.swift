@@ -256,7 +256,8 @@ enum HikingRouteSnapshotGenerator {
         insetLeft: CGFloat = 0,
         insetRight: CGFloat = 0,
         routeFillFraction: CGFloat = 1,
-        appearance: HikingRouteSnapshotAppearance = .standard
+        appearance: HikingRouteSnapshotAppearance = .standard,
+        fadeSolidEndY: CGFloat? = nil
     ) async -> UIImage? {
         let coordinates = HikingSessionMetrics.resolvedDisplayRouteCoordinates(from: record.session)
         guard coordinates.count >= 2 else { return nil }
@@ -273,7 +274,8 @@ enum HikingRouteSnapshotGenerator {
             insetLeft: insetLeft,
             insetRight: insetRight,
             routeFillFraction: routeFillFraction,
-            appearance: appearance
+            appearance: appearance,
+            fadeSolidEndY: fadeSolidEndY
         )
     }
 
@@ -292,7 +294,8 @@ enum HikingRouteSnapshotGenerator {
         insetRight: CGFloat = 0,
         routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction,
         listThumbnailOnly: Bool = false,
-        appearance: HikingRouteSnapshotAppearance = .standard
+        appearance: HikingRouteSnapshotAppearance = .standard,
+        fadeSolidEndY: CGFloat? = nil
     ) async -> UIImage? {
         // MKMapSnapshotter 이미지에는 Apple 법적 표기·로고가 포함되지 않습니다(개발자가 직접
         // 그려야 함). 따라서 strip 크롭은 실제 지도를 잘라내 경로를 어긋나게 할 뿐이라 하지 않습니다.
@@ -328,7 +331,7 @@ enum HikingRouteSnapshotGenerator {
                 let projector = SnapshotCoordinateProjector(snapshot: snapshot)
                 let baseImage: UIImage
                 if appearance == .shareSummary {
-                    baseImage = desaturatedMapImage(snapshot.image) ?? snapshot.image
+                    baseImage = shareSummaryTonedMapImage(snapshot.image) ?? snapshot.image
                 } else {
                     baseImage = snapshot.image
                 }
@@ -341,24 +344,68 @@ enum HikingRouteSnapshotGenerator {
                     pixelScale: pixelScale,
                     mapOptions: mapOptions,
                     listThumbnailOnly: listThumbnailOnly,
-                    appearance: appearance
+                    appearance: appearance,
+                    fadeSolidEndY: fadeSolidEndY
                 )
                 continuation.resume(returning: image)
             }
         }
     }
 
-    private static func desaturatedMapImage(_ image: UIImage) -> UIImage? {
+    private static func drawShareSummaryPaperFade(
+        solidEndY: CGFloat,
+        canvasSize: CGSize,
+        in cgContext: CGContext
+    ) {
+        let fadeEnd = min(solidEndY + ShareSummaryTokens.fadeTail, canvasSize.height)
+        let colors = [
+            ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(ShareSummaryTokens.fadeSolidOpacity).cgColor,
+            ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(ShareSummaryTokens.fadeSolidOpacity).cgColor,
+            ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(0).cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [
+            0,
+            max(solidEndY / canvasSize.height, 0),
+            min(fadeEnd / canvasSize.height, 1)
+        ]
+        guard let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: colors,
+            locations: locations
+        ) else { return }
+        cgContext.saveGState()
+        cgContext.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 0, y: canvasSize.height),
+            options: []
+        )
+        cgContext.restoreGState()
+    }
+
+    /// Paper #F0F0F0 / road #FDFDFD — muted tiles are land-light/road-dark; invert into that band (finding 11 / S5).
+    private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let ciImage = CIImage(cgImage: cgImage)
-        guard let filter = CIFilter(name: "CIColorControls") else { return nil }
-        filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(0, forKey: kCIInputSaturationKey)
-        filter.setValue(0.04, forKey: kCIInputBrightnessKey)
-        filter.setValue(1.02, forKey: kCIInputContrastKey)
-        guard let output = filter.outputImage else { return nil }
+        guard let controls = CIFilter(name: "CIColorControls") else { return nil }
+        controls.setValue(ciImage, forKey: kCIInputImageKey)
+        controls.setValue(0, forKey: kCIInputSaturationKey)
+        guard let gray = controls.outputImage else { return nil }
+
+        let paper = 240.0 / 255.0
+        let road = 253.0 / 255.0
+        // Muted land is bright, roads darker — remap so roads end brighter than paper.
+        guard let tone = CIFilter(name: "CIToneCurve") else { return nil }
+        tone.setValue(gray, forKey: kCIInputImageKey)
+        tone.setValue(CIVector(x: 0.00, y: road), forKey: "inputPoint0")
+        tone.setValue(CIVector(x: 0.45, y: road), forKey: "inputPoint1")
+        tone.setValue(CIVector(x: 0.72, y: (paper + road) / 2), forKey: "inputPoint2")
+        tone.setValue(CIVector(x: 0.90, y: paper + 0.008), forKey: "inputPoint3")
+        tone.setValue(CIVector(x: 1.00, y: paper), forKey: "inputPoint4")
+        guard let toned = tone.outputImage else { return nil }
+
         let context = CIContext(options: nil)
-        guard let rendered = context.createCGImage(output, from: output.extent) else { return nil }
+        guard let rendered = context.createCGImage(toned, from: toned.extent) else { return nil }
         return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
     }
 
@@ -372,7 +419,8 @@ enum HikingRouteSnapshotGenerator {
         mapOptions: HikingShareMapExportOptions,
         includesLiveDetailContent: Bool = false,
         listThumbnailOnly: Bool = false,
-        appearance: HikingRouteSnapshotAppearance = .standard
+        appearance: HikingRouteSnapshotAppearance = .standard,
+        fadeSolidEndY: CGFloat? = nil
     ) -> UIImage {
         let contentScale = mapContentScale(for: canvasSize.width, appearance: appearance)
         let format = UIGraphicsImageRendererFormat()
@@ -380,6 +428,15 @@ enum HikingRouteSnapshotGenerator {
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
         return renderer.image { context in
             baseImage.draw(in: CGRect(origin: .zero, size: canvasSize))
+
+            // Layer order (finding 2): map → fade → route → markers → labels.
+            if appearance == .shareSummary, let solidEnd = fadeSolidEndY, solidEnd > 0 {
+                drawShareSummaryPaperFade(
+                    solidEndY: solidEnd,
+                    canvasSize: canvasSize,
+                    in: context.cgContext
+                )
+            }
 
             if !includesLiveDetailContent {
                 drawRoute(

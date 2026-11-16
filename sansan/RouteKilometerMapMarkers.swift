@@ -41,7 +41,8 @@ struct RouteKilometerCombinedLabelCapsule: View {
             return [(distanceText, .semibold, Color(RouteKilometerMarkerMetrics.inkUIColor))]
         }
         if let timeText {
-            return [(timeText, .regular, Color(RouteKilometerMarkerMetrics.ink2UIColor))]
+            // S9: time-only uses medium + ink so gray-only stays readable.
+            return [(timeText, .medium, Color(RouteKilometerMarkerMetrics.inkUIColor))]
         }
         return []
     }
@@ -74,7 +75,6 @@ struct RouteKilometerHorizontalMarker: View {
     var verticalOffset: CGFloat = 0
 
     private let gap = RouteKilometerMarkerMetrics.labelGap
-    private let dotDiameter = RouteKilometerMarkerMetrics.routeDotDiameter
 
     var body: some View {
         ZStack {
@@ -96,7 +96,8 @@ struct RouteKilometerHorizontalMarker: View {
     }
 
     private func horizontalOffset(capsuleWidth: CGFloat) -> CGFloat {
-        let distance = dotDiameter / 2 + gap + capsuleWidth / 2
+        // labelGap = center → near edge (S7).
+        let distance = gap + capsuleWidth / 2
         return placesLabelOnLeadingSide ? -distance : distance
     }
 }

@@ -206,7 +206,10 @@ enum RouteKilometerMarkerDrawing {
 
         let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
         let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let timeFont = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+        let timeFont = UIFont.systemFont(
+            ofSize: fontSize,
+            weight: RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
+        )
         let height = RouteKilometerMarkerMetrics.labelHeight * contentScale
         let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
         let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
@@ -220,7 +223,7 @@ enum RouteKilometerMarkerDrawing {
         } else if let distanceLabel {
             parts = [(distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor)]
         } else if let timeLabel {
-            parts = [(timeLabel, timeFont, RouteKilometerMarkerMetrics.ink2UIColor)]
+            parts = [(timeLabel, timeFont, RouteKilometerMarkerMetrics.inkUIColor)]
         } else {
             return
         }
@@ -287,13 +290,13 @@ enum RouteKilometerMarkerDrawing {
         let dot = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale
         let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
         let pad = 6 * contentScale
-
-        let width = capsule.width + gap + dot + pad * 2
+        // gap is center→near-edge; span from far capsule edge to far dot edge ≈ capsule + gap + dot/2.
+        let width = capsule.width + gap + dot / 2 + pad * 2
         let height = max(capsule.height, dot) + pad * 2
 
         let routeDotCenterX: CGFloat
         if placesLabelOnLeadingSide {
-            routeDotCenterX = pad + capsule.width + gap + dot / 2
+            routeDotCenterX = pad + capsule.width + gap
         } else {
             routeDotCenterX = pad + dot / 2
         }
@@ -306,9 +309,9 @@ enum RouteKilometerMarkerDrawing {
         placesLabelOnLeadingSide: Bool,
         contentScale: CGFloat
     ) -> CGPoint {
+        // labelGap = center → near edge (S7); not edge→edge.
         let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
-        let dotRadius = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale / 2
-        let offsetX = dotRadius + gap + capsuleWidth / 2
+        let offsetX = gap + capsuleWidth / 2
         return CGPoint(
             x: routePoint.x + (placesLabelOnLeadingSide ? -offsetX : offsetX),
             y: routePoint.y
@@ -351,7 +354,10 @@ enum RouteKilometerMarkerDrawing {
         }
         let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
         let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let timeFont = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+        let timeFont = UIFont.systemFont(
+            ofSize: fontSize,
+            weight: RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
+        )
         let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
         let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
         var textWidth: CGFloat = 0
@@ -418,6 +424,7 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
+        // Outer Ø10: white fill Ø10, stroke centered on Ø8 (border 2) → white Ø6 + ring (S6).
         let diameter = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale
         let border = RouteKilometerMarkerMetrics.routeDotBorderWidth * contentScale
         let rect = CGRect(
