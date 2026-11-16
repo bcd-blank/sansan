@@ -48,6 +48,8 @@ enum ShareSummaryTokens {
         static let hairline = "E5E5EA"
         static let track = "D1D1D6"
         static let hr = "AEAEB2"
+        static let chartElev = "FF8D28"
+        static let chartHR = "FF383C"
         static let surface = "FFFFFF"
         static let mapPaper = "F0F0F0"
         static let mapRoad = "FDFDFD"
@@ -60,10 +62,15 @@ enum ShareSummaryTokens {
     static let mapTextUIColor = UIColor(red: 99 / 255, green: 99 / 255, blue: 102 / 255, alpha: 1)
     static let hairlineUIColor = UIColor(red: 229 / 255, green: 229 / 255, blue: 234 / 255, alpha: 1)
     static let trackUIColor = UIColor(red: 209 / 255, green: 209 / 255, blue: 214 / 255, alpha: 1)
+    /// Legacy gray — prefer `chartHRUIColor` for share chart/legend.
     static let hrUIColor = UIColor(red: 174 / 255, green: 174 / 255, blue: 178 / 255, alpha: 1)
     static let surfaceUIColor = UIColor.white
     static let mapPaperUIColor = UIColor(red: 240 / 255, green: 240 / 255, blue: 240 / 255, alpha: 1)
     static let mapRoadUIColor = UIColor(red: 253 / 255, green: 253 / 255, blue: 253 / 255, alpha: 1)
+    /// Record-detail elev orange (glass3 §9 / elevation-color-v2 white card).
+    static let chartElevUIColor = UIColor(red: 255 / 255, green: 141 / 255, blue: 40 / 255, alpha: 1) // #FF8D28
+    /// Record-detail HR red.
+    static let chartHRUIColor = UIColor(red: 255 / 255, green: 56 / 255, blue: 60 / 255, alpha: 1) // #FF383C
 #endif
 
     // MARK: Header
@@ -99,6 +106,8 @@ enum ShareSummaryTokens {
     static let cardHeight: CGFloat = 324.5
     static let cardRadius: CGFloat = 24
     static let cardBlockGap: CGFloat = 16
+    /// Label line-box bottom → value line-box top (hero + metrics). Spec had 4; missing → lower block −5…−7 (impl4 #3).
+    static let cardLabelGap: CGFloat = 4
     static let cardColumnWidth: CGFloat = 106
     static let cardColumnGap: CGFloat = 16
 
@@ -156,10 +165,14 @@ enum ShareSummaryTokens {
     static var kmLabelOffset: CGFloat { RouteKilometerMarkerMetrics.labelGap }
     static var kmLabelFont: CGFloat { RouteKilometerMarkerMetrics.labelFontSize }
     static let graphHeight: CGFloat = 56
-    static let graphElevWidth: CGFloat = 2
+    /// Chart elev + HR both 1pt (JW correction; cancel prior 1.5/2).
+    static let graphElevWidth: CGFloat = 1
     static let graphHRWidth: CGFloat = 1
+    /// Elev area fill under line (record-detail 15%).
+    static let chartElevFillAlpha: CGFloat = 0.15
     static let graphLegendSwatchWidth: CGFloat = 12
-    static let graphLegendElevHeight: CGFloat = 2
+    /// Legend swatches match line widths (both 1pt).
+    static let graphLegendElevHeight: CGFloat = 1
     static let graphLegendHRHeight: CGFloat = 1
     static let graphLegendGap: CGFloat = 6
     static let graphLegendBlockGap: CGFloat = 16
@@ -179,6 +192,8 @@ enum ShareSummaryTokens {
     static let attributionMaxWidth: CGFloat = 350
     /// Paper halo behind credit so basemap roads under the mark stay ≥4.5:1 (impl3 #15).
     static let attributionHaloBlur: CGFloat = 2
+    /// Opaque paper pad around attribution glyphs; soft edge = same radius (impl4 #11).
+    static let attributionClearZone: CGFloat = 4
     /// Legacy alias — line box height.
     static var attributionHeight: CGFloat { attributionLineHeight }
 
@@ -200,7 +215,14 @@ enum ShareSummaryTokens {
 
     // MARK: Map insets
 
+    /// Marker **outer** edge ≥ this from canvas L/R (impl4 #4).
     static let mapSideInset: CGFloat = 24
+    /// Half of endpoint Ø18 — added to side inset so route fit keeps marker outer at 24.
+    static var mapMarkerInsetPad: CGFloat { markerOuter / 2 }
+    /// Camera/fit inset for route points (= sideInset + marker radius).
+    static var mapRouteSideInset: CGFloat { mapSideInset + mapMarkerInsetPad }
+    /// km-label capsules must stay inside [mapSideInset, width − mapSideInset] (impl4 #2).
+    static var kmLabelBoundsInset: CGFloat { mapSideInset }
     /// Bottom inset = cardHeight + cardInset + routeClearance + marker radius
     /// so the white endpoint circle stays above the card (S3 + finding 7).
     static var mapBottomInset: CGFloat { cardHeight + 32 + markerOuter / 2 }
