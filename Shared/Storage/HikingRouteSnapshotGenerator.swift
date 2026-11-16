@@ -383,7 +383,8 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Paper #F0F0F0 / road #FDFDFD — muted tiles are land-light/road-dark; invert into that band (finding 11 / S5).
+    /// Paper #F0F0F0 < road #FDFDFD; labels stay dark ≈ #9A9A9E (S5).
+    /// Do **not** invert luminance — that turned map type white on paper.
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let ciImage = CIImage(cgImage: cgImage)
@@ -392,16 +393,17 @@ enum HikingRouteSnapshotGenerator {
         controls.setValue(0, forKey: kCIInputSaturationKey)
         guard let gray = controls.outputImage else { return nil }
 
-        let paper = 240.0 / 255.0
-        let road = 253.0 / 255.0
-        // Muted land is bright, roads darker — remap so roads end brighter than paper.
+        let mapLabel = 154.0 / 255.0 // #9A9A9E
+        let paper = 240.0 / 255.0    // #F0F0F0
+        let road = 253.0 / 255.0     // #FDFDFD
         guard let tone = CIFilter(name: "CIToneCurve") else { return nil }
         tone.setValue(gray, forKey: kCIInputImageKey)
-        tone.setValue(CIVector(x: 0.00, y: road), forKey: "inputPoint0")
-        tone.setValue(CIVector(x: 0.45, y: road), forKey: "inputPoint1")
-        tone.setValue(CIVector(x: 0.72, y: (paper + road) / 2), forKey: "inputPoint2")
-        tone.setValue(CIVector(x: 0.90, y: paper + 0.008), forKey: "inputPoint3")
-        tone.setValue(CIVector(x: 1.00, y: paper), forKey: "inputPoint4")
+        // Keep dark label ink readable; lift land toward paper; keep bright roads above paper.
+        tone.setValue(CIVector(x: 0.00, y: mapLabel), forKey: "inputPoint0")
+        tone.setValue(CIVector(x: 0.28, y: 0.72), forKey: "inputPoint1")
+        tone.setValue(CIVector(x: 0.70, y: paper), forKey: "inputPoint2")
+        tone.setValue(CIVector(x: 0.90, y: road), forKey: "inputPoint3")
+        tone.setValue(CIVector(x: 1.00, y: road), forKey: "inputPoint4")
         guard let toned = tone.outputImage else { return nil }
 
         let context = CIContext(options: nil)

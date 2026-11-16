@@ -3,7 +3,7 @@
 //  sansanTests
 //
 //  Renders share-summary v2 review-fix captures into the app Documents
-//  folder `share-summary-v2-impl2/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
+//  folder `share-summary-v2-impl3/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
 //
 
 import CoreLocation
@@ -12,21 +12,25 @@ import XCTest
 
 @MainActor
 final class ShareSummaryV2ArtifactTests: XCTestCase {
-    /// Spec S11 review fixture — long enough to ellipsize at 3 lines.
+    /// Spec S11 — must overflow 3×350pt lines so tail '…' is visible.
     private let memoLongEllipsis =
-        "아침 공기가 차서 마산역 앞에서 손난로를 켜고 출발했다. 산길은 아직 어두웠고 이슬이 신발 끝에 맺혔다. 정상에 도착하면 동쪽 능선 너머로 일출을 보고 싶다. 내려올 때는 단풍 터널에서 사진을 몇 장 더 남기자."
+        "아침 공기가 차서 마산역 앞에서 손난로를 켜고 출발했다. 산길은 아직 어두웠고 이슬이 신발 끝에 맺혔다. 정상에 도착하면 동쪽 능선 너머로 일출을 보고 싶다. 내려올 때는 단풍 터널에서 사진을 몇 장 더 남기자. 카페에서 따뜻한 차를 마시며 오늘 걸은 길을 천천히 되짚어 보기로 했다."
 
     private let memoOneLine = "단풍이 절정이라 사진 찍느라 쉬엄쉬엄 걸었다."
 
     func testRenderShareSummaryV2Artifacts() async throws {
-        // Prefer host path (clone Documents vanish). Fallback: app Documents for manual pull.
+        // Prefer host path. Shared app-group-style host folder (simulator can write under Documents/…);
+        // also try TEST_RUNNER_ / env. Fallback: app Documents.
         let envOut = ProcessInfo.processInfo.environment["SANSAN_SHARE_SUMMARY_OUT"]
+        let hostFallback = URL(fileURLWithPath: "/Users/jeongwook/Documents/sansan/build/share-summary-v2-impl3-artifacts", isDirectory: true)
         let outDir: URL
         if let envOut, !envOut.isEmpty {
             outDir = URL(fileURLWithPath: envOut, isDirectory: true)
+        } else if FileManager.default.fileExists(atPath: hostFallback.deletingLastPathComponent().path) {
+            outDir = hostFallback
         } else {
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            outDir = docs.appendingPathComponent("share-summary-v2-impl2", isDirectory: true)
+            outDir = docs.appendingPathComponent("share-summary-v2-impl3", isDirectory: true)
         }
         try? FileManager.default.removeItem(at: outDir)
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
@@ -51,11 +55,19 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             try await writeSummary(record: record, options: mapOptions, to: outDir, name: "weather-\(count).png")
         }
         try """
-        weather-8 input hours (WMO@temp), first→last kept + even thin → 6:
+        weather-8 input hours (WMO@temp), first→last + even thin round(i·7/5) → indices [0,1,3,4,6,7]:
         \(weather8Inputs.joined(separator: ", "))
         """.write(to: outDir.appendingPathComponent("weather-8-inputs.txt"), atomically: true, encoding: .utf8)
 
-        // Memo variants
+        // Memo variants — S11 long fixture must need ≥3 lines for tail ellipsis.
+        XCTAssertGreaterThanOrEqual(
+            ShareSummaryTokens.memoLineCount(
+                memoLongEllipsis,
+                canvasWidth: HikingRecordShareDeviceMetrics.fullScreenBounds.width
+            ),
+            3,
+            "S11 memo must need ≥3 lines"
+        )
         try await writeSummary(
             record: makeRecord(weatherHours: 2, memo: nil),
             options: mapOptions,
@@ -81,9 +93,9 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             name: "weather-many-memo.png"
         )
 
-        // Long average-speed / pace (S1 worst-case style string via slow pace)
+        // Long average-speed — must overflow 106pt at 28pt (e.g. 125'30"/km) and shrink alone (S1).
         try await writeSummary(
-            record: makeRecord(weatherHours: 2, memo: nil, paceOverride: 42.55),
+            record: makeRecord(weatherHours: 2, memo: nil, paceOverride: 125.5),
             options: mapOptions,
             to: outDir,
             name: "avg-speed-long.png"
@@ -128,7 +140,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
 
         let written = try FileManager.default.contentsOfDirectory(atPath: outDir.path)
         XCTAssertGreaterThanOrEqual(written.filter { $0.hasSuffix(".png") }.count, 12)
-        print("ShareSummaryV2 impl2 artifacts → \(outDir.path): \(written.sorted())")
+        print("ShareSummaryV2 impl3 artifacts → \(outDir.path): \(written.sorted())")
     }
 
     private func writeSummary(
@@ -157,29 +169,46 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         paceOverride: Double? = nil
     ) -> SavedHikingSession {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
-        var points: [HikingPoint] = []
         let count = 120
-        let targetDistanceMeters: Double
-        let elapsed: TimeInterval
-        if let paceOverride {
-            // ~2.5km at the requested pace → averageSpeedValueText uses that pace.
-            targetDistanceMeters = 2_500
-            elapsed = paceOverride * 60.0 * (targetDistanceMeters / 1_000.0)
-        } else {
-            targetDistanceMeters = 0
-            elapsed = 6420
-        }
+        let targetDistanceMeters: Double = paceOverride != nil ? 2_500 : 0
+        let latSpan = targetDistanceMeters > 0 ? (targetDistanceMeters / 111_000.0) : 0.018
+        var coords: [(lat: Double, lon: Double, alt: Double)] = []
         for i in 0..<count {
             let t = Double(i) / Double(count - 1)
-            let latSpan = targetDistanceMeters > 0 ? (targetDistanceMeters / 111_000.0) : 0.018
-            points.append(
-                HikingPoint(
-                    latitude: 37.6500 + t * latSpan,
-                    longitude: 127.0100 + sin(t * .pi) * 0.008,
-                    altitude: 80 + t * 200 + sin(t * 6) * 8,
-                    timestamp: start.addingTimeInterval(t * elapsed),
-                    horizontalAccuracy: 5
+            coords.append(
+                (
+                    37.6500 + t * latSpan,
+                    127.0100 + sin(t * .pi) * 0.008,
+                    80 + t * 200 + sin(t * 6) * 8
                 )
+            )
+        }
+        // Provisional points for distance; timestamps filled after pace retarget.
+        var points: [HikingPoint] = coords.enumerated().map { index, c in
+            HikingPoint(
+                latitude: c.lat,
+                longitude: c.lon,
+                altitude: c.alt,
+                timestamp: start.addingTimeInterval(Double(index)),
+                horizontalAccuracy: 5
+            )
+        }
+        let distance = HikingSessionMetrics.horizontalDistance(from: points)
+        let gain = HikingSessionMetrics.cumulativeElevationGain(from: points)
+        let elapsedFinal: TimeInterval
+        if let paceOverride, distance >= 10 {
+            elapsedFinal = paceOverride * 60.0 * (distance / 1_000.0)
+        } else {
+            elapsedFinal = 6420
+        }
+        points = coords.enumerated().map { index, c in
+            let t = Double(index) / Double(count - 1)
+            return HikingPoint(
+                latitude: c.lat,
+                longitude: c.lon,
+                altitude: c.alt,
+                timestamp: start.addingTimeInterval(t * elapsedFinal),
+                horizontalAccuracy: 5
             )
         }
         let elevation = HikingSessionMetrics.elevationProfileSamples(from: points).map {
@@ -192,19 +221,17 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
                 HikingHeartRateChartSample(id: sample.id, distanceMeters: sample.distanceMeters, bpm: bpm)
             )
         }
-        let distance = HikingSessionMetrics.horizontalDistance(from: points)
-        let gain = HikingSessionMetrics.cumulativeElevationGain(from: points)
         let session = HikingSessionData(
             startedAt: start,
             totalDistance: distance,
-            elapsedTime: elapsed,
+            elapsedTime: elapsedFinal,
             currentAltitude: points.last?.altitude ?? 0,
             points: points,
             heartRateSamples: heart.enumerated().map { index, sample in
                 HikingHeartRateSample(
                     id: sample.id,
                     bpm: sample.bpm,
-                    timestamp: start.addingTimeInterval(Double(index) * max(elapsed / Double(count), 1))
+                    timestamp: start.addingTimeInterval(Double(index) * max(elapsedFinal / Double(count), 1))
                 )
             },
             stepCount: 7535,
@@ -212,7 +239,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             elevationGainMeters: gain,
             elevationProfile: elevation,
             heartRateProfile: heart,
-            lastUpdated: start.addingTimeInterval(elapsed)
+            lastUpdated: start.addingTimeInterval(elapsedFinal)
         )
 
         // Documented weather-8 palette (finding 18): sun/sun/cloud-sun/cloud/rain/cloud/sun/fog
@@ -236,7 +263,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
 
         return SavedHikingSession(
             session: session,
-            endedAt: start.addingTimeInterval(elapsed),
+            endedAt: start.addingTimeInterval(elapsedFinal),
             displayName: "[저장된 경로]",
             memo: memo,
             weather: weather

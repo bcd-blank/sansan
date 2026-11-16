@@ -69,6 +69,11 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.metricUnitGap, 2, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.metricUnitTrailing, 6, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.metricMinScale, 0.82, accuracy: 0.001)
+        XCTAssertEqual(ShareSummaryTokens.attributionFontSize, 10, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.attributionLogoHeight, 9, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.attributionLineHeight, 12, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.memoLineHeight, 17, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.weatherIconSize, 18, accuracy: 0.01)
     }
 
     func testMaxMemoLengthIs200() {

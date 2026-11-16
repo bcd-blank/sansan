@@ -87,9 +87,15 @@
   },
   "attribution": {
     "content": "apple.logo + 지도",
-    "height": 10.7,
+    "font": 10,
+    "weight": 500,
+    "lineHeight": 12,
+    "logoHeight": 9,
+    "logoGap": 2,
     "x": 40,
     "gapAboveCard": 8,
+    "maxWidth": 350,
+    "halo": "#F0F0F0 1.5pt",
     "hideSnapshotLegal": true
   },
   "weather": {
