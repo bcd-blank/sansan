@@ -177,7 +177,8 @@ enum ShareSummaryTokens {
     static let attributionGapAboveCard: CGFloat = 8
     static let attributionX: CGFloat = 40
     static let attributionMaxWidth: CGFloat = 350
-    static let attributionHaloBlur: CGFloat = 1.5
+    /// Paper halo behind credit so basemap roads under the mark stay ≥4.5:1 (impl3 #15).
+    static let attributionHaloBlur: CGFloat = 2
     /// Legacy alias — line box height.
     static var attributionHeight: CGFloat { attributionLineHeight }
 

@@ -3,7 +3,7 @@
 //  sansanTests
 //
 //  Renders share-summary v2 review-fix captures into the app Documents
-//  folder `share-summary-v2-impl3/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
+//  folder `share-summary-v2-impl4/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
 //
 
 import CoreLocation
@@ -22,7 +22,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         // Prefer host path. Shared app-group-style host folder (simulator can write under Documents/…);
         // also try TEST_RUNNER_ / env. Fallback: app Documents.
         let envOut = ProcessInfo.processInfo.environment["SANSAN_SHARE_SUMMARY_OUT"]
-        let hostFallback = URL(fileURLWithPath: "/Users/jeongwook/Documents/sansan/build/share-summary-v2-impl3-artifacts", isDirectory: true)
+        let hostFallback = URL(fileURLWithPath: "/Users/jeongwook/Documents/sansan/build/share-summary-v2-impl4-artifacts", isDirectory: true)
         let outDir: URL
         if let envOut, !envOut.isEmpty {
             outDir = URL(fileURLWithPath: envOut, isDirectory: true)
@@ -30,7 +30,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             outDir = hostFallback
         } else {
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            outDir = docs.appendingPathComponent("share-summary-v2-impl3", isDirectory: true)
+            outDir = docs.appendingPathComponent("share-summary-v2-impl4", isDirectory: true)
         }
         try? FileManager.default.removeItem(at: outDir)
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
@@ -101,6 +101,26 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             name: "avg-speed-long.png"
         )
 
+        // impl4 extras: roads under attribution (halo check) + km near right edge.
+        try await writeSummary(
+            record: makeRecord(weatherHours: 2, memo: nil, routeStyle: .urbanAttribution),
+            options: mapOptions,
+            to: outDir,
+            name: "attribution-path.png"
+        )
+        try await writeSummary(
+            record: makeRecord(weatherHours: 0, memo: nil, routeStyle: .eastWestLong),
+            options: HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: false,
+                showsPinnedThumbnails: false
+            ),
+            to: outDir,
+            name: "km-label-right-edge.png"
+        )
+
         // Combined km-label cases (map snapshot with share-summary appearance)
         let canvas = ShareSummaryTokens.canvasSize(widthPoints: 430, pixelScale: 3)
         let record = makeRecord(weatherHours: 2, memo: nil)
@@ -139,8 +159,8 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         }
 
         let written = try FileManager.default.contentsOfDirectory(atPath: outDir.path)
-        XCTAssertGreaterThanOrEqual(written.filter { $0.hasSuffix(".png") }.count, 12)
-        print("ShareSummaryV2 impl3 artifacts → \(outDir.path): \(written.sorted())")
+        XCTAssertGreaterThanOrEqual(written.filter { $0.hasSuffix(".png") }.count, 14)
+        print("ShareSummaryV2 impl4 artifacts → \(outDir.path): \(written.sorted())")
     }
 
     private func writeSummary(
@@ -162,26 +182,62 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         add(attachment)
     }
 
+    private enum RouteStyle {
+        /// Default N–S bulge used by impl3 captures.
+        case standard
+        /// Dense Seoul block so basemap roads cross attribution (impl4 #15).
+        case urbanAttribution
+        /// ~3.5 km east–west so a late km capsule sits near the right inset.
+        case eastWestLong
+    }
+
     /// - Parameter paceOverride: minutes/km used to force elapsed time for a long pace string.
     private func makeRecord(
         weatherHours: Int,
         memo: String?,
-        paceOverride: Double? = nil
+        paceOverride: Double? = nil,
+        routeStyle: RouteStyle = .standard
     ) -> SavedHikingSession {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let count = 120
-        let targetDistanceMeters: Double = paceOverride != nil ? 2_500 : 0
+        let targetDistanceMeters: Double = {
+            switch routeStyle {
+            case .eastWestLong: return 3_500
+            case .urbanAttribution: return 2_200
+            case .standard: return paceOverride != nil ? 2_500 : 0
+            }
+        }()
         let latSpan = targetDistanceMeters > 0 ? (targetDistanceMeters / 111_000.0) : 0.018
         var coords: [(lat: Double, lon: Double, alt: Double)] = []
         for i in 0..<count {
             let t = Double(i) / Double(count - 1)
-            coords.append(
-                (
-                    37.6500 + t * latSpan,
-                    127.0100 + sin(t * .pi) * 0.008,
-                    80 + t * 200 + sin(t * 6) * 8
+            switch routeStyle {
+            case .eastWestLong:
+                let lonSpan = 3.5 / (111.0 * cos(37.5665 * .pi / 180.0))
+                coords.append(
+                    (
+                        37.5665 + sin(t * .pi) * 0.0015,
+                        126.9780 + t * lonSpan,
+                        40 + t * 30 + sin(t * 4) * 4
+                    )
                 )
-            )
+            case .urbanAttribution:
+                coords.append(
+                    (
+                        37.5665 + t * 0.012,
+                        126.9780 + sin(t * .pi * 2) * 0.006,
+                        30 + t * 40 + sin(t * 5) * 3
+                    )
+                )
+            case .standard:
+                coords.append(
+                    (
+                        37.6500 + t * latSpan,
+                        127.0100 + sin(t * .pi) * 0.008,
+                        80 + t * 200 + sin(t * 6) * 8
+                    )
+                )
+            }
         }
         // Provisional points for distance; timestamps filled after pace retarget.
         var points: [HikingPoint] = coords.enumerated().map { index, c in
