@@ -1,0 +1,3109 @@
+{
+  "36.04297,128.58183": {
+    "place_id": 270216518,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12902086,
+    "lat": "36.0722100",
+    "lon": "128.5383600",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18671166781109327,
+    "addresstype": "town",
+    "name": "가산면",
+    "display_name": "가산면, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "가산면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0251422",
+      "36.1258982",
+      "128.4639257",
+      "128.6328505"
+    ]
+  },
+  "36.06045,128.56400": {
+    "place_id": 270216518,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12902086,
+    "lat": "36.0722100",
+    "lon": "128.5383600",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18671166781109327,
+    "addresstype": "town",
+    "name": "가산면",
+    "display_name": "가산면, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "가산면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0251422",
+      "36.1258982",
+      "128.4639257",
+      "128.6328505"
+    ]
+  },
+  "35.07999,126.92309": {
+    "place_id": 223352568,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146411,
+    "lat": "35.0594500",
+    "lon": "126.9731200",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.3140788844789178,
+    "addresstype": "town",
+    "name": "화순읍",
+    "display_name": "화순읍, 화순군, 전라남도, 58120, 대한민국",
+    "address": {
+      "town": "화순읍",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58120",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0194500",
+      "35.0994500",
+      "126.9331200",
+      "127.0131200"
+    ]
+  },
+  "35.08606,126.94686": {
+    "place_id": 223867948,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.07679,126.92632": {
+    "place_id": 223907623,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146411,
+    "lat": "35.0594500",
+    "lon": "126.9731200",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.3140788844789178,
+    "addresstype": "town",
+    "name": "화순읍",
+    "display_name": "화순읍, 화순군, 전라남도, 58120, 대한민국",
+    "address": {
+      "town": "화순읍",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58120",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0194500",
+      "35.0994500",
+      "126.9331200",
+      "127.0131200"
+    ]
+  },
+  "35.09223,126.92682": {
+    "place_id": 223596107,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "37.74923,126.44034": {
+    "place_id": 222779296,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853476,
+    "lat": "37.7684050",
+    "lon": "126.4048539",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2827546027204031,
+    "addresstype": "town",
+    "name": "하점면",
+    "display_name": "하점면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "하점면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.7371988",
+      "37.7912270",
+      "126.3317871",
+      "126.4458346"
+    ]
+  },
+  "35.30200,127.03378": {
+    "place_id": 223228807,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415144754,
+    "lat": "35.2864500",
+    "lon": "127.0423000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.26922332516764147,
+    "addresstype": "town",
+    "name": "무정면",
+    "display_name": "무정면, 담양군, 전라남도, 57360, 대한민국",
+    "address": {
+      "town": "무정면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57360",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2464500",
+      "35.3264500",
+      "127.0023000",
+      "127.0823000"
+    ]
+  },
+  "34.84511,127.00295": {
+    "place_id": 224353929,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164853,
+    "lat": "34.8903700",
+    "lon": "127.0265500",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.28939223170644257,
+    "addresstype": "town",
+    "name": "이양면",
+    "display_name": "이양면, 화순군, 전라남도, 58165, 대한민국",
+    "address": {
+      "town": "이양면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58165",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8503700",
+      "34.9303700",
+      "126.9865500",
+      "127.0665500"
+    ]
+  },
+  "34.98178,127.08699": {
+    "place_id": 223877754,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164909,
+    "lat": "35.0007700",
+    "lon": "127.1250000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "사평면",
+    "display_name": "사평면, 화순군, 전라남도, 58144, 대한민국",
+    "address": {
+      "town": "사평면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58144",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9607700",
+      "35.0407700",
+      "127.0850000",
+      "127.1650000"
+    ]
+  },
+  "35.02444,127.08519": {
+    "place_id": 223273056,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146445,
+    "lat": "35.0450724",
+    "lon": "127.0458543",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "동면",
+    "display_name": "동면, 화순군, 전라남도, 58132, 대한민국",
+    "address": {
+      "town": "동면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58132",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0050724",
+      "35.0850724",
+      "127.0058543",
+      "127.0858543"
+    ]
+  },
+  "37.53290,126.36702": {
+    "place_id": 225529027,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 8294442,
+    "lat": "37.5311860",
+    "lon": "126.4067084",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673795147631034,
+    "addresstype": "town",
+    "name": "북도면",
+    "display_name": "북도면, 옹진군, 인천광역시, 대한민국",
+    "address": {
+      "town": "북도면",
+      "county": "옹진군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.4851440",
+      "37.5603069",
+      "126.0442659",
+      "126.4735787"
+    ]
+  },
+  "35.01155,126.96923": {
+    "place_id": 224386413,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164807,
+    "lat": "35.0029800",
+    "lon": "126.9584000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2836220396951343,
+    "addresstype": "town",
+    "name": "능주면",
+    "display_name": "능주면, 화순군, 전라남도, 58153, 대한민국",
+    "address": {
+      "town": "능주면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58153",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9629800",
+      "35.0429800",
+      "126.9184000",
+      "126.9984000"
+    ]
+  },
+  "35.21171,127.04475": {
+    "place_id": 221041025,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146550,
+    "lat": "35.2366700",
+    "lon": "127.0538400",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "대덕면",
+    "display_name": "대덕면, 담양군, 전라남도, 57380, 대한민국",
+    "address": {
+      "town": "대덕면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57380",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1966700",
+      "35.2766700",
+      "127.0138400",
+      "127.0938400"
+    ]
+  },
+  "35.77423,128.44917": {
+    "place_id": 270119595,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972330,
+    "lat": "35.7872116",
+    "lon": "128.4612293",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2844781372993679,
+    "addresstype": "town",
+    "name": "옥포읍",
+    "display_name": "옥포읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "옥포읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7208844",
+      "35.8117375",
+      "128.4110935",
+      "128.5395112"
+    ]
+  },
+  "35.12152,126.88105": {
+    "place_id": 222110636,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 15574983,
+    "lat": "35.1242195",
+    "lon": "126.8751119",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673427405203322,
+    "addresstype": "suburb",
+    "name": "풍암동",
+    "display_name": "풍암동, 서구, 광주광역시, 대한민국",
+    "address": {
+      "suburb": "풍암동",
+      "borough": "서구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1100617",
+      "35.1382388",
+      "126.8602091",
+      "126.8885386"
+    ]
+  },
+  "35.11996,126.88427": {
+    "place_id": 223278947,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 15574983,
+    "lat": "35.1242195",
+    "lon": "126.8751119",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673427405203322,
+    "addresstype": "suburb",
+    "name": "풍암동",
+    "display_name": "풍암동, 서구, 광주광역시, 대한민국",
+    "address": {
+      "suburb": "풍암동",
+      "borough": "서구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1100617",
+      "35.1382388",
+      "126.8602091",
+      "126.8885386"
+    ]
+  },
+  "35.77771,128.45504": {
+    "place_id": 270963278,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972330,
+    "lat": "35.7872116",
+    "lon": "128.4612293",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2844781372993679,
+    "addresstype": "town",
+    "name": "옥포읍",
+    "display_name": "옥포읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "옥포읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7208844",
+      "35.8117375",
+      "128.4110935",
+      "128.5395112"
+    ]
+  },
+  "35.27503,127.03613": {
+    "place_id": 222120052,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415144754,
+    "lat": "35.2864500",
+    "lon": "127.0423000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.26922332516764147,
+    "addresstype": "town",
+    "name": "무정면",
+    "display_name": "무정면, 담양군, 전라남도, 57360, 대한민국",
+    "address": {
+      "town": "무정면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57360",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2464500",
+      "35.3264500",
+      "127.0023000",
+      "127.0823000"
+    ]
+  },
+  "34.88389,126.92413": {
+    "place_id": 223344535,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164825,
+    "lat": "34.8853700",
+    "lon": "126.9565100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "청풍면",
+    "display_name": "청풍면, 화순군, 전라남도, 58162, 대한민국",
+    "address": {
+      "town": "청풍면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58162",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8453700",
+      "34.9253700",
+      "126.9165100",
+      "126.9965100"
+    ]
+  },
+  "36.08073,128.29070": {
+    "place_id": 270035966,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12615756,
+    "lat": "36.0572800",
+    "lon": "128.3364700",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2507397701059262,
+    "addresstype": "town",
+    "name": "북삼읍",
+    "display_name": "북삼읍, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "북삼읍",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0280058",
+      "36.0920624",
+      "128.2852077",
+      "128.4039091"
+    ]
+  },
+  "35.76936,128.50534": {
+    "place_id": 268410007,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972330,
+    "lat": "35.7872116",
+    "lon": "128.4612293",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2844781372993679,
+    "addresstype": "town",
+    "name": "옥포읍",
+    "display_name": "옥포읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "옥포읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7208844",
+      "35.8117375",
+      "128.4110935",
+      "128.5395112"
+    ]
+  },
+  "35.19615,127.10753": {
+    "place_id": 223306755,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146550,
+    "lat": "35.2366700",
+    "lon": "127.0538400",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "대덕면",
+    "display_name": "대덕면, 담양군, 전라남도, 57380, 대한민국",
+    "address": {
+      "town": "대덕면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57380",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1966700",
+      "35.2766700",
+      "127.0138400",
+      "127.0938400"
+    ]
+  },
+  "35.12197,127.06313": {
+    "place_id": 224122323,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146453,
+    "lat": "35.1773048",
+    "lon": "127.0278392",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.25352702198722055,
+    "addresstype": "town",
+    "name": "가사문학면",
+    "display_name": "가사문학면, 담양군, 전라남도, 57392, 대한민국",
+    "address": {
+      "town": "가사문학면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57392",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1373048",
+      "35.2173048",
+      "126.9878392",
+      "127.0678392"
+    ]
+  },
+  "34.85109,126.92545": {
+    "place_id": 223699114,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164825,
+    "lat": "34.8853700",
+    "lon": "126.9565100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "청풍면",
+    "display_name": "청풍면, 화순군, 전라남도, 58162, 대한민국",
+    "address": {
+      "town": "청풍면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58162",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8453700",
+      "34.9253700",
+      "126.9165100",
+      "126.9965100"
+    ]
+  },
+  "35.13806,126.94140": {
+    "place_id": 223596107,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.18604,127.01625": {
+    "place_id": 222645171,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146453,
+    "lat": "35.1773048",
+    "lon": "127.0278392",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.25352702198722055,
+    "addresstype": "town",
+    "name": "가사문학면",
+    "display_name": "가사문학면, 담양군, 전라남도, 57392, 대한민국",
+    "address": {
+      "town": "가사문학면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57392",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1373048",
+      "35.2173048",
+      "126.9878392",
+      "127.0678392"
+    ]
+  },
+  "34.95966,127.12642": {
+    "place_id": 224254968,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164951,
+    "lat": "34.9352100",
+    "lon": "127.1844500",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.25876906166717667,
+    "addresstype": "town",
+    "name": "문덕면",
+    "display_name": "문덕면, 보성군, 전라남도, 59400, 대한민국",
+    "address": {
+      "town": "문덕면",
+      "county": "보성군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "59400",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8952100",
+      "34.9752100",
+      "127.1444500",
+      "127.2244500"
+    ]
+  },
+  "35.70809,128.94308": {
+    "place_id": 271450705,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012787,
+    "lat": "35.7482900",
+    "lon": "128.9602200",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.29322317952748045,
+    "addresstype": "town",
+    "name": "운문면",
+    "display_name": "운문면, 청도군, 경상북도, 38367, 대한민국",
+    "address": {
+      "town": "운문면",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "postcode": "38367",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6074597",
+      "35.8461347",
+      "128.9040481",
+      "129.0471979"
+    ]
+  },
+  "35.66370,128.62621": {
+    "place_id": 270515809,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012792,
+    "lat": "35.6816200",
+    "lon": "128.6644700",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18671166781109327,
+    "addresstype": "town",
+    "name": "이서면",
+    "display_name": "이서면, 청도군, 경상북도, 대한민국",
+    "address": {
+      "town": "이서면",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6407589",
+      "35.7437634",
+      "128.6105730",
+      "128.7152643"
+    ]
+  },
+  "37.68857,126.33017": {
+    "place_id": 223722942,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853479,
+    "lat": "37.7083200",
+    "lon": "126.3038246",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "삼산면",
+    "display_name": "삼산면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "삼산면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.6152173",
+      "37.7663216",
+      "126.1665504",
+      "126.3887357"
+    ]
+  },
+  "37.73873,126.47287": {
+    "place_id": 222933717,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853473,
+    "lat": "37.7482072",
+    "lon": "126.4835323",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673795147631034,
+    "addresstype": "town",
+    "name": "강화읍",
+    "display_name": "강화읍, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "강화읍",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.7279175",
+      "37.8013197",
+      "126.4372945",
+      "126.5281705"
+    ]
+  },
+  "35.31672,126.99917": {
+    "place_id": 222031119,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415144713,
+    "lat": "35.3181900",
+    "lon": "126.9823600",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.3022467077917196,
+    "addresstype": "town",
+    "name": "담양읍",
+    "display_name": "담양읍, 담양군, 전라남도, 57341, 대한민국",
+    "address": {
+      "town": "담양읍",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57341",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2781900",
+      "35.3581900",
+      "126.9423600",
+      "127.0223600"
+    ]
+  },
+  "35.62747,128.71665": {
+    "place_id": 269972465,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012791,
+    "lat": "35.6608900",
+    "lon": "128.7169300",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2909516038077344,
+    "addresstype": "town",
+    "name": "화양읍",
+    "display_name": "화양읍, 청도군, 경상북도, 대한민국",
+    "address": {
+      "town": "화양읍",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6125880",
+      "35.7207751",
+      "128.6777096",
+      "128.7460377"
+    ]
+  },
+  "35.67327,128.58752": {
+    "place_id": 270365868,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012794,
+    "lat": "35.6369000",
+    "lon": "128.5859300",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.28008114849440524,
+    "addresstype": "town",
+    "name": "풍각면",
+    "display_name": "풍각면, 청도군, 경상북도, 대한민국",
+    "address": {
+      "town": "풍각면",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5843118",
+      "35.6874432",
+      "128.5266474",
+      "128.6330428"
+    ]
+  },
+  "34.97280,127.04294": {
+    "place_id": 223770259,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164861,
+    "lat": "34.9733200",
+    "lon": "127.0289900",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "한천면",
+    "display_name": "한천면, 화순군, 전라남도, 58147, 대한민국",
+    "address": {
+      "town": "한천면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58147",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9333200",
+      "35.0133200",
+      "126.9889900",
+      "127.0689900"
+    ]
+  },
+  "34.85157,126.91114": {
+    "place_id": 223699114,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164825,
+    "lat": "34.8853700",
+    "lon": "126.9565100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "청풍면",
+    "display_name": "청풍면, 화순군, 전라남도, 58162, 대한민국",
+    "address": {
+      "town": "청풍면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58162",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8453700",
+      "34.9253700",
+      "126.9165100",
+      "126.9965100"
+    ]
+  },
+  "35.77347,128.45752": {
+    "place_id": 270119595,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972330,
+    "lat": "35.7872116",
+    "lon": "128.4612293",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2844781372993679,
+    "addresstype": "town",
+    "name": "옥포읍",
+    "display_name": "옥포읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "옥포읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7208844",
+      "35.8117375",
+      "128.4110935",
+      "128.5395112"
+    ]
+  },
+  "35.17083,126.97634": {
+    "place_id": 223653374,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7348583,
+    "lat": "35.1741000",
+    "lon": "126.9122000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.4326730496036241,
+    "addresstype": "borough",
+    "name": "북구",
+    "display_name": "북구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "북구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1210906",
+      "35.2587987",
+      "126.8348868",
+      "127.0232992"
+    ]
+  },
+  "35.97973,128.60033": {
+    "place_id": 270451965,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3966577,
+    "lat": "35.9529998",
+    "lon": "128.5799093",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2521482229732802,
+    "addresstype": "quarter",
+    "name": "국우동",
+    "display_name": "국우동, 북구, 대구광역시, 대한민국",
+    "address": {
+      "quarter": "국우동",
+      "borough": "북구",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.9335542",
+      "35.9846674",
+      "128.5528286",
+      "128.6068512"
+    ]
+  },
+  "34.96647,127.00369": {
+    "place_id": 223433827,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164861,
+    "lat": "34.9733200",
+    "lon": "127.0289900",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "한천면",
+    "display_name": "한천면, 화순군, 전라남도, 58147, 대한민국",
+    "address": {
+      "town": "한천면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58147",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9333200",
+      "35.0133200",
+      "126.9889900",
+      "127.0689900"
+    ]
+  },
+  "35.56514,128.72943": {
+    "place_id": 271545355,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150787,
+    "lat": "35.5167000",
+    "lon": "128.7186700",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2917175836992075,
+    "addresstype": "town",
+    "name": "부북면",
+    "display_name": "부북면, 밀양시, 경상남도, 50402, 대한민국",
+    "address": {
+      "town": "부북면",
+      "city": "밀양시",
+      "province": "경상남도",
+      "ISO3166-2-lvl4": "KR-48",
+      "postcode": "50402",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.4767000",
+      "35.5567000",
+      "128.6786700",
+      "128.7586700"
+    ]
+  },
+  "34.78960,127.04931": {
+    "place_id": 223895424,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164880,
+    "lat": "34.8114200",
+    "lon": "127.0507100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2507397701059262,
+    "addresstype": "town",
+    "name": "노동면",
+    "display_name": "노동면, 보성군, 전라남도, 59444, 대한민국",
+    "address": {
+      "town": "노동면",
+      "county": "보성군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "59444",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.7714200",
+      "34.8514200",
+      "127.0107100",
+      "127.0907100"
+    ]
+  },
+  "34.91604,127.07971": {
+    "place_id": 224261022,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164853,
+    "lat": "34.8903700",
+    "lon": "127.0265500",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.28939223170644257,
+    "addresstype": "town",
+    "name": "이양면",
+    "display_name": "이양면, 화순군, 전라남도, 58165, 대한민국",
+    "address": {
+      "town": "이양면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58165",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8503700",
+      "34.9303700",
+      "126.9865500",
+      "127.0665500"
+    ]
+  },
+  "37.62253,126.42310": {
+    "place_id": 223543920,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853468,
+    "lat": "37.6165073",
+    "lon": "126.4189198",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2901765588551152,
+    "addresstype": "town",
+    "name": "화도면",
+    "display_name": "화도면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "화도면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.5679988",
+      "37.6555652",
+      "126.3129172",
+      "126.4884805"
+    ]
+  },
+  "35.89169,128.44976": {
+    "place_id": 270032767,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972323,
+    "lat": "35.8622907",
+    "lon": "128.4620011",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.32173239253715025,
+    "addresstype": "town",
+    "name": "다사읍",
+    "display_name": "다사읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "다사읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.8368779",
+      "35.9003111",
+      "128.4132043",
+      "128.5278293"
+    ]
+  },
+  "35.27700,127.02249": {
+    "place_id": 223228807,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415144754,
+    "lat": "35.2864500",
+    "lon": "127.0423000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.26922332516764147,
+    "addresstype": "town",
+    "name": "무정면",
+    "display_name": "무정면, 담양군, 전라남도, 57360, 대한민국",
+    "address": {
+      "town": "무정면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57360",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2464500",
+      "35.3264500",
+      "127.0023000",
+      "127.0823000"
+    ]
+  },
+  "34.94325,127.03824": {
+    "place_id": 224261218,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164861,
+    "lat": "34.9733200",
+    "lon": "127.0289900",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "한천면",
+    "display_name": "한천면, 화순군, 전라남도, 58147, 대한민국",
+    "address": {
+      "town": "한천면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58147",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9333200",
+      "35.0133200",
+      "126.9889900",
+      "127.0689900"
+    ]
+  },
+  "35.07509,126.88216": {
+    "place_id": 223648824,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146224,
+    "lat": "35.0452992",
+    "lon": "126.8440032",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.29823583006172555,
+    "addresstype": "town",
+    "name": "남평읍",
+    "display_name": "남평읍, 나주시, 전라남도, 58227, 대한민국",
+    "address": {
+      "town": "남평읍",
+      "city": "나주시",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58227",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0052992",
+      "35.0852992",
+      "126.8040032",
+      "126.8840032"
+    ]
+  },
+  "35.11565,126.94530": {
+    "place_id": 223867948,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.18517,127.05745": {
+    "place_id": 224271954,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146453,
+    "lat": "35.1773048",
+    "lon": "127.0278392",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.25352702198722055,
+    "addresstype": "town",
+    "name": "가사문학면",
+    "display_name": "가사문학면, 담양군, 전라남도, 57392, 대한민국",
+    "address": {
+      "town": "가사문학면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57392",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1373048",
+      "35.2173048",
+      "126.9878392",
+      "127.0678392"
+    ]
+  },
+  "36.08424,128.64642": {
+    "place_id": 270995237,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 10220644,
+    "lat": "36.0707500",
+    "lon": "128.6574500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2733828520337679,
+    "addresstype": "town",
+    "name": "부계면",
+    "display_name": "부계면, 군위군, 대구광역시, 대한민국",
+    "address": {
+      "town": "부계면",
+      "county": "군위군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0075190",
+      "36.1248892",
+      "128.6211246",
+      "128.7034693"
+    ]
+  },
+  "36.01563,128.52713": {
+    "place_id": 270471138,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12902088,
+    "lat": "36.0037800",
+    "lon": "128.5666000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2853231881743613,
+    "addresstype": "town",
+    "name": "동명면",
+    "display_name": "동명면, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "동명면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.9602018",
+      "36.0483231",
+      "128.5045652",
+      "128.6413386"
+    ]
+  },
+  "34.99270,126.99094": {
+    "place_id": 223894634,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164807,
+    "lat": "35.0029800",
+    "lon": "126.9584000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2836220396951343,
+    "addresstype": "town",
+    "name": "능주면",
+    "display_name": "능주면, 화순군, 전라남도, 58153, 대한민국",
+    "address": {
+      "town": "능주면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58153",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9629800",
+      "35.0429800",
+      "126.9184000",
+      "126.9984000"
+    ]
+  },
+  "34.99578,127.15033": {
+    "place_id": 222109396,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164909,
+    "lat": "35.0007700",
+    "lon": "127.1250000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "사평면",
+    "display_name": "사평면, 화순군, 전라남도, 58144, 대한민국",
+    "address": {
+      "town": "사평면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58144",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9607700",
+      "35.0407700",
+      "127.0850000",
+      "127.1650000"
+    ]
+  },
+  "35.39017,129.18820": {
+    "place_id": 269961654,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 6780185746,
+    "lat": "35.3949330",
+    "lon": "129.1553566",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16005558937972075,
+    "addresstype": "town",
+    "name": "웅상",
+    "display_name": "웅상, 양산시, 경상남도, 50519, 대한민국",
+    "address": {
+      "town": "웅상",
+      "city": "양산시",
+      "province": "경상남도",
+      "ISO3166-2-lvl4": "KR-48",
+      "postcode": "50519",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.3549330",
+      "35.4349330",
+      "129.1153566",
+      "129.1953566"
+    ]
+  },
+  "35.40041,129.23178": {
+    "place_id": 270799941,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12656265,
+    "lat": "35.4188802",
+    "lon": "129.2807434",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.31074813956852465,
+    "addresstype": "town",
+    "name": "온양읍",
+    "display_name": "온양읍, 울주군, 울산광역시, 대한민국",
+    "address": {
+      "town": "온양읍",
+      "county": "울주군",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.3755888",
+      "35.4615018",
+      "129.1997329",
+      "129.3129533"
+    ]
+  },
+  "36.02054,128.32749": {
+    "place_id": 270840506,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12615757,
+    "lat": "36.0306700",
+    "lon": "128.3703300",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.25876906166717667,
+    "addresstype": "town",
+    "name": "약목면",
+    "display_name": "약목면, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "약목면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.9944550",
+      "36.0567083",
+      "128.3103159",
+      "128.4050711"
+    ]
+  },
+  "35.55755,129.09499": {
+    "place_id": 268181569,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150527,
+    "lat": "35.5403336",
+    "lon": "129.1087437",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2782362227145218,
+    "addresstype": "town",
+    "name": "삼남읍",
+    "display_name": "삼남읍, 울산광역시, 44953, 대한민국",
+    "address": {
+      "town": "삼남읍",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44953",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5003336",
+      "35.5803336",
+      "129.0687437",
+      "129.1487437"
+    ]
+  },
+  "35.68611,129.17651": {
+    "place_id": 269709858,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150573,
+    "lat": "35.6544161",
+    "lon": "129.2015568",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16006686884870677,
+    "addresstype": "town",
+    "name": "두동면",
+    "display_name": "두동면, 울산광역시, 44915, 대한민국",
+    "address": {
+      "town": "두동면",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44915",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6144161",
+      "35.6944161",
+      "129.1615568",
+      "129.2415568"
+    ]
+  },
+  "35.73234,128.63686": {
+    "place_id": 270211916,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972324,
+    "lat": "35.7778073",
+    "lon": "128.6476679",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.29823583006172555,
+    "addresstype": "town",
+    "name": "가창면",
+    "display_name": "가창면, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "가창면",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7033635",
+      "35.8115612",
+      "128.5191869",
+      "128.6966243"
+    ]
+  },
+  "37.62815,126.38758": {
+    "place_id": 222697774,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853468,
+    "lat": "37.6165073",
+    "lon": "126.4189198",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2901765588551152,
+    "addresstype": "town",
+    "name": "화도면",
+    "display_name": "화도면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "화도면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.5679988",
+      "37.6555652",
+      "126.3129172",
+      "126.4884805"
+    ]
+  },
+  "37.69803,126.31488": {
+    "place_id": 223722942,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853479,
+    "lat": "37.7083200",
+    "lon": "126.3038246",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "삼산면",
+    "display_name": "삼산면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "삼산면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.6152173",
+      "37.7663216",
+      "126.1665504",
+      "126.3887357"
+    ]
+  },
+  "34.94403,127.03693": {
+    "place_id": 224261218,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164861,
+    "lat": "34.9733200",
+    "lon": "127.0289900",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "한천면",
+    "display_name": "한천면, 화순군, 전라남도, 58147, 대한민국",
+    "address": {
+      "town": "한천면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58147",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9333200",
+      "35.0133200",
+      "126.9889900",
+      "127.0689900"
+    ]
+  },
+  "35.09263,126.92788": {
+    "place_id": 222718689,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.07728,126.93999": {
+    "place_id": 223282195,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.20864,127.06490": {
+    "place_id": 224342750,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146550,
+    "lat": "35.2366700",
+    "lon": "127.0538400",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "대덕면",
+    "display_name": "대덕면, 담양군, 전라남도, 57380, 대한민국",
+    "address": {
+      "town": "대덕면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57380",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1966700",
+      "35.2766700",
+      "127.0138400",
+      "127.0938400"
+    ]
+  },
+  "34.84743,126.96116": {
+    "place_id": 223764517,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164825,
+    "lat": "34.8853700",
+    "lon": "126.9565100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "청풍면",
+    "display_name": "청풍면, 화순군, 전라남도, 58162, 대한민국",
+    "address": {
+      "town": "청풍면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58162",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8453700",
+      "34.9253700",
+      "126.9165100",
+      "126.9965100"
+    ]
+  },
+  "36.03068,128.53403": {
+    "place_id": 270216030,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12902088,
+    "lat": "36.0037800",
+    "lon": "128.5666000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2853231881743613,
+    "addresstype": "town",
+    "name": "동명면",
+    "display_name": "동명면, 칠곡군, 경상북도, 대한민국",
+    "address": {
+      "town": "동명면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.9602018",
+      "36.0483231",
+      "128.5045652",
+      "128.6413386"
+    ]
+  },
+  "35.29751,129.17921": {
+    "place_id": 270177705,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010354,
+    "lat": "35.2794800",
+    "lon": "129.1549500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.3095991533582804,
+    "addresstype": "town",
+    "name": "철마면",
+    "display_name": "철마면, 기장군, 부산광역시, 46049, 대한민국",
+    "address": {
+      "town": "철마면",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "postcode": "46049",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2184336",
+      "35.3438212",
+      "129.1092904",
+      "129.1958706"
+    ]
+  },
+  "36.12497,128.31766": {
+    "place_id": 271371759,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7816731,
+    "lat": "36.1195513",
+    "lon": "128.3444692",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.5226160075505356,
+    "addresstype": "city",
+    "name": "구미시",
+    "display_name": "구미시, 경상북도, 대한민국",
+    "address": {
+      "city": "구미시",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0607075",
+      "36.3633148",
+      "128.1340598",
+      "128.5639552"
+    ]
+  },
+  "35.24899,127.07926": {
+    "place_id": 224342750,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146550,
+    "lat": "35.2366700",
+    "lon": "127.0538400",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "대덕면",
+    "display_name": "대덕면, 담양군, 전라남도, 57380, 대한민국",
+    "address": {
+      "town": "대덕면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57380",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1966700",
+      "35.2766700",
+      "127.0138400",
+      "127.0938400"
+    ]
+  },
+  "35.56809,129.09483": {
+    "place_id": 270237165,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150517,
+    "lat": "35.5911428",
+    "lon": "129.0891958",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16006686884870677,
+    "addresstype": "town",
+    "name": "상북면",
+    "display_name": "상북면, 울산광역시, 44902, 대한민국",
+    "address": {
+      "town": "상북면",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44902",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5511428",
+      "35.6311428",
+      "129.0491958",
+      "129.1291958"
+    ]
+  },
+  "35.05732,126.90663": {
+    "place_id": 222117907,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146321,
+    "lat": "35.0075100",
+    "lon": "126.9094100",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2763378134411431,
+    "addresstype": "town",
+    "name": "도곡면",
+    "display_name": "도곡면, 화순군, 전라남도, 58154, 대한민국",
+    "address": {
+      "town": "도곡면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58154",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9675100",
+      "35.0475100",
+      "126.8694100",
+      "126.9494100"
+    ]
+  },
+  "35.22639,129.20403": {
+    "place_id": 266983403,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010355,
+    "lat": "35.2385796",
+    "lon": "129.2158159",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.33518014852624106,
+    "addresstype": "town",
+    "name": "기장읍",
+    "display_name": "기장읍, 기장군, 부산광역시, 대한민국",
+    "address": {
+      "town": "기장읍",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1810149",
+      "35.2692342",
+      "129.1566577",
+      "129.2534791"
+    ]
+  },
+  "35.63689,129.20448": {
+    "place_id": 269709858,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150573,
+    "lat": "35.6544161",
+    "lon": "129.2015568",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16006686884870677,
+    "addresstype": "town",
+    "name": "두동면",
+    "display_name": "두동면, 울산광역시, 44915, 대한민국",
+    "address": {
+      "town": "두동면",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44915",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6144161",
+      "35.6944161",
+      "129.1615568",
+      "129.2415568"
+    ]
+  },
+  "35.30502,129.15686": {
+    "place_id": 271194633,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010354,
+    "lat": "35.2794800",
+    "lon": "129.1549500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.3095991533582804,
+    "addresstype": "town",
+    "name": "철마면",
+    "display_name": "철마면, 기장군, 부산광역시, 46049, 대한민국",
+    "address": {
+      "town": "철마면",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "postcode": "46049",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2184336",
+      "35.3438212",
+      "129.1092904",
+      "129.1958706"
+    ]
+  },
+  "35.18123,129.15414": {
+    "place_id": 270069565,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4063016,
+    "lat": "35.1766320",
+    "lon": "129.1564732",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673886701762413,
+    "addresstype": "suburb",
+    "name": "우1동",
+    "display_name": "우1동, 해운대구, 부산광역시, 대한민국",
+    "address": {
+      "suburb": "우1동",
+      "borough": "해운대구",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1518030",
+      "35.2016164",
+      "129.1358555",
+      "129.1666073"
+    ]
+  },
+  "35.74171,129.17224": {
+    "place_id": 270058389,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 8100785,
+    "lat": "35.7508972",
+    "lon": "129.1966246",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.3343910964012564,
+    "addresstype": "town",
+    "name": "내남면",
+    "display_name": "내남면, 경주시, 경상북도, 대한민국",
+    "address": {
+      "town": "내남면",
+      "city": "경주시",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7002374",
+      "35.7987757",
+      "129.0845489",
+      "129.2678189"
+    ]
+  },
+  "35.76529,128.51875": {
+    "place_id": 268410007,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 3972330,
+    "lat": "35.7872116",
+    "lon": "128.4612293",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2844781372993679,
+    "addresstype": "town",
+    "name": "옥포읍",
+    "display_name": "옥포읍, 달성군, 대구광역시, 대한민국",
+    "address": {
+      "town": "옥포읍",
+      "county": "달성군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.7208844",
+      "35.8117375",
+      "128.4110935",
+      "128.5395112"
+    ]
+  },
+  "34.96046,126.99947": {
+    "place_id": 223770259,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164861,
+    "lat": "34.9733200",
+    "lon": "127.0289900",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "한천면",
+    "display_name": "한천면, 화순군, 전라남도, 58147, 대한민국",
+    "address": {
+      "town": "한천면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58147",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9333200",
+      "35.0133200",
+      "126.9889900",
+      "127.0689900"
+    ]
+  },
+  "35.46726,129.19467": {
+    "place_id": 270103007,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 414979937,
+    "lat": "35.4615215",
+    "lon": "129.2079772",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2924747081334101,
+    "addresstype": "town",
+    "name": "웅촌면",
+    "display_name": "웅촌면, 울산광역시, 44965, 대한민국",
+    "address": {
+      "town": "웅촌면",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44965",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.4215215",
+      "35.5015215",
+      "129.1679772",
+      "129.2479772"
+    ]
+  },
+  "35.22166,127.03283": {
+    "place_id": 224342750,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146550,
+    "lat": "35.2366700",
+    "lon": "127.0538400",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2548773901198179,
+    "addresstype": "town",
+    "name": "대덕면",
+    "display_name": "대덕면, 담양군, 전라남도, 57380, 대한민국",
+    "address": {
+      "town": "대덕면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57380",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1966700",
+      "35.2766700",
+      "127.0138400",
+      "127.0938400"
+    ]
+  },
+  "36.14495,128.55282": {
+    "place_id": 271400093,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 10220646,
+    "lat": "36.1466300",
+    "lon": "128.5954400",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.28187552194901133,
+    "addresstype": "town",
+    "name": "효령면",
+    "display_name": "효령면, 군위군, 대구광역시, 대한민국",
+    "address": {
+      "town": "효령면",
+      "county": "군위군",
+      "city": "대구광역시",
+      "ISO3166-2-lvl4": "KR-27",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0581701",
+      "36.2252655",
+      "128.5400805",
+      "128.6662279"
+    ]
+  },
+  "35.11872,126.94783": {
+    "place_id": 223282195,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.58650,129.10019": {
+    "place_id": 270237165,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150517,
+    "lat": "35.5911428",
+    "lon": "129.0891958",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16006686884870677,
+    "addresstype": "town",
+    "name": "상북면",
+    "display_name": "상북면, 울산광역시, 44902, 대한민국",
+    "address": {
+      "town": "상북면",
+      "city": "울산광역시",
+      "ISO3166-2-lvl4": "KR-31",
+      "postcode": "44902",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5511428",
+      "35.6311428",
+      "129.0491958",
+      "129.1291958"
+    ]
+  },
+  "35.12879,126.94426": {
+    "place_id": 223596107,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.19345,129.15191": {
+    "place_id": 270069565,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4063016,
+    "lat": "35.1766320",
+    "lon": "129.1564732",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18673886701762413,
+    "addresstype": "suburb",
+    "name": "우1동",
+    "display_name": "우1동, 해운대구, 부산광역시, 대한민국",
+    "address": {
+      "suburb": "우1동",
+      "borough": "해운대구",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1518030",
+      "35.2016164",
+      "129.1358555",
+      "129.1666073"
+    ]
+  },
+  "35.19073,127.00044": {
+    "place_id": 224271954,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146453,
+    "lat": "35.1773048",
+    "lon": "127.0278392",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.25352702198722055,
+    "addresstype": "town",
+    "name": "가사문학면",
+    "display_name": "가사문학면, 담양군, 전라남도, 57392, 대한민국",
+    "address": {
+      "town": "가사문학면",
+      "county": "담양군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "57392",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1373048",
+      "35.2173048",
+      "126.9878392",
+      "127.0678392"
+    ]
+  },
+  "35.15457,126.95014": {
+    "place_id": 223653374,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7348583,
+    "lat": "35.1741000",
+    "lon": "126.9122000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.4326730496036241,
+    "addresstype": "borough",
+    "name": "북구",
+    "display_name": "북구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "북구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.1210906",
+      "35.2587987",
+      "126.8348868",
+      "127.0232992"
+    ]
+  },
+  "35.98870,128.47123": {
+    "place_id": 270278354,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 12860680,
+    "lat": "35.9565300",
+    "lon": "128.4878500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.29322317952748045,
+    "addresstype": "town",
+    "name": "지천면",
+    "display_name": "지천면, 칠곡군, 경상북도, 39864, 대한민국",
+    "address": {
+      "town": "지천면",
+      "county": "칠곡군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "postcode": "39864",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.8864742",
+      "36.0469795",
+      "128.4221909",
+      "128.5352390"
+    ]
+  },
+  "35.08638,126.90413": {
+    "place_id": 224134014,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7348741,
+    "lat": "35.1327000",
+    "lon": "126.9025000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.4022453104308014,
+    "addresstype": "borough",
+    "name": "남구",
+    "display_name": "남구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "남구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0524160",
+      "35.1525379",
+      "126.7531202",
+      "126.9297278"
+    ]
+  },
+  "37.63393,126.47974": {
+    "place_id": 223503864,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7853469,
+    "lat": "37.6265000",
+    "lon": "126.4988400",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.2924747081334101,
+    "addresstype": "town",
+    "name": "길상면",
+    "display_name": "길상면, 강화군, 인천광역시, 대한민국",
+    "address": {
+      "town": "길상면",
+      "county": "강화군",
+      "city": "인천광역시",
+      "ISO3166-2-lvl4": "KR-28",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "37.5618785",
+      "37.6734269",
+      "126.4642869",
+      "126.5490841"
+    ]
+  },
+  "35.12230,126.92511": {
+    "place_id": 223596107,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4162635,
+    "lat": "35.1462000",
+    "lon": "126.9229000",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.40110878673898587,
+    "addresstype": "borough",
+    "name": "동구",
+    "display_name": "동구, 광주광역시, 대한민국",
+    "address": {
+      "borough": "동구",
+      "city": "광주광역시",
+      "ISO3166-2-lvl4": "KR-29",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0723262",
+      "35.1654587",
+      "126.9072064",
+      "127.0042533"
+    ]
+  },
+  "35.73308,128.56246": {
+    "place_id": 271330121,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012795,
+    "lat": "35.6935700",
+    "lon": "128.5901600",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.26244239079806453,
+    "addresstype": "town",
+    "name": "각북면",
+    "display_name": "각북면, 청도군, 경상북도, 38302, 대한민국",
+    "address": {
+      "town": "각북면",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "postcode": "38302",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.6409770",
+      "35.7386894",
+      "128.5264586",
+      "128.6316225"
+    ]
+  },
+  "35.30813,129.19059": {
+    "place_id": 268927454,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010356,
+    "lat": "35.2640093",
+    "lon": "129.2323721",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.3015950553092256,
+    "addresstype": "town",
+    "name": "일광읍",
+    "display_name": "일광읍, 기장군, 부산광역시, 대한민국",
+    "address": {
+      "town": "일광읍",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2501305",
+      "35.3203545",
+      "129.1793789",
+      "129.2630590"
+    ]
+  },
+  "35.05695,127.09455": {
+    "place_id": 223213342,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415146596,
+    "lat": "35.0746900",
+    "lon": "127.1405300",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2713361062662927,
+    "addresstype": "town",
+    "name": "동복면",
+    "display_name": "동복면, 화순군, 전라남도, 58102, 대한민국",
+    "address": {
+      "town": "동복면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58102",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.0346900",
+      "35.1146900",
+      "127.1005300",
+      "127.1805300"
+    ]
+  },
+  "34.90476,126.91239": {
+    "place_id": 223369470,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164760,
+    "lat": "34.9209000",
+    "lon": "126.8850700",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "도암면",
+    "display_name": "도암면, 화순군, 전라남도, 58158, 대한민국",
+    "address": {
+      "town": "도암면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58158",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8809000",
+      "34.9609000",
+      "126.8450700",
+      "126.9250700"
+    ]
+  },
+  "35.58670,128.71434": {
+    "place_id": 270839905,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 11012790,
+    "lat": "35.6282300",
+    "lon": "128.7595500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.18670666742961772,
+    "addresstype": "town",
+    "name": "청도읍",
+    "display_name": "청도읍, 청도군, 경상북도, 대한민국",
+    "address": {
+      "town": "청도읍",
+      "county": "청도군",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5663752",
+      "35.7037497",
+      "128.6886814",
+      "128.8078734"
+    ]
+  },
+  "34.93086,127.04997": {
+    "place_id": 222412124,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164853,
+    "lat": "34.8903700",
+    "lon": "127.0265500",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.28939223170644257,
+    "addresstype": "town",
+    "name": "이양면",
+    "display_name": "이양면, 화순군, 전라남도, 58165, 대한민국",
+    "address": {
+      "town": "이양면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58165",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.8503700",
+      "34.9303700",
+      "126.9865500",
+      "127.0665500"
+    ]
+  },
+  "34.98951,127.09836": {
+    "place_id": 223465754,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415164909,
+    "lat": "35.0007700",
+    "lon": "127.1250000",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.16004000076295108,
+    "addresstype": "town",
+    "name": "사평면",
+    "display_name": "사평면, 화순군, 전라남도, 58144, 대한민국",
+    "address": {
+      "town": "사평면",
+      "county": "화순군",
+      "province": "전라남도",
+      "ISO3166-2-lvl4": "KR-46",
+      "postcode": "58144",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "34.9607700",
+      "35.0407700",
+      "127.0850000",
+      "127.1650000"
+    ]
+  },
+  "35.33760,129.20558": {
+    "place_id": 270712964,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010358,
+    "lat": "35.3342690",
+    "lon": "129.1774798",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.31461790426364866,
+    "addresstype": "town",
+    "name": "정관읍",
+    "display_name": "정관읍, 기장군, 부산광역시, 대한민국",
+    "address": {
+      "town": "정관읍",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.3043326",
+      "35.3757984",
+      "129.1180471",
+      "129.2333683"
+    ]
+  },
+  "35.30134,129.17384": {
+    "place_id": 270177705,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 4010354,
+    "lat": "35.2794800",
+    "lon": "129.1549500",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 16,
+    "importance": 0.3095991533582804,
+    "addresstype": "town",
+    "name": "철마면",
+    "display_name": "철마면, 기장군, 부산광역시, 46049, 대한민국",
+    "address": {
+      "town": "철마면",
+      "county": "기장군",
+      "city": "부산광역시",
+      "ISO3166-2-lvl4": "KR-26",
+      "postcode": "46049",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.2184336",
+      "35.3438212",
+      "129.1092904",
+      "129.1958706"
+    ]
+  },
+  "35.55818,128.66229": {
+    "place_id": 271551529,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "node",
+    "osm_id": 415150721,
+    "lat": "35.5545700",
+    "lon": "128.6290700",
+    "class": "place",
+    "type": "town",
+    "place_rank": 18,
+    "importance": 0.2562004762132184,
+    "addresstype": "town",
+    "name": "청도면",
+    "display_name": "청도면, 밀양시, 경상남도, 50400, 대한민국",
+    "address": {
+      "town": "청도면",
+      "city": "밀양시",
+      "province": "경상남도",
+      "ISO3166-2-lvl4": "KR-48",
+      "postcode": "50400",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "35.5145700",
+      "35.5945700",
+      "128.5890700",
+      "128.6690700"
+    ]
+  },
+  "36.10112,128.32462": {
+    "place_id": 269974457,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7816731,
+    "lat": "36.1195513",
+    "lon": "128.3444692",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.5226160075505356,
+    "addresstype": "city",
+    "name": "구미시",
+    "display_name": "구미시, 경상북도, 대한민국",
+    "address": {
+      "city": "구미시",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0607075",
+      "36.3633148",
+      "128.1340598",
+      "128.5639552"
+    ]
+  },
+  "36.08928,128.34038": {
+    "place_id": 271371759,
+    "licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+    "osm_type": "relation",
+    "osm_id": 7816731,
+    "lat": "36.1195513",
+    "lon": "128.3444692",
+    "class": "boundary",
+    "type": "administrative",
+    "place_rank": 12,
+    "importance": 0.5226160075505356,
+    "addresstype": "city",
+    "name": "구미시",
+    "display_name": "구미시, 경상북도, 대한민국",
+    "address": {
+      "city": "구미시",
+      "province": "경상북도",
+      "ISO3166-2-lvl4": "KR-47",
+      "country": "대한민국",
+      "country_code": "kr"
+    },
+    "boundingbox": [
+      "36.0607075",
+      "36.3633148",
+      "128.1340598",
+      "128.5639552"
+    ]
+  }
+}

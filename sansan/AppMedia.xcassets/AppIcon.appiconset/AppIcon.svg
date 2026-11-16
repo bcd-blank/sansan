@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_레이어_1" data-name="레이어_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 1024 1024">
+  <!-- Generator: Adobe Illustrator 30.5.1, SVG Export Plug-In . SVG Version: 2.1.4 Build 3)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#_무제_그라디언트);
+      }
+
+      .st1 {
+        fill: url(#_무제_그라디언트_2);
+      }
+
+      .st2 {
+        fill: url(#_무제_그라디언트_3);
+      }
+
+      .st3 {
+        fill: #fff;
+      }
+    </style>
+    <linearGradient id="_무제_그라디언트" data-name="무제 그라디언트" x1="323.69" y1="732.62" x2="323.69" y2="1002.91" gradientTransform="translate(-123.6 1876.8) scale(1.7 -1.7)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8683ff"/>
+      <stop offset="1" stop-color="#ff6ec1"/>
+      <stop offset="1" stop-color="#bb6ea8" stop-opacity=".3"/>
+    </linearGradient>
+    <linearGradient id="_무제_그라디언트_2" data-name="무제 그라디언트 2" x1="475.97" y1="450.41" x2="483.29" y2="777.14" gradientTransform="translate(-123.6 1876.8) scale(1.7 -1.7)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00c56e" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#00bb6e"/>
+    </linearGradient>
+    <linearGradient id="_무제_그라디언트_3" data-name="무제 그라디언트 3" x1="323.69" y1="603.03" x2="323.69" y2="921.78" gradientTransform="translate(-123.6 1876.8) scale(1.7 -1.7)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0062ff" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#0000a3"/>
+    </linearGradient>
+  </defs>
+  <rect class="st3" width="1024" height="1024"/>
+  <g>
+    <path class="st0" d="M242.38,177.42h368.58c64.59,0,117.04,52.44,117.04,117.03v335.72h-361.56c-133.06,0-241.1-108.04-241.1-241.1v-94.62c0-64.59,52.44-117.03,117.03-117.03Z"/>
+    <path class="st1" d="M693.72,458.04h0c113.21,0,205.12,91.91,205.12,205.12v168.64c0,11.33-9.19,20.52-20.52,20.52h-369.19c-11.33,0-20.52-9.19-20.52-20.52v-168.64c0-113.21,91.91-205.12,205.12-205.12h0Z"/>
+    <path class="st2" d="M194.21,852.3l171.68-492.69c26-74.6,98.08-74.33,123.82.46l169.4,492.22H194.21Z"/>
+  </g>
+</svg>
