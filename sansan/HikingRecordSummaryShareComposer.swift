@@ -32,8 +32,8 @@ enum HikingRecordSummaryShareComposer {
             mapOptions: captureOptions,
             insetTop: ShareSummaryTokens.mapTopInset(memoLineCount: memoLines) * s,
             insetBottom: ShareSummaryTokens.mapBottomInset * s,
-            insetLeft: ShareSummaryTokens.mapSideInset * s,
-            insetRight: ShareSummaryTokens.mapSideInset * s,
+            insetLeft: ShareSummaryTokens.mapRouteSideInset * s,
+            insetRight: ShareSummaryTokens.mapRouteSideInset * s,
             routeFillFraction: 1,
             appearance: .shareSummary,
             fadeSolidEndY: ShareSummaryTokens.fadeSolidEnd(memoLineCount: memoLines) * s
@@ -153,8 +153,10 @@ private struct SummaryMapSharePage: View {
 
     /// Apple Maps credit between map and card (§13 / S10).
     /// MKMapSnapshotter does not bake legal marks into the image — we draw them.
+    /// clearZone: glyph box + 4pt solid paper, soft 4pt edge so basemap labels don't read as "지도…" (impl4 #11).
     private var mapsAttribution: some View {
-        HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
+        let clear = ShareSummaryTokens.attributionClearZone * s
+        return HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
             Image(systemName: "apple.logo")
                 .font(.system(size: ShareSummaryTokens.attributionLogoHeight * s, weight: .medium))
                 .frame(
@@ -166,6 +168,18 @@ private struct SummaryMapSharePage: View {
                 .tracking(0)
         }
         .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
+        .padding(clear)
+        .background {
+            ZStack {
+                // Soft edge first (under), then solid paper over the glyph box + pad.
+                Rectangle()
+                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
+                    .blur(radius: clear)
+                Rectangle()
+                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
+            }
+        }
+        .padding(-clear)
         .shadow(
             color: Color(ShareSummaryTokens.mapPaperUIColor),
             radius: ShareSummaryTokens.attributionHaloBlur * s,
@@ -261,6 +275,20 @@ private struct ShareSummaryMemoText: View {
 // MARK: - Fixed line box (lh = box, glyph centered, Trim.None)
 
 private enum ShareSummaryTypeBox {
+    /// Centering offset for a fixed lh box. Units beside a number must reuse the
+    /// **number's** offset — otherwise (lh − unitFont.lineHeight)/2 lifts km/h/m (impl4 #1).
+    static func baselineOffset(
+        size: CGFloat,
+        weight: UIFont.Weight,
+        lineHeight: CGFloat,
+        monospaced: Bool = false
+    ) -> CGFloat {
+        let font = monospaced
+            ? UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+            : UIFont.systemFont(ofSize: size, weight: weight)
+        return (lineHeight - font.lineHeight) / 2
+    }
+
     static func attributed(
         _ string: String,
         size: CGFloat,
@@ -268,7 +296,8 @@ private enum ShareSummaryTypeBox {
         lineHeight: CGFloat,
         color: UIColor,
         tracking: CGFloat = 0,
-        monospaced: Bool = false
+        monospaced: Bool = false,
+        baselineOffset override: CGFloat? = nil
     ) -> AttributedString {
         let font = monospaced
             ? UIFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
@@ -276,6 +305,7 @@ private enum ShareSummaryTypeBox {
         let paragraph = NSMutableParagraphStyle()
         paragraph.minimumLineHeight = lineHeight
         paragraph.maximumLineHeight = lineHeight
+        let offset = override ?? (lineHeight - font.lineHeight) / 2
         let ns = NSAttributedString(
             string: string,
             attributes: [
@@ -283,7 +313,7 @@ private enum ShareSummaryTypeBox {
                 .foregroundColor: color,
                 .paragraphStyle: paragraph,
                 .kern: tracking,
-                .baselineOffset: (lineHeight - font.lineHeight) / 2
+                .baselineOffset: offset
             ]
         )
         return AttributedString(ns)
@@ -297,7 +327,9 @@ private enum ShareSummaryTypeBox {
         lineHeight: CGFloat,
         color: UIColor,
         tracking: CGFloat = 0,
-        monospaced: Bool = false
+        monospaced: Bool = false,
+        baselineOffset override: CGFloat? = nil,
+        frameHeight: CGFloat? = nil
     ) -> some View {
         Text(
             attributed(
@@ -307,10 +339,11 @@ private enum ShareSummaryTypeBox {
                 lineHeight: lineHeight,
                 color: color,
                 tracking: tracking,
-                monospaced: monospaced
+                monospaced: monospaced,
+                baselineOffset: override
             )
         )
-        .frame(height: lineHeight, alignment: .center)
+        .frame(height: frameHeight ?? lineHeight, alignment: .center)
     }
 }
 
@@ -457,8 +490,16 @@ private struct SummaryInfoCard: View {
     }
 
     private var heroRow: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 0) {
+        let heroLH = ShareSummaryTokens.heroLineHeight * scale
+        let heroSize = ShareSummaryTokens.heroSize * scale
+        let numberBaseline = ShareSummaryTypeBox.baselineOffset(
+            size: heroSize,
+            weight: .light,
+            lineHeight: heroLH,
+            monospaced: true
+        )
+        return ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: ShareSummaryTokens.cardLabelGap * scale) {
                 ShareSummaryTypeBox.text(
                     "거리",
                     size: ShareSummaryTokens.labelSize * scale,
@@ -466,25 +507,29 @@ private struct SummaryInfoCard: View {
                     lineHeight: ShareSummaryTokens.labelLineHeight * scale,
                     color: ShareSummaryTokens.ink2UIColor
                 )
-                HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.heroUnitGap * scale) {
+                // lastTextBaseline + shared number baselineOffset (impl4 #1 unit regression).
+                HStack(alignment: .lastTextBaseline, spacing: ShareSummaryTokens.heroUnitGap * scale) {
                     ShareSummaryTypeBox.text(
                         record.distanceValueText,
-                        size: ShareSummaryTokens.heroSize * scale,
+                        size: heroSize,
                         weight: .light,
-                        lineHeight: ShareSummaryTokens.heroLineHeight * scale,
+                        lineHeight: heroLH,
                         color: ShareSummaryTokens.inkUIColor,
                         tracking: -1.4 * scale,
-                        monospaced: true
+                        monospaced: true,
+                        baselineOffset: numberBaseline
                     )
                     ShareSummaryTypeBox.text(
                         record.distanceUnitText,
                         size: ShareSummaryTokens.heroUnitSize * scale,
                         weight: .regular,
-                        lineHeight: ShareSummaryTokens.heroLineHeight * scale,
-                        color: ShareSummaryTokens.ink2UIColor
+                        lineHeight: heroLH,
+                        color: ShareSummaryTokens.ink2UIColor,
+                        baselineOffset: numberBaseline,
+                        frameHeight: heroLH
                     )
                 }
-                .frame(height: ShareSummaryTokens.heroLineHeight * scale, alignment: .center)
+                .frame(height: heroLH, alignment: .center)
             }
 
             timeline
@@ -632,7 +677,7 @@ private struct SummaryInfoCard: View {
     }
 
     private func metricColumn<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: ShareSummaryTokens.cardLabelGap * scale) {
             ShareSummaryTypeBox.text(
                 label,
                 size: ShareSummaryTokens.labelSize * scale,
@@ -678,7 +723,13 @@ private struct SummaryInfoCard: View {
             + metricTextWidth(unit, size: unitSize, weight: .regular, tracking: 0)
         let fit = metricOverflowScale(neededWidth: natural)
         let valueLH = ShareSummaryTokens.metricLineHeight * scale
-        return HStack(alignment: .firstTextBaseline, spacing: ShareSummaryTokens.metricUnitGap * scale * fit) {
+        let numberBaseline = ShareSummaryTypeBox.baselineOffset(
+            size: valueSize * fit,
+            weight: .light,
+            lineHeight: valueLH,
+            monospaced: true
+        )
+        return HStack(alignment: .lastTextBaseline, spacing: ShareSummaryTokens.metricUnitGap * scale * fit) {
             ShareSummaryTypeBox.text(
                 value,
                 size: valueSize * fit,
@@ -686,14 +737,17 @@ private struct SummaryInfoCard: View {
                 lineHeight: valueLH,
                 color: ShareSummaryTokens.inkUIColor,
                 tracking: -0.5 * scale * fit,
-                monospaced: true
+                monospaced: true,
+                baselineOffset: numberBaseline
             )
             ShareSummaryTypeBox.text(
                 unit,
                 size: unitSize * fit,
                 weight: .regular,
                 lineHeight: valueLH,
-                color: ShareSummaryTokens.ink2UIColor
+                color: ShareSummaryTokens.ink2UIColor,
+                baselineOffset: numberBaseline,
+                frameHeight: valueLH
             )
         }
         .lineLimit(1)
@@ -717,7 +771,13 @@ private struct SummaryInfoCard: View {
         }
         let fit = metricOverflowScale(neededWidth: natural)
         let valueLH = ShareSummaryTokens.metricLineHeight * scale
-        return HStack(alignment: .firstTextBaseline, spacing: 0) {
+        let numberBaseline = ShareSummaryTypeBox.baselineOffset(
+            size: ShareSummaryTokens.metricSize * scale * fit,
+            weight: .light,
+            lineHeight: valueLH,
+            monospaced: true
+        )
+        return HStack(alignment: .lastTextBaseline, spacing: 0) {
             ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
                 if index > 0 {
                     Color.clear.frame(
@@ -732,7 +792,9 @@ private struct SummaryInfoCard: View {
                     lineHeight: valueLH,
                     color: part.isUnit ? ShareSummaryTokens.ink2UIColor : ShareSummaryTokens.inkUIColor,
                     tracking: part.isUnit ? 0 : -0.5 * scale * fit,
-                    monospaced: true
+                    monospaced: true,
+                    baselineOffset: numberBaseline,
+                    frameHeight: valueLH
                 )
             }
         }

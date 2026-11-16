@@ -3,7 +3,7 @@
 //  sansanTests
 //
 //  Renders share-summary v2 review-fix captures into the app Documents
-//  folder `share-summary-v2-impl4/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
+//  folder `share-summary-v2-impl5/` when SANSAN_SHARE_SUMMARY_ARTIFACTS=1.
 //
 
 import CoreLocation
@@ -22,7 +22,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         // Prefer host path. Shared app-group-style host folder (simulator can write under Documents/…);
         // also try TEST_RUNNER_ / env. Fallback: app Documents.
         let envOut = ProcessInfo.processInfo.environment["SANSAN_SHARE_SUMMARY_OUT"]
-        let hostFallback = URL(fileURLWithPath: "/Users/jeongwook/Documents/sansan/build/share-summary-v2-impl4-artifacts", isDirectory: true)
+        let hostFallback = URL(fileURLWithPath: "/Users/jeongwook/Documents/sansan/build/share-summary-v2-impl5-artifacts", isDirectory: true)
         let outDir: URL
         if let envOut, !envOut.isEmpty {
             outDir = URL(fileURLWithPath: envOut, isDirectory: true)
@@ -30,7 +30,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             outDir = hostFallback
         } else {
             let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            outDir = docs.appendingPathComponent("share-summary-v2-impl4", isDirectory: true)
+            outDir = docs.appendingPathComponent("share-summary-v2-impl5", isDirectory: true)
         }
         try? FileManager.default.removeItem(at: outDir)
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
@@ -101,7 +101,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             name: "avg-speed-long.png"
         )
 
-        // impl4 extras: roads under attribution (halo check) + km near right edge.
+        // impl4/5 extras: roads under attribution + km near right edge + ~2km path-overlap case.
         try await writeSummary(
             record: makeRecord(weatherHours: 2, memo: nil, routeStyle: .urbanAttribution),
             options: mapOptions,
@@ -120,10 +120,23 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
             to: outDir,
             name: "km-label-right-edge.png"
         )
+        try await writeSummary(
+            record: makeRecord(weatherHours: 0, memo: nil, routeStyle: .twoKmOverlap),
+            options: HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: false,
+                showsPinnedThumbnails: false
+            ),
+            to: outDir,
+            name: "km-label-2km.png"
+        )
 
         // Combined km-label cases (map snapshot with share-summary appearance)
         let canvas = ShareSummaryTokens.canvasSize(widthPoints: 430, pixelScale: 3)
         let record = makeRecord(weatherHours: 2, memo: nil)
+        let side = ShareSummaryTokens.mapRouteSideInset
         for (name, distance, time) in [
             ("km-label-both.png", true, true),
             ("km-label-km-only.png", true, false),
@@ -143,8 +156,8 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
                 mapOptions: options,
                 insetTop: ShareSummaryTokens.mapTopInset(memoLineCount: 0),
                 insetBottom: ShareSummaryTokens.mapBottomInset,
-                insetLeft: 24,
-                insetRight: 24,
+                insetLeft: side,
+                insetRight: side,
                 appearance: .shareSummary,
                 fadeSolidEndY: ShareSummaryTokens.fadeSolidEnd(memoLineCount: 0)
             )
@@ -159,8 +172,8 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         }
 
         let written = try FileManager.default.contentsOfDirectory(atPath: outDir.path)
-        XCTAssertGreaterThanOrEqual(written.filter { $0.hasSuffix(".png") }.count, 14)
-        print("ShareSummaryV2 impl4 artifacts → \(outDir.path): \(written.sorted())")
+        XCTAssertGreaterThanOrEqual(written.filter { $0.hasSuffix(".png") }.count, 15)
+        print("ShareSummaryV2 impl5 artifacts → \(outDir.path): \(written.sorted())")
     }
 
     private func writeSummary(
@@ -189,6 +202,8 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         case urbanAttribution
         /// ~3.5 km east–west so a late km capsule sits near the right inset.
         case eastWestLong
+        /// ~2.5 km with a sharp bend so 2km capsule can sit on the path (impl4 #6 / impl5).
+        case twoKmOverlap
     }
 
     /// - Parameter paceOverride: minutes/km used to force elapsed time for a long pace string.
@@ -203,6 +218,7 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
         let targetDistanceMeters: Double = {
             switch routeStyle {
             case .eastWestLong: return 3_500
+            case .twoKmOverlap: return 2_500
             case .urbanAttribution: return 2_200
             case .standard: return paceOverride != nil ? 2_500 : 0
             }
@@ -219,6 +235,19 @@ final class ShareSummaryV2ArtifactTests: XCTestCase {
                         37.5665 + sin(t * .pi) * 0.0015,
                         126.9780 + t * lonSpan,
                         40 + t * 30 + sin(t * 4) * 4
+                    )
+                )
+            case .twoKmOverlap:
+                // Go east then fold south so mid-route (≈2km) hugs the continuing path.
+                let lonSpan = 2.0 / (111.0 * cos(37.55 * .pi / 180.0))
+                let latFold = 0.5 / 111.0
+                let east = min(t * 1.25, 1.0)
+                let south = max(t * 1.25 - 1.0, 0)
+                coords.append(
+                    (
+                        37.5500 - south * latFold,
+                        126.9900 + east * lonSpan,
+                        50 + t * 40 + sin(t * 5) * 3
                     )
                 )
             case .urbanAttribution:

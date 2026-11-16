@@ -99,6 +99,8 @@ enum ShareSummaryTokens {
     static let cardHeight: CGFloat = 324.5
     static let cardRadius: CGFloat = 24
     static let cardBlockGap: CGFloat = 16
+    /// Label line-box bottom → value line-box top (hero + metrics). Spec had 4; missing → lower block −5…−7 (impl4 #3).
+    static let cardLabelGap: CGFloat = 4
     static let cardColumnWidth: CGFloat = 106
     static let cardColumnGap: CGFloat = 16
 
@@ -179,6 +181,8 @@ enum ShareSummaryTokens {
     static let attributionMaxWidth: CGFloat = 350
     /// Paper halo behind credit so basemap roads under the mark stay ≥4.5:1 (impl3 #15).
     static let attributionHaloBlur: CGFloat = 2
+    /// Opaque paper pad around attribution glyphs; soft edge = same radius (impl4 #11).
+    static let attributionClearZone: CGFloat = 4
     /// Legacy alias — line box height.
     static var attributionHeight: CGFloat { attributionLineHeight }
 
@@ -200,7 +204,14 @@ enum ShareSummaryTokens {
 
     // MARK: Map insets
 
+    /// Marker **outer** edge ≥ this from canvas L/R (impl4 #4).
     static let mapSideInset: CGFloat = 24
+    /// Half of endpoint Ø18 — added to side inset so route fit keeps marker outer at 24.
+    static var mapMarkerInsetPad: CGFloat { markerOuter / 2 }
+    /// Camera/fit inset for route points (= sideInset + marker radius).
+    static var mapRouteSideInset: CGFloat { mapSideInset + mapMarkerInsetPad }
+    /// km-label capsules must stay inside [mapSideInset, width − mapSideInset] (impl4 #2).
+    static var kmLabelBoundsInset: CGFloat { mapSideInset }
     /// Bottom inset = cardHeight + cardInset + routeClearance + marker radius
     /// so the white endpoint circle stays above the card (S3 + finding 7).
     static var mapBottomInset: CGFloat { cardHeight + 32 + markerOuter / 2 }

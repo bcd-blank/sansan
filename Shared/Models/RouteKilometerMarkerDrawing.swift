@@ -28,10 +28,13 @@ enum RouteKilometerMarkerDrawing {
     private static let endpointClearanceRadius: CGFloat = 18 / 2 + 6
 
     /// 겹치는 라벨을 포인트 옆에서만 조금 떼어 놓습니다.
+    /// When `imageSize` is set, capsules must stay inside the canvas (impl4 #2 / Android `imageBoundsPenalty`).
     static func labelShifts(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
-        contentScale: CGFloat
+        contentScale: CGFloat,
+        imageSize: CGSize = .zero,
+        sideInset: CGFloat = 0
     ) -> [Int: RouteKilometerLabelShift] {
         var occupied: [CGRect] = []
         var shifts: [Int: RouteKilometerLabelShift] = [:]
@@ -43,7 +46,9 @@ enum RouteKilometerMarkerDrawing {
                 preferredLeadingSide: marker.preferredLeadingSide,
                 endpointPoints: endpointPoints,
                 occupied: occupied,
-                contentScale: contentScale
+                contentScale: contentScale,
+                imageSize: imageSize,
+                sideInset: sideInset
             )
             shifts[marker.kilometer] = placed.shift
             occupied.append(contentsOf: placed.rects)
@@ -58,22 +63,25 @@ enum RouteKilometerMarkerDrawing {
         preferredLeadingSide: Bool,
         endpointPoints: [CGPoint],
         occupied: [CGRect],
-        contentScale: CGFloat
+        contentScale: CGFloat,
+        imageSize: CGSize,
+        sideInset: CGFloat
     ) -> (shift: RouteKilometerLabelShift, rects: [CGRect]) {
         let clearance = endpointClearanceRadius * contentScale
         let labelPadding = 3 * contentScale
         let unit = max(RouteKilometerMarkerMetrics.labelHeight * contentScale, 12 * contentScale)
+        // Preferred side first, then opposite / vertical nudges. Canvas clamp rejects clips (impl4 #2).
         let nudges: [(sideIsPreferred: Bool, multiplier: CGFloat)] = [
             (true, 0),
             (false, 0),
-            (true, -1),
             (true, 1),
-            (false, -1),
             (false, 1),
-            (true, -1.6),
+            (true, -1),
+            (false, -1),
             (true, 1.6),
-            (false, -1.6),
-            (false, 1.6)
+            (false, 1.6),
+            (true, -1.6),
+            (false, -1.6)
         ]
 
         var bestShift = RouteKilometerLabelShift(
@@ -89,8 +97,9 @@ enum RouteKilometerMarkerDrawing {
             contentScale: contentScale
         )
         var bestPenalty = CGFloat.greatestFiniteMagnitude
+        var foundInBounds = false
 
-        for nudge in nudges {
+        for (index, nudge) in nudges.enumerated() {
             let side = nudge.sideIsPreferred ? preferredLeadingSide : !preferredLeadingSide
             let verticalOffset = unit * nudge.multiplier
             let rects = labelRects(
@@ -101,22 +110,19 @@ enum RouteKilometerMarkerDrawing {
                 verticalOffset: verticalOffset,
                 contentScale: contentScale
             )
+            // Hard-reject capsules that leave the image (review #2).
+            if clipsCanvas(rects, imageSize: imageSize) { continue }
+            let boundsHit = imageBoundsPenalty(rects, imageSize: imageSize, sideInset: sideInset)
             let endpointScore = endpointSeparation(of: rects, from: endpointPoints, clearance: clearance)
             let overlapsLabels = rectsOverlap(rects, occupied, padding: labelPadding)
-            if endpointScore == .greatestFiniteMagnitude, !overlapsLabels {
-                return (
-                    RouteKilometerLabelShift(
-                        placesLabelOnLeadingSide: side,
-                        verticalOffset: verticalOffset
-                    ),
-                    rects
-                )
-            }
             let endpointPenalty: CGFloat = endpointScore == .greatestFiniteMagnitude ? 0 : -endpointScore * 48
+            let clear = endpointScore == .greatestFiniteMagnitude && !overlapsLabels && boundsHit < 1
             let penalty = overlapArea(rects, occupied)
                 + endpointPenalty
-                + abs(nudge.multiplier) * 6
-                + (nudge.sideIsPreferred ? 0 : 3)
+                + boundsHit
+                + abs(nudge.multiplier) * 2
+                + CGFloat(index) * 0.4
+                + (clear ? 0 : 80)
             if penalty < bestPenalty {
                 bestPenalty = penalty
                 bestShift = RouteKilometerLabelShift(
@@ -124,9 +130,63 @@ enum RouteKilometerMarkerDrawing {
                     verticalOffset: verticalOffset
                 )
                 bestRects = rects
+                foundInBounds = true
+                if clear {
+                    return (bestShift, bestRects)
+                }
             }
         }
+        if foundInBounds {
+            return (bestShift, bestRects)
+        }
+        // Last resort: flip to leading (left) so a right-edge clip still paints on-canvas.
+        let fallbackSide = true
+        let fallbackRects = labelRects(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            placesLabelOnLeadingSide: fallbackSide,
+            verticalOffset: 0,
+            contentScale: contentScale
+        )
+        if !clipsCanvas(fallbackRects, imageSize: imageSize) {
+            return (
+                RouteKilometerLabelShift(placesLabelOnLeadingSide: fallbackSide, verticalOffset: 0),
+                fallbackRects
+            )
+        }
         return (bestShift, bestRects)
+    }
+
+    private static func clipsCanvas(_ rects: [CGRect], imageSize: CGSize) -> Bool {
+        guard imageSize.width > 1, imageSize.height > 1 else { return false }
+        return rects.contains { rect in
+            rect.minX < -0.5
+                || rect.maxX > imageSize.width + 0.5
+                || rect.minY < -0.5
+                || rect.maxY > imageSize.height + 0.5
+        }
+    }
+
+    /// Heavy penalty when capsule leaves the side-inset band `[sideInset, width−sideInset]`.
+    private static func imageBoundsPenalty(
+        _ rects: [CGRect],
+        imageSize: CGSize,
+        sideInset: CGFloat
+    ) -> CGFloat {
+        guard imageSize.width > 1, imageSize.height > 1 else { return 0 }
+        let left = sideInset
+        let right = imageSize.width - sideInset
+        let top = sideInset
+        let bottom = imageSize.height - sideInset
+        var penalty: CGFloat = 0
+        for rect in rects {
+            if rect.minX < left { penalty += (left - rect.minX) * 40 }
+            if rect.maxX > right { penalty += (rect.maxX - right) * 40 }
+            if rect.minY < top { penalty += (top - rect.minY) * 20 }
+            if rect.maxY > bottom { penalty += (rect.maxY - bottom) * 20 }
+        }
+        return penalty
     }
 
     static func drawMarker(
