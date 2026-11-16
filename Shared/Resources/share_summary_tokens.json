@@ -2,7 +2,7 @@
   "id": "share.summary",
   "confirmed": "2026-11-16",
   "variant": "A",
-  "reviewFixes": "impl5: unit baseline + km clamp + labelGap 4 + chart elev#FF8D28/HR#FF383C both 1pt fill15%",
+  "reviewFixes": "ship: color.hr=#FF383C; attribution.halo=#F0F0F0 (map.paper) blur 1–2pt; chart elev#FF8D28/HR#FF383C both 1pt fill15%",
   "canvas": {
     "widthPt": 430,
     "aspect": "16/9",
@@ -19,7 +19,7 @@
     "mapLabel": "#9A9A9E",
     "hairline": "#E5E5EA",
     "track": "#D1D1D6",
-    "hr": "#AEAEB2",
+    "hr": "#FF383C",
     "surface": "#FFFFFF",
     "mapPaper": "#F0F0F0",
     "mapRoad": "#FDFDFD"
@@ -97,7 +97,7 @@
     "x": 40,
     "gapAboveCard": 8,
     "maxWidth": 350,
-    "halo": "#F0F0F0 2pt",
+    "halo": "#F0F0F0 (map.paper), blur 1–2pt",
     "clearZone": "glyphBox + 4pt paper 100%, soft edge 4pt",
     "hideSnapshotLegal": true
   },
