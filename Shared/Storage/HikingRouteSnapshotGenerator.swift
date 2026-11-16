@@ -383,32 +383,55 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Paper #F0F0F0 < road #FDFDFD; labels stay dark ≈ #9A9A9E (S5).
-    /// Do **not** invert luminance — that turned map type white on paper.
+    /// Paper #F0F0F0 mode; roads only at near-white → #FDFDFD; labels → #9A9A9E (S5 / impl3 #3).
+    /// CIToneCurve alone left muted land at #FDFDFD — remap pixels explicitly.
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
-        let ciImage = CIImage(cgImage: cgImage)
-        guard let controls = CIFilter(name: "CIColorControls") else { return nil }
-        controls.setValue(ciImage, forKey: kCIInputImageKey)
-        controls.setValue(0, forKey: kCIInputSaturationKey)
-        guard let gray = controls.outputImage else { return nil }
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = width * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: height * bytesPerRow)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        let mapLabel = 154.0 / 255.0 // #9A9A9E
-        let paper = 240.0 / 255.0    // #F0F0F0
-        let road = 253.0 / 255.0     // #FDFDFD
-        guard let tone = CIFilter(name: "CIToneCurve") else { return nil }
-        tone.setValue(gray, forKey: kCIInputImageKey)
-        // Keep dark label ink readable; lift land toward paper; keep bright roads above paper.
-        tone.setValue(CIVector(x: 0.00, y: mapLabel), forKey: "inputPoint0")
-        tone.setValue(CIVector(x: 0.28, y: 0.72), forKey: "inputPoint1")
-        tone.setValue(CIVector(x: 0.70, y: paper), forKey: "inputPoint2")
-        tone.setValue(CIVector(x: 0.90, y: road), forKey: "inputPoint3")
-        tone.setValue(CIVector(x: 1.00, y: road), forKey: "inputPoint4")
-        guard let toned = tone.outputImage else { return nil }
-
-        let context = CIContext(options: nil)
-        guard let rendered = context.createCGImage(toned, from: toned.extent) else { return nil }
-        return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
+        let mapLabel = 154.0 // #9A9A9E
+        let paper = 240.0    // #F0F0F0
+        let road = 253.0     // #FDFDFD
+        let count = width * height
+        for i in 0..<count {
+            let o = i * bytesPerPixel
+            let r = Double(pixels[o])
+            let g = Double(pixels[o + 1])
+            let b = Double(pixels[o + 2])
+            let y = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+            let out: Double
+            if y < 0.40 {
+                // Labels / dark features → mapLabel band (keep some contrast).
+                out = mapLabel * (0.75 + 0.25 * (y / 0.40))
+            } else if y > 0.985 {
+                out = road
+            } else {
+                // Land collapses to paper with tiny variation so roads above paper still read.
+                let t = (y - 0.40) / (0.985 - 0.40)
+                out = paper - 2.0 + t * 4.0 // ≈238…242 around paper
+            }
+            let v = UInt8(max(0, min(255, out.rounded())))
+            pixels[o] = v
+            pixels[o + 1] = v
+            pixels[o + 2] = v
+        }
+        guard let outImage = ctx.makeImage() else { return nil }
+        return UIImage(cgImage: outImage, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private static func composite(
@@ -429,6 +452,10 @@ enum HikingRouteSnapshotGenerator {
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
         return renderer.image { context in
+            if appearance == .shareSummary {
+                ShareSummaryTokens.mapPaperUIColor.setFill()
+                context.fill(CGRect(origin: .zero, size: canvasSize))
+            }
             baseImage.draw(in: CGRect(origin: .zero, size: canvasSize))
 
             // Layer order (finding 2): map → fade → route → markers → labels.

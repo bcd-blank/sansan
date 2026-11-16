@@ -2,7 +2,7 @@
   "id": "share.summary",
   "confirmed": "2026-11-16",
   "variant": "A",
-  "reviewFixes": "impl-review findings 1–25 + S1–S12",
+  "reviewFixes": "impl3-review 1–16 root-cause + fixedLineBox/memo …/map paper/snapshotLegal",
   "canvas": {
     "widthPt": 430,
     "aspect": "16/9",
