@@ -36,6 +36,8 @@ struct HikingRecordRouteMapView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var kilometerMarkerPlacements: [RouteKilometerMarkerPlacement] = []
     @State private var kilometerLabelShifts: [Int: RouteKilometerLabelShift] = [:]
+    /// Kilometers that keep a blue combined capsule after hideSteps thinning; dots always draw.
+    @State private var labeledKilometers: Set<Int> = []
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
 
@@ -257,6 +259,7 @@ struct HikingRecordRouteMapView: View {
     }
 
     /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
+    /// Detail map: #007AFF combined capsules + hideSteps [1,5,10,20,50] thinning.
     private func updateKilometerLabelShifts(proxy: MapProxy) {
         guard mapWidth > 1, mapHeight > 1,
               let start = routeCoordinates.first,
@@ -283,13 +286,20 @@ struct HikingRecordRouteMapView: View {
                 )
             )
         }
-        let shifts = RouteKilometerMarkerDrawing.labelShifts(
+        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
             for: requests,
             endpointPoints: endpoints,
-            contentScale: 1
+            contentScale: 1,
+            imageSize: CGSize(width: mapWidth, height: mapHeight),
+            sideInset: RouteKilometerMarkerMetrics.detailLabelSideInset,
+            verticalInset: RouteKilometerMarkerMetrics.detailLabelVerticalInset
         )
-        if shifts != kilometerLabelShifts {
-            kilometerLabelShifts = shifts
+        let nextLabeled = Set(thinned.shifts.keys)
+        if thinned.shifts != kilometerLabelShifts {
+            kilometerLabelShifts = thinned.shifts
+        }
+        if nextLabeled != labeledKilometers {
+            labeledKilometers = nextLabeled
         }
     }
 
@@ -325,11 +335,13 @@ struct HikingRecordRouteMapView: View {
                 if distanceText != nil || timeText != nil {
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         let shift = kilometerLabelShifts[marker.kilometer]
+                        let showsLabel = labeledKilometers.contains(marker.kilometer)
                         RouteKilometerHorizontalMarker(
                             distanceText: distanceText,
                             timeText: timeText,
                             placesLabelOnLeadingSide: shift?.placesLabelOnLeadingSide ?? marker.placesLabelOnLeadingSide,
-                            verticalOffset: shift?.verticalOffset ?? 0
+                            verticalOffset: shift?.verticalOffset ?? 0,
+                            showsLabel: showsLabel
                         )
                         .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }
                     }

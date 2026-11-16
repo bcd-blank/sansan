@@ -81,13 +81,8 @@ private struct SummaryMapSharePage: View {
             mapsAttribution
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Full-bleed white under card + bottom inset — MK legal marks sit in the
-            // bottom margin / rounded-corner fillet (impl3 #4), not only under the card rect.
-            Color.white
-                .frame(height: (ShareSummaryTokens.cardHeight + ShareSummaryTokens.cardInset) * s)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .allowsHitTesting(false)
-
+            // Concept A: muted gray map stays full-bleed to canvas bottom; only the
+            // floating card itself is white (no white hinter under/beside the card).
             SummaryInfoCard(record: record, scale: s)
                 .padding(.horizontal, ShareSummaryTokens.cardInset * s)
                 .padding(.bottom, ShareSummaryTokens.cardInset * s)

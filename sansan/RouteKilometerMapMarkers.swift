@@ -2,7 +2,8 @@
 //  RouteKilometerMapMarkers.swift
 //  sansan
 //
-//  Detail-map km markers — combined white capsule shared with summary export.
+//  Detail-map km markers — combined #007AFF capsule (spec-detail-labels-final).
+//  Share-summary / card export keep white capsules via RouteKilometerMarkerDrawing.
 //
 
 #if os(iOS)
@@ -25,24 +26,25 @@ struct RouteKilometerRouteDot: View {
     }
 }
 
-/// Combined white capsule: both → `1km 16:50`; km-only / time-only → single part.
+/// Combined blue capsule: both → `1km 16:50`; km-only / time-only → single part.
+/// Fill #007AFF, white text (km 600 / time 400), white 1pt stroke, dual shadows.
 struct RouteKilometerCombinedLabelCapsule: View {
     var distanceText: String?
     var timeText: String?
 
     private var parts: [(text: String, weight: Font.Weight, color: Color)] {
+        let white = Color(RouteKilometerMarkerMetrics.detailLabelTextUIColor)
         if let distanceText, let timeText {
             return [
-                (distanceText, .semibold, Color(RouteKilometerMarkerMetrics.inkUIColor)),
-                (timeText, .regular, Color(RouteKilometerMarkerMetrics.ink2UIColor))
+                (distanceText, .semibold, white),
+                (timeText, .regular, white)
             ]
         }
         if let distanceText {
-            return [(distanceText, .semibold, Color(RouteKilometerMarkerMetrics.inkUIColor))]
+            return [(distanceText, .semibold, white)]
         }
         if let timeText {
-            // S9: time-only uses medium + ink so gray-only stays readable.
-            return [(timeText, .medium, Color(RouteKilometerMarkerMetrics.inkUIColor))]
+            return [(timeText, .regular, white)]
         }
         return []
     }
@@ -58,12 +60,27 @@ struct RouteKilometerCombinedLabelCapsule: View {
         }
         .padding(.horizontal, RouteKilometerMarkerMetrics.labelPadH)
         .frame(height: RouteKilometerMarkerMetrics.labelHeight)
-        .background(Color.white, in: Capsule(style: .continuous))
+        .background(
+            Color(RouteKilometerMarkerMetrics.detailLabelFillUIColor),
+            in: Capsule(style: .continuous)
+        )
         .overlay {
             Capsule(style: .continuous)
-                .strokeBorder(Color(RouteKilometerMarkerMetrics.inkUIColor).opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(
+                    Color(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor),
+                    lineWidth: RouteKilometerMarkerMetrics.detailLabelStrokeWidth
+                )
         }
-        .shadow(color: Color(RouteKilometerMarkerMetrics.inkUIColor).opacity(0.10), radius: 3, y: 2)
+        .shadow(
+            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowSecondary.color),
+            radius: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.radius,
+            y: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.y
+        )
+        .shadow(
+            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowPrimary.color),
+            radius: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.radius,
+            y: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.y
+        )
     }
 }
 
@@ -73,13 +90,16 @@ struct RouteKilometerHorizontalMarker: View {
     var timeText: String?
     let placesLabelOnLeadingSide: Bool
     var verticalOffset: CGFloat = 0
+    /// When false, draw only the km dot (thinning hid this label).
+    var showsLabel: Bool = true
 
     private let gap = RouteKilometerMarkerMetrics.labelGap
 
     var body: some View {
         ZStack {
             RouteKilometerRouteDot()
-            if RouteKilometerMarkerMetrics.combinedLabel(distance: distanceText, time: timeText) != nil {
+            if showsLabel,
+               RouteKilometerMarkerMetrics.combinedLabel(distance: distanceText, time: timeText) != nil {
                 RouteKilometerCombinedLabelCapsule(distanceText: distanceText, timeText: timeText)
                     .fixedSize()
                     .offset(x: horizontalOffset(capsuleWidth: capsuleWidth), y: verticalOffset)
