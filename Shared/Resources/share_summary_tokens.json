@@ -2,7 +2,7 @@
   "id": "share.summary",
   "confirmed": "2026-11-16",
   "variant": "A",
-  "reviewFixes": "impl4-review: unit baseline + km bounds clamp + card.labelGap 4 + route side+markerPad + attribution clearZone",
+  "reviewFixes": "impl5: unit baseline + km clamp + labelGap 4 + chart elev#FF8D28/HR#FF383C both 1pt fill15%",
   "canvas": {
     "widthPt": 430,
     "aspect": "16/9",
@@ -131,5 +131,16 @@
     "bounds": "capsule inside x [24, width-24]",
     "offset": 10,
     "sides": ["right", "below", "bottom-left", "left"]
+  },
+  "chart": {
+    "elev": "#FF8D28",
+    "elevWidth": 1,
+    "elevFillAlpha": 0.15,
+    "hr": "#FF383C",
+    "hrWidth": 1,
+    "hrFill": "none",
+    "legendSwatch": "same color and width as strokes",
+    "drawOrder": "elevFill → hrLine → elevLine",
+    "source": "docs/share-summary-v2/chart/spec-glass3.md §9 + elevation-color-v2.png; JW both 1pt"
   }
 }

@@ -614,8 +614,8 @@ private struct SummaryInfoCard: View {
 
     private var legendRow: some View {
         HStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 1 * scale, style: .continuous)
-                .fill(Color(ShareSummaryTokens.accentUIColor))
+            RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
+                .fill(Color(ShareSummaryTokens.chartElevUIColor))
                 .frame(
                     width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
                     height: ShareSummaryTokens.graphLegendElevHeight * scale
@@ -632,7 +632,7 @@ private struct SummaryInfoCard: View {
             if let heartStats {
                 Color.clear.frame(width: ShareSummaryTokens.graphLegendBlockGap * scale)
                 RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
-                    .fill(Color(ShareSummaryTokens.hrUIColor))
+                    .fill(Color(ShareSummaryTokens.chartHRUIColor))
                     .frame(
                         width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
                         height: ShareSummaryTokens.graphLegendHRHeight * scale
@@ -906,9 +906,12 @@ private struct SummaryChartCanvas: View {
             baseline.addLine(to: CGPoint(x: size.width, y: size.height - hair / 2))
             context.stroke(baseline, with: .color(Color(ShareSummaryTokens.hairlineUIColor)), lineWidth: hair)
 
+            // Draw order (spec-glass3 §9): elev fill → HR line → elev line (elev on top when overlapping).
+            var elevFirst: CGPoint?
             if elevation.count >= 2 {
                 var area = Path()
                 let first = point(distance: elevation[0].distanceMeters, value: elevation[0].altitude, lower: 0, upper: elevationMax)
+                elevFirst = first
                 area.move(to: CGPoint(x: first.x, y: size.height))
                 area.addLine(to: first)
                 for sample in elevation.dropFirst() {
@@ -919,27 +922,10 @@ private struct SummaryChartCanvas: View {
                     area.addLine(to: CGPoint(x: end.x, y: size.height))
                 }
                 area.closeSubpath()
+                // #FF8D28 @ 15% flat fill (JW / elevation-color-v2 white card).
                 context.fill(
                     area,
-                    with: .linearGradient(
-                        Gradient(colors: [
-                            Color(ShareSummaryTokens.inkUIColor).opacity(0.07),
-                            Color(ShareSummaryTokens.inkUIColor).opacity(0.02)
-                        ]),
-                        startPoint: CGPoint(x: 0, y: 0),
-                        endPoint: CGPoint(x: 0, y: size.height)
-                    )
-                )
-
-                var line = Path()
-                line.move(to: first)
-                for sample in elevation.dropFirst() {
-                    line.addLine(to: point(distance: sample.distanceMeters, value: sample.altitude, lower: 0, upper: elevationMax))
-                }
-                context.stroke(
-                    line,
-                    with: .color(Color(ShareSummaryTokens.accentUIColor)),
-                    lineWidth: ShareSummaryTokens.graphElevWidth * scale
+                    with: .color(Color(ShareSummaryTokens.chartElevUIColor).opacity(ShareSummaryTokens.chartElevFillAlpha))
                 )
             }
 
@@ -952,8 +938,21 @@ private struct SummaryChartCanvas: View {
                 }
                 context.stroke(
                     line,
-                    with: .color(Color(ShareSummaryTokens.hrUIColor)),
+                    with: .color(Color(ShareSummaryTokens.chartHRUIColor)),
                     lineWidth: ShareSummaryTokens.graphHRWidth * scale
+                )
+            }
+
+            if elevation.count >= 2, let first = elevFirst {
+                var line = Path()
+                line.move(to: first)
+                for sample in elevation.dropFirst() {
+                    line.addLine(to: point(distance: sample.distanceMeters, value: sample.altitude, lower: 0, upper: elevationMax))
+                }
+                context.stroke(
+                    line,
+                    with: .color(Color(ShareSummaryTokens.chartElevUIColor)),
+                    lineWidth: ShareSummaryTokens.graphElevWidth * scale
                 )
             }
         }

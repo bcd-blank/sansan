@@ -80,6 +80,13 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.attributionClearZone, 4, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.memoLineHeight, 17, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.weatherIconSize, 18, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.graphElevWidth, 1, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.graphHRWidth, 1, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.chartElevFillAlpha, 0.15, accuracy: 0.001)
+        XCTAssertEqual(ShareSummaryTokens.ColorHex.chartElev, "FF8D28")
+        XCTAssertEqual(ShareSummaryTokens.ColorHex.chartHR, "FF383C")
+        XCTAssertEqual(ShareSummaryTokens.graphLegendElevHeight, 1, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.graphLegendHRHeight, 1, accuracy: 0.01)
     }
 
     func testKmLabelCanvasClampPrefersInBoundsSide() throws {
