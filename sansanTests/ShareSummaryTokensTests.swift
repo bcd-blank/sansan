@@ -89,6 +89,62 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.graphLegendHRHeight, 1, accuracy: 0.01)
     }
 
+    func testDetailMapBlueLabelTokens() {
+        XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelHideSteps, [1, 5, 10, 20, 50])
+        XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelSideInset, 24, accuracy: 0.01)
+        XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelVerticalInset, 8, accuracy: 0.01)
+        XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelStrokeWidth, 1, accuracy: 0.01)
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        RouteKilometerMarkerMetrics.detailLabelFillUIColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual(r * 255, 0, accuracy: 0.5)
+        XCTAssertEqual(g * 255, 122, accuracy: 0.5)
+        XCTAssertEqual(b * 255, 255, accuracy: 0.5)
+        XCTAssertEqual(a, 1, accuracy: 0.01)
+    }
+
+    func testDetailThinningEscalatesWhenStepOneCollides() {
+        // Two capsules forced to overlap on a tiny canvas → step 1 fails, step 5 keeps only 5km.
+        let canvas = CGSize(width: 120, height: 80)
+        let requests = [
+            RouteKilometerLabelRequest(
+                kilometer: 1,
+                distanceLabel: "1km",
+                timeLabel: "10:00",
+                routePoint: CGPoint(x: 60, y: 40),
+                preferredLeadingSide: false
+            ),
+            RouteKilometerLabelRequest(
+                kilometer: 2,
+                distanceLabel: "2km",
+                timeLabel: "20:00",
+                routePoint: CGPoint(x: 62, y: 40),
+                preferredLeadingSide: false
+            ),
+            RouteKilometerLabelRequest(
+                kilometer: 5,
+                distanceLabel: "5km",
+                timeLabel: "50:00",
+                routePoint: CGPoint(x: 60, y: 40),
+                preferredLeadingSide: true
+            )
+        ]
+        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+            for: requests,
+            endpointPoints: [CGPoint(x: 10, y: 40), CGPoint(x: 110, y: 40)],
+            contentScale: 1,
+            imageSize: canvas
+        )
+        XCTAssertGreaterThanOrEqual(thinned.step, 5)
+        XCTAssertFalse(thinned.shifts.keys.contains(1))
+        XCTAssertFalse(thinned.shifts.keys.contains(2))
+        if thinned.step == 5 {
+            XCTAssertTrue(thinned.shifts.keys.contains(5))
+        }
+    }
+
     func testKmLabelCanvasClampPrefersInBoundsSide() throws {
         // Dot near right edge of 430pt canvas — right-side capsule would clip past 430.
         let canvas = CGSize(width: 430, height: 764)

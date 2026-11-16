@@ -130,7 +130,17 @@
   "kmLabel": {
     "bounds": "capsule inside x [24, width-24]",
     "offset": 10,
-    "sides": ["right", "below", "bottom-left", "left"]
+    "sides": ["right", "below", "bottom-left", "left"],
+    "shareFill": "white (share/card/flythrough)",
+    "detailMap": {
+      "fill": "#007AFF",
+      "textKm": "white 600",
+      "textTime": "white 400",
+      "stroke": "white 1pt inner",
+      "shadow": ["0 1 2 #000000 22%", "0 2 6 #0B0D1F 10%"],
+      "hideSteps": [1, 5, 10, 20, 50],
+      "source": "docs/detail-map-labels/spec-detail-labels-final.md"
+    }
   },
   "chart": {
     "elev": "#FF8D28",
