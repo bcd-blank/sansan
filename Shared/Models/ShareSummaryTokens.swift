@@ -47,7 +47,8 @@ enum ShareSummaryTokens {
         static let mapLabel = "9A9A9E"
         static let hairline = "E5E5EA"
         static let track = "D1D1D6"
-        static let hr = "AEAEB2"
+        /// Same as chart HR (#FF383C); legacy gray #AEAEB2 retired (ship 2026-11-16).
+        static let hr = "FF383C"
         static let chartElev = "FF8D28"
         static let chartHR = "FF383C"
         static let surface = "FFFFFF"
@@ -62,8 +63,8 @@ enum ShareSummaryTokens {
     static let mapTextUIColor = UIColor(red: 99 / 255, green: 99 / 255, blue: 102 / 255, alpha: 1)
     static let hairlineUIColor = UIColor(red: 229 / 255, green: 229 / 255, blue: 234 / 255, alpha: 1)
     static let trackUIColor = UIColor(red: 209 / 255, green: 209 / 255, blue: 214 / 255, alpha: 1)
-    /// Legacy gray — prefer `chartHRUIColor` for share chart/legend.
-    static let hrUIColor = UIColor(red: 174 / 255, green: 174 / 255, blue: 178 / 255, alpha: 1)
+    /// Matches `color.hr` / chart HR (#FF383C).
+    static let hrUIColor = UIColor(red: 255 / 255, green: 56 / 255, blue: 60 / 255, alpha: 1)
     static let surfaceUIColor = UIColor.white
     static let mapPaperUIColor = UIColor(red: 240 / 255, green: 240 / 255, blue: 240 / 255, alpha: 1)
     static let mapRoadUIColor = UIColor(red: 253 / 255, green: 253 / 255, blue: 253 / 255, alpha: 1)
@@ -190,7 +191,7 @@ enum ShareSummaryTokens {
     static let attributionGapAboveCard: CGFloat = 8
     static let attributionX: CGFloat = 40
     static let attributionMaxWidth: CGFloat = 350
-    /// Paper halo behind credit so basemap roads under the mark stay ≥4.5:1 (impl3 #15).
+    /// Paper halo (#F0F0F0 map.paper, blur 1–2pt) so basemap roads under the mark stay ≥4.5:1 (§13/§15).
     static let attributionHaloBlur: CGFloat = 2
     /// Opaque paper pad around attribution glyphs; soft edge = same radius (impl4 #11).
     static let attributionClearZone: CGFloat = 4
