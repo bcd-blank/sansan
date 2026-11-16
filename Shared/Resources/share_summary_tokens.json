@@ -1,0 +1,74 @@
+{
+  "id": "share.summary",
+  "confirmed": "2026-11-16",
+  "variant": "A",
+  "canvas": { "widthPt": 430, "aspect": "16/9", "textScaling": "none" },
+  "color": {
+    "accentIOS": "#34C759",
+    "accentAndroid": "#33C658",
+    "ink": "#0B0D1F",
+    "ink2": "#6E6E73",
+    "ink3": "#8A8A8E",
+    "mapText": "#636366",
+    "hairline": "#E5E5EA",
+    "track": "#D1D1D6",
+    "hr": "#AEAEB2",
+    "surface": "#FFFFFF",
+    "mapPaper": "#F0F0F0",
+    "mapRoad": "#FDFDFD"
+  },
+  "header": {
+    "top": 24,
+    "inset": 40,
+    "row1Height": 48,
+    "logoHeight": 32,
+    "titleGap": 8,
+    "bottomNoMemo": 104
+  },
+  "memo": {
+    "font": 12,
+    "weight": 500,
+    "lineHeight": 17,
+    "tracking": -0.1,
+    "color": "#636366",
+    "gapFromTitle": 8,
+    "maxLines": 3,
+    "truncation": "tail"
+  },
+  "card": {
+    "inset": 16,
+    "padding": { "h": 24, "top": 20, "bottom": 20 },
+    "height": 320,
+    "radius": 24,
+    "blockGap": 16,
+    "columns": { "width": 106, "gap": 16 }
+  },
+  "route": {
+    "width": 4.5,
+    "casing": 8,
+    "markerOuter": 18,
+    "markerInner": 12,
+    "kmLabel": "see RouteKilometerMarkerMetrics (shared with detail map)"
+  },
+  "weather": {
+    "maxWidthFraction": 0.5,
+    "height": 48,
+    "paddingH": 12,
+    "columnWidth": 28,
+    "columnGap": 8,
+    "iconSize": 18,
+    "tempSize": 12,
+    "maxColumns": 6,
+    "minScale": 0.85,
+    "overflow": "fit-first-last-then-scale",
+    "plusN": false,
+    "wrap": false
+  },
+  "map": {
+    "sideInset": 24,
+    "bottomInset": 352,
+    "fadeSolidOpacity": 0.97,
+    "fadeTail": 96,
+    "routeClearance": 16
+  }
+}

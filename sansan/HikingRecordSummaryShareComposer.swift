@@ -2,8 +2,8 @@
 //  HikingRecordSummaryShareComposer.swift
 //  sansan
 //
-//  9:16 지도 한 장 위에 기록 정보를 흰 글자로 올리고, 타이틀과 정보 뒤에만
-//  지도 도미넌트 컬러(multiply 56%) 음영을 둡니다.
+//  Share-summary A안: gray map + floating white card. Layout from share.summary.*
+//  tokens; km labels via shared RouteKilometerMarkerMetrics.
 //
 
 #if os(iOS)
@@ -18,10 +18,10 @@ enum HikingRecordSummaryShareComposer {
         mapOptions: HikingShareMapExportOptions
     ) async -> UIImage? {
         let width = HikingRecordShareDeviceMetrics.fullScreenBounds.width
-        let canvas = CGSize(width: width, height: width * 16 / 9)
+        let canvas = CGSize(width: width, height: width * ShareSummaryTokens.canvasAspect)
         let scale = HikingRecordShareDeviceMetrics.nativeScale
-        let hasMemo = !(record.memo?.isEmpty ?? true)
-        let pinnedCount = mapOptions.showsPinnedThumbnails ? record.mapPinnedPhotos.count : 0
+        let s = ShareSummaryTokens.ptScale(for: canvas.width)
+        let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvas.width)
         var captureOptions = mapOptions
         captureOptions.showsPinnedThumbnails = false
         guard let map = await HikingRouteSnapshotGenerator.fittedMapImage(
@@ -29,19 +29,21 @@ enum HikingRecordSummaryShareComposer {
             canvasSize: canvas,
             pixelScale: scale,
             mapOptions: captureOptions,
-            insetTop: summaryMemoBottom(canvasWidth: canvas.width, hasMemo: hasMemo) + summaryRouteMarkerPad,
-            insetBottom: summaryDistanceInset() + summaryRouteMarkerPad,
-            insetLeft: summaryRouteEdgePad,
-            insetRight: summaryRouteEdgePad,
-            routeFillFraction: 1
+            insetTop: ShareSummaryTokens.mapTopInset(memoLineCount: memoLines) * s,
+            insetBottom: ShareSummaryTokens.mapBottomInset * s,
+            insetLeft: ShareSummaryTokens.mapSideInset * s,
+            insetRight: ShareSummaryTokens.mapSideInset * s,
+            routeFillFraction: 1,
+            appearance: .shareSummary
         ) else { return nil }
 
         let page = SummaryMapSharePage(
             record: record,
             mapImage: map,
-            showsPinnedThumbnails: pinnedCount > 0
+            memoLineCount: memoLines
         )
-            .frame(width: canvas.width, height: canvas.height)
+        .frame(width: canvas.width, height: canvas.height)
+        .environment(\.colorScheme, .light)
         let renderer = ImageRenderer(content: page)
         renderer.proposedSize = ProposedViewSize(width: canvas.width, height: canvas.height)
         renderer.scale = scale
@@ -50,66 +52,15 @@ enum HikingRecordSummaryShareComposer {
     }
 }
 
-/// 로고 줄, 타이틀, 메모가 경로와 겹치지 않도록 위쪽을 비웁니다.
-/// 2행이던 메모가 길면 글자를 80%까지 줄여 그리던 크기.
-private let summaryMemoFontScale: CGFloat = 0.8
-private let summaryMemoLineBox: CGFloat = 4.2
-private let summaryPinnedThumbTopDrop: CGFloat = 16
-private let summaryRouteEdgePad: CGFloat = 36
-private let summaryRouteMarkerPad: CGFloat = 28
-private let summaryHeaderTopPad: CGFloat = 22
-private let summaryHeaderSidePad: CGFloat = 20
-
-/// 메모(없으면 제목) 하단. 경로는 여기서부터 거리 숫자 위까지 채웁니다.
-private func summaryMemoBottom(canvasWidth: CGFloat, hasMemo: Bool) -> CGFloat {
-    let layoutScale = canvasWidth / RouteBrandLogoMetrics.referenceCanvasWidth
-    let logoHeight = RouteBrandLogoMetrics.side * layoutScale * 0.64 / RouteBrandLogoMetrics.artworkAspect
-    let titleHeight = max(24, canvasWidth * 0.064) * 1.15
-    var height = summaryHeaderTopPad + logoHeight + 8 + titleHeight
-    if hasMemo {
-        height += 8 + max(13, canvasWidth * 0.032) * summaryMemoFontScale * summaryMemoLineBox
-    }
-    return height
-}
-
-/// 화면 하단에서 거리 라벨 상단까지의 높이.
-private func summaryDistanceInset() -> CGFloat {
-    let distance = 12 * 1.2 + 2 + 52 * 1.2
-    let metrics = 11 * 1.2 + 3 + 18 * 1.2
-    let caption = 12 * 1.2
-    let chart = 11 * 1.2 + 8 + 64
-    return 36 + distance + 16 + metrics + 16 + caption + 16 + chart
-}
-
-private func summaryHeaderClearance(canvasWidth: CGFloat, hasMemo: Bool, pinnedCount: Int = 0) -> CGFloat {
-    let layoutScale = canvasWidth / RouteBrandLogoMetrics.referenceCanvasWidth
-    let logoHeight = RouteBrandLogoMetrics.side * layoutScale * 0.64 / RouteBrandLogoMetrics.artworkAspect
-    var textHeight = summaryMemoBottom(canvasWidth: canvasWidth, hasMemo: hasMemo) + 12
-    guard pinnedCount > 0 else { return textHeight }
-    let scale = canvasWidth / 377
-    let chip = (64 + 10) * scale
-    let stack = 8 + summaryPinnedThumbTopDrop + CGFloat(pinnedCount) * chip + CGFloat(pinnedCount - 1) * 7 * scale
-    let railHeight = summaryHeaderTopPad + logoHeight + stack + 12
-    return max(textHeight, railHeight)
-}
+// MARK: - Page
 
 private struct SummaryMapSharePage: View {
     let record: SavedHikingSession
     let mapImage: UIImage
-    var showsPinnedThumbnails: Bool = false
-    /// Dominant-color (or fallback) fill for text-area scrims — color + multiply only.
-    private let overlayFill: Color
+    let memoLineCount: Int
 
-    init(
-        record: SavedHikingSession,
-        mapImage: UIImage,
-        showsPinnedThumbnails: Bool = false
-    ) {
-        self.record = record
-        self.mapImage = mapImage
-        self.showsPinnedThumbnails = showsPinnedThumbnails
-        self.overlayFill = Color(ShareSummaryOverlayColor.uiColor(from: mapImage))
-    }
+    private var s: CGFloat { ShareSummaryTokens.ptScale(for: mapImage.size.width) }
+    private var headerBottom: CGFloat { ShareSummaryTokens.headerBottom(memoLineCount: memoLineCount) * s }
 
     private var showsWeather: Bool {
         HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
@@ -121,174 +72,184 @@ private struct SummaryMapSharePage: View {
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
 
-            topScrim
-            bottomScrim
+            paperFade
+                .allowsHitTesting(false)
 
-            headerLine
+            headerBlock
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            SummaryInfoBlock(record: record)
-                .padding(.horizontal, 22)
-                .padding(.bottom, 36)
+            mapsAttribution
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+
+            SummaryInfoCard(record: record, scale: s)
+                .padding(.horizontal, ShareSummaryTokens.cardInset * s)
+                .padding(.bottom, ShareSummaryTokens.cardInset * s)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .frame(width: mapImage.size.width, height: mapImage.size.height)
         .clipped()
     }
 
-    /// 타이틀을 덮고, 경로가 시작되는 지점에서 투명해진다.
-    /// Stop locations / opacities / height unchanged — only fill color + multiply.
-    private var topScrim: some View {
-        LinearGradient(
+    private var paperFade: some View {
+        let solidEnd = headerBottom + ShareSummaryTokens.routeClearance * s
+        let fadeEnd = solidEnd + ShareSummaryTokens.fadeTail * s
+        let h = mapImage.size.height
+        let solidLoc = min(solidEnd / h, 0.98)
+        let fadeLoc = min(fadeEnd / h, 1)
+        let paper = Color(ShareSummaryTokens.mapPaperUIColor)
+        return LinearGradient(
             stops: [
-                .init(color: overlayFill.opacity(0.62), location: 0),
-                .init(color: overlayFill.opacity(0.46), location: 0.55),
-                .init(color: overlayFill.opacity(0.20), location: 0.78),
-                .init(color: overlayFill.opacity(0.05), location: 0.92),
-                .init(color: .clear, location: 1)
+                .init(color: paper.opacity(ShareSummaryTokens.fadeSolidOpacity), location: 0),
+                .init(color: paper.opacity(ShareSummaryTokens.fadeSolidOpacity), location: solidLoc),
+                .init(color: paper.opacity(0), location: fadeLoc)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
-        .blendMode(.multiply)
-        .frame(height: summaryHeaderClearance(
-            canvasWidth: mapImage.size.width,
-            hasMemo: !(record.memo?.isEmpty ?? true),
-            pinnedCount: showsPinnedThumbnails ? record.mapPinnedPhotos.count : 0
-        ) + mapImage.size.height * 0.07)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .allowsHitTesting(false)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// 거리 숫자까지 진하게 덮고, 그 위에서 경로 쪽으로 사라진다.
-    /// Stop locations / opacities / height unchanged — only fill color + multiply.
-    private var bottomScrim: some View {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0),
-                .init(color: overlayFill.opacity(0.04), location: 0.10),
-                .init(color: overlayFill.opacity(0.20), location: 0.18),
-                .init(color: overlayFill.opacity(0.40), location: 0.28),
-                .init(color: overlayFill.opacity(0.48), location: 0.38),
-                .init(color: overlayFill.opacity(0.50), location: 0.52),
-                .init(color: overlayFill.opacity(0.50), location: 1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .blendMode(.multiply)
-        .frame(height: mapImage.size.height * 0.56)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .allowsHitTesting(false)
-    }
-
-    private var headerLine: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
+    private var headerBlock: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 16 * s) {
                 summaryLogo
-                Spacer(minLength: 8)
+                Spacer(minLength: 16 * s)
                 if showsWeather, let weather = record.weather {
-                    HikingRecordMapWeatherOverlay(
+                    ShareSummaryWeatherCard(
                         weather: weather,
-                        layoutScale: mapImage.size.width / HikingRecordCardLayout.referenceContentWidth * 0.72,
-                        summaryMaxWidth: mapImage.size.width * 0.5
+                        scale: s,
+                        maxWidth: mapImage.size.width * ShareSummaryTokens.weatherMaxWidthFraction
                     )
-                    .frame(maxWidth: mapImage.size.width * 0.5, alignment: .trailing)
                 }
             }
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(record.exportCardTitle)
-                        .font(.system(size: max(24, mapImage.size.width * 0.064), weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.55)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .summaryTextShadow()
-                    if let memo = record.memo, !memo.isEmpty {
-                        Text(memo)
-                            .font(.system(size: max(13, mapImage.size.width * 0.032) * summaryMemoFontScale, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.84))
-                            .lineLimit(3)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .summaryTextShadow()
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: ShareSummaryTokens.headerRow1Height * s, alignment: .center)
 
-                if showsPinnedThumbnails {
-                    VStack(spacing: 7 * mapImage.size.width / 377) {
-                        ForEach(record.mapPinnedPhotos) { photo in
-                            SummaryPinnedThumbnailChip(recordID: record.id, photo: photo, canvasWidth: mapImage.size.width)
-                        }
-                    }
-                    .padding(.top, summaryPinnedThumbTopDrop)
-                    .frame(width: (64 + 10) * mapImage.size.width / 377)
-                }
+            Text(record.exportCardTitle)
+                .font(.system(size: ShareSummaryTokens.headerTitleSize * s, weight: .bold))
+                .tracking(-0.2 * s)
+                .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.top, ShareSummaryTokens.headerTitleGap * s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: ShareSummaryTokens.headerTitleLineHeight * s, alignment: .center)
+
+            if let memo = record.memo?.trimmingCharacters(in: .whitespacesAndNewlines), !memo.isEmpty {
+                Text(memo)
+                    .font(.system(size: ShareSummaryTokens.memoFontSize * s, weight: .medium))
+                    .tracking(ShareSummaryTokens.memoTracking * s)
+                    .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
+                    .lineLimit(ShareSummaryTokens.memoMaxLines)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing((ShareSummaryTokens.memoLineHeight - ShareSummaryTokens.memoFontSize) * s)
+                    .padding(.top, ShareSummaryTokens.memoGapFromTitle * s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.top, summaryHeaderTopPad)
-        .padding(.horizontal, summaryHeaderSidePad)
+        .padding(.top, ShareSummaryTokens.headerTop * s)
+        .padding(.horizontal, ShareSummaryTokens.headerInset * s)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var summaryLogo: some View {
-        let layoutScale = mapImage.size.width / RouteBrandLogoMetrics.referenceCanvasWidth
-        let logoWidth = RouteBrandLogoMetrics.side * layoutScale * 0.64
-        let logoHeight = logoWidth / RouteBrandLogoMetrics.artworkAspect
+        let height = ShareSummaryTokens.headerLogoHeight * s
         return Image("SansanLogoSymbol")
             .resizable()
             .aspectRatio(RouteBrandLogoMetrics.artworkAspect, contentMode: .fit)
-            .frame(width: logoWidth, height: logoHeight)
-            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+            .frame(height: height)
+    }
+
+    private var mapsAttribution: some View {
+        Text("지도")
+            .font(.system(size: 10.7 * s, weight: .regular))
+            .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
+            .padding(.leading, ShareSummaryTokens.headerInset * s)
+            .padding(.bottom, (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + 8) * s)
     }
 }
 
-private struct SummaryPinnedThumbnailChip: View {
-    let recordID: UUID
-    let photo: HikingTrailPhoto
-    let canvasWidth: CGFloat
+// MARK: - Weather
 
-    private var scale: CGFloat { canvasWidth / 377 }
-    private var imageSide: CGFloat { 64 * scale }
-    private var ring: CGFloat { 5 * scale }
+private struct ShareSummaryWeatherCard: View {
+    let weather: HikingRouteWeatherSnapshot
+    let scale: CGFloat
+    let maxWidth: CGFloat
 
-    private var image: UIImage? {
-        HikingTrailPhotoStore.loadImage(sessionID: recordID, filename: photo.filename)
+    private var hours: [HikingWeatherHourPoint] {
+        let minScale = ShareSummaryTokens.weatherMinScale * scale
+        let capacity = columnCapacity(at: minScale)
+        return HikingRouteWeatherSnapshot.timelineFitting(
+            weather.timelineHours,
+            maximumCount: min(ShareSummaryTokens.weatherMaxColumns, capacity)
+        )
+    }
+
+    /// Fit card into maxWidth; floor at weatherMinScale × layout scale.
+    private var displayScale: CGFloat {
+        let naturalDesign = chipWidth(hours: hours, scale: 1)
+        guard naturalDesign > 0 else { return scale }
+        let fitted = maxWidth / naturalDesign
+        return min(scale, max(fitted, ShareSummaryTokens.weatherMinScale * scale))
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.white.opacity(0.38))
-                .frame(width: imageSide + ring * 2, height: imageSide + ring * 2)
-            Circle()
-                .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
-                .frame(width: imageSide + ring * 2, height: imageSide + ring * 2)
-            Group {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Color(.tertiarySystemFill)
+        let s = displayScale
+        HStack(alignment: .top, spacing: ShareSummaryTokens.weatherColumnGap * s) {
+            ForEach(hours) { hour in
+                VStack(spacing: ShareSummaryTokens.weatherIconTempGap * s) {
+                    Image(systemName: HikingRouteWeatherSnapshot.symbolName(for: hour.wmoCode))
+                        .font(.system(size: ShareSummaryTokens.weatherIconSize * s, weight: .semibold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            WeatherIconPalette.primary(for: hour.wmoCode),
+                            WeatherIconPalette.secondary(for: hour.wmoCode)
+                        )
+                        .frame(
+                            width: ShareSummaryTokens.weatherColumnWidth * s,
+                            height: ShareSummaryTokens.weatherIconSize * s
+                        )
+                    Text(hour.formattedTemperature)
+                        .font(.system(size: ShareSummaryTokens.weatherTempSize * s, weight: .semibold))
+                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .frame(width: ShareSummaryTokens.weatherColumnWidth * s)
                 }
             }
-            .frame(width: imageSide, height: imageSide)
-            .clipShape(Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(Color.white.opacity(0.85), lineWidth: 2 * scale)
-            }
         }
-        .shadow(color: .black.opacity(0.22), radius: 8 * scale, y: 3 * scale)
+        .padding(.horizontal, ShareSummaryTokens.weatherPaddingH * s)
+        .padding(.vertical, ShareSummaryTokens.weatherPaddingV * s)
+        .frame(height: ShareSummaryTokens.weatherHeight * s)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: ShareSummaryTokens.weatherRadius * s, style: .continuous))
+        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.08), radius: 0.5 * s, y: 0)
+        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.08), radius: 4 * s, y: 2 * s)
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private func columnCapacity(at scale: CGFloat) -> Int {
+        guard scale > 0, maxWidth > 0 else { return 1 }
+        let column = ShareSummaryTokens.weatherColumnWidth * scale
+        let gap = ShareSummaryTokens.weatherColumnGap * scale
+        let pad = ShareSummaryTokens.weatherPaddingH * 2 * scale
+        let count = Int(((maxWidth - pad + gap) / (column + gap)).rounded(.down))
+        return max(1, min(ShareSummaryTokens.weatherMaxColumns, count))
+    }
+
+    private func chipWidth(hours: [HikingWeatherHourPoint], scale: CGFloat) -> CGFloat {
+        guard !hours.isEmpty else { return 0 }
+        let n = CGFloat(hours.count)
+        return ShareSummaryTokens.weatherPaddingH * 2 * scale
+            + ShareSummaryTokens.weatherColumnWidth * n * scale
+            + ShareSummaryTokens.weatherColumnGap * max(n - 1, 0) * scale
     }
 }
 
-private struct SummaryInfoBlock: View {
+// MARK: - Info card
+
+private struct SummaryInfoCard: View {
     let record: SavedHikingSession
+    let scale: CGFloat
 
     private var elevationSamples: [HikingElevationChartSample] {
         if let stored = record.session.elevationProfile, stored.count >= 2 {
@@ -311,57 +272,204 @@ private struct SummaryInfoBlock: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("거리")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.62))
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(record.distanceValueText)
-                        .font(.system(size: 52, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.7)
-                        .lineLimit(1)
-                    Text(record.distanceUnitText)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
-            .foregroundStyle(.white)
-            .summaryTextShadow()
-
-            HStack(alignment: .top, spacing: 0) {
-                valueColumn(label: "시간", value: record.formattedDurationCompact, unit: "")
-                valueColumn(label: "상승", value: record.elevationValueText, unit: "m")
-                valueColumn(
-                    label: "평균속도",
-                    value: record.averageSpeedValueText,
-                    unit: record.averageSpeedUnitText
-                )
-            }
-            .summaryTextShadow()
-
-            Text(captionLine)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.78))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .summaryTextShadow()
-
-            SummaryElevationHeartChart(
-                elevation: elevationSamples,
-                heartRate: heartSamples
-            )
-        }
-        .foregroundStyle(.white)
+    /// Peak elevation from profile samples — current app meaning of 「고도 N m」.
+    private var maxElevation: Int {
+        Int((elevationSamples.map(\.altitude).max() ?? 0).rounded())
     }
 
-    private var captionLine: String {
-        let end = record.endedScheduleParts
-        let start = record.startedScheduleParts
-        let startTime = timeLabel(start)
-        let endTime = timeLabel(end)
-        return "\(startTime) – \(endTime)   ·   \(record.stepCountValueText) 걸음   ·   \(record.caloriesValueText) kcal"
+    private var heartStats: (average: Int, minimum: Int, maximum: Int)? {
+        let values = heartSamples.map(\.bpm)
+        guard let minValue = values.min(), let maxValue = values.max(), !values.isEmpty else { return nil }
+        let average = values.reduce(0, +) / Double(values.count)
+        return (Int(average.rounded()), Int(minValue.rounded()), Int(maxValue.rounded()))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ShareSummaryTokens.cardBlockGap * scale) {
+            heroRow
+            divider
+            metricsRow
+            metaRow
+            chartBlock
+        }
+        .padding(.horizontal, ShareSummaryTokens.cardPaddingH * scale)
+        .padding(.top, ShareSummaryTokens.cardPaddingTop * scale)
+        .padding(.bottom, ShareSummaryTokens.cardPaddingBottom * scale)
+        .frame(height: ShareSummaryTokens.cardHeight * scale, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.white,
+            in: RoundedRectangle(cornerRadius: ShareSummaryTokens.cardRadius * scale, style: .continuous)
+        )
+        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.10), radius: 16 * scale, y: 12 * scale)
+        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.06), radius: 1.5 * scale, y: 1 * scale)
+    }
+
+    private var heroRow: some View {
+        HStack(alignment: .center, spacing: 12 * scale) {
+            VStack(alignment: .leading, spacing: 4 * scale) {
+                Text("거리")
+                    .font(.system(size: ShareSummaryTokens.labelSize * scale, weight: .medium))
+                    .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                HStack(alignment: .firstTextBaseline, spacing: 4 * scale) {
+                    Text(record.distanceValueText)
+                        .font(.system(size: ShareSummaryTokens.heroSize * scale, weight: .light))
+                        .tracking(-1.4 * scale)
+                        .monospacedDigit()
+                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    Text(record.distanceUnitText)
+                        .font(.system(size: ShareSummaryTokens.heroUnitSize * scale, weight: .regular))
+                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                }
+            }
+            Spacer(minLength: 8 * scale)
+            timeline
+        }
+    }
+
+    private var timeline: some View {
+        let start = timeLabel(record.startedScheduleParts)
+        let end = timeLabel(record.endedScheduleParts)
+        let dot = ShareSummaryTokens.timelineDot * scale
+        return HStack(alignment: .center, spacing: 8 * scale) {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(Color(ShareSummaryTokens.accentUIColor))
+                    .frame(width: dot, height: dot)
+                Rectangle()
+                    .fill(Color(ShareSummaryTokens.trackUIColor))
+                    .frame(width: max(1 * scale, 1), height: ShareSummaryTokens.timelineLine * scale)
+                Circle()
+                    .fill(Color(ShareSummaryTokens.inkUIColor))
+                    .frame(width: dot, height: dot)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(start)
+                    .font(.system(size: ShareSummaryTokens.timeSize * scale, weight: .regular))
+                    .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    .monospacedDigit()
+                Spacer(minLength: 0)
+                Text(end)
+                    .font(.system(size: ShareSummaryTokens.timeSize * scale, weight: .regular))
+                    .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    .monospacedDigit()
+            }
+            .frame(height: ShareSummaryTokens.timelineLine * scale + dot * 2)
+        }
+    }
+
+    private var metricsRow: some View {
+        HStack(alignment: .top, spacing: ShareSummaryTokens.cardColumnGap * scale) {
+            metricColumn(label: "시간") {
+                let parts = durationParts(record.formattedDurationCompact)
+                HStack(alignment: .firstTextBaseline, spacing: 1 * scale) {
+                    ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                        Text(part.text)
+                            .font(.system(
+                                size: (part.isUnit ? ShareSummaryTokens.metricUnitSize : ShareSummaryTokens.metricSize) * scale,
+                                weight: part.isUnit ? .regular : .light
+                            ))
+                            .tracking(part.isUnit ? 0 : -0.5 * scale)
+                            .monospacedDigit()
+                            .foregroundStyle(
+                                part.isUnit
+                                    ? Color(ShareSummaryTokens.ink2UIColor)
+                                    : Color(ShareSummaryTokens.inkUIColor)
+                            )
+                    }
+                }
+            }
+            metricColumn(label: "상승") {
+                HStack(alignment: .firstTextBaseline, spacing: 2 * scale) {
+                    Text(record.elevationValueText)
+                        .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
+                        .tracking(-0.5 * scale)
+                        .monospacedDigit()
+                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    Text("m")
+                        .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
+                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                }
+            }
+            metricColumn(label: "평균속도") {
+                HStack(alignment: .firstTextBaseline, spacing: 2 * scale) {
+                    Text(record.averageSpeedValueText)
+                        .font(.system(size: ShareSummaryTokens.metricSize * scale, weight: .light))
+                        .tracking(-0.5 * scale)
+                        .monospacedDigit()
+                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                    Text(record.averageSpeedUnitText)
+                        .font(.system(size: ShareSummaryTokens.metricUnitSize * scale, weight: .regular))
+                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                }
+            }
+        }
+    }
+
+    private var metaRow: some View {
+        HStack(spacing: 0) {
+            metaItem(value: record.stepCountValueText, unit: "걸음")
+            metaItem(value: record.caloriesValueText, unit: "kcal")
+            metaItem(value: "\(maxElevation)", unit: "m", label: "고도")
+        }
+    }
+
+    private var chartBlock: some View {
+        VStack(alignment: .leading, spacing: 8 * scale) {
+            if let heartStats {
+                HStack(spacing: 4 * scale) {
+                    Text("심박")
+                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
+                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                    Text("\(heartStats.average)")
+                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .medium))
+                        .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                        .monospacedDigit()
+                    Text("\(heartStats.minimum)–\(heartStats.maximum)")
+                        .font(.system(size: ShareSummaryTokens.legendSize * scale, weight: .regular))
+                        .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+                        .monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+            }
+            SummaryChartCanvas(elevation: elevationSamples, heartRate: heartSamples, scale: scale)
+                .frame(height: ShareSummaryTokens.graphHeight * scale)
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(Color(ShareSummaryTokens.hairlineUIColor))
+            .frame(height: ShareSummaryTokens.hairlineWidth(scale: scale))
+            .frame(maxWidth: .infinity)
+    }
+
+    private func metricColumn<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4 * scale) {
+            Text(label)
+                .font(.system(size: ShareSummaryTokens.labelSize * scale, weight: .medium))
+                .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func metaItem(value: String, unit: String, label: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3 * scale) {
+            if let label {
+                Text(label)
+                    .font(.system(size: ShareSummaryTokens.metaSize * scale, weight: .regular))
+                    .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+            }
+            Text(value)
+                .font(.system(size: ShareSummaryTokens.metaSize * scale, weight: .medium))
+                .foregroundStyle(Color(ShareSummaryTokens.inkUIColor))
+                .monospacedDigit()
+            Text(unit)
+                .font(.system(size: ShareSummaryTokens.metaSize * scale, weight: .regular))
+                .foregroundStyle(Color(ShareSummaryTokens.ink2UIColor))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func timeLabel(_ parts: ScheduleDateParts?) -> String {
@@ -372,73 +480,39 @@ private struct SummaryInfoBlock: View {
         return parts.timeText
     }
 
-    private func valueColumn(label: String, value: String, unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.62))
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if !unit.isEmpty {
-                    Text(unit)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.78))
+    private struct DurationPart {
+        let text: String
+        let isUnit: Bool
+    }
+
+    private func durationParts(_ compact: String) -> [DurationPart] {
+        // "1h 47m" or "47:30"
+        if compact.contains("h") || (compact.contains("m") && compact.contains(" ")) {
+            var parts: [DurationPart] = []
+            for token in compact.split(separator: " ") {
+                let s = String(token)
+                if s.hasSuffix("h"), !s.dropLast().isEmpty {
+                    parts.append(.init(text: String(s.dropLast()), isUnit: false))
+                    parts.append(.init(text: "h", isUnit: true))
+                } else if s.hasSuffix("m"), !s.dropLast().isEmpty {
+                    parts.append(.init(text: String(s.dropLast()), isUnit: false))
+                    parts.append(.init(text: "m", isUnit: true))
+                } else {
+                    parts.append(.init(text: s, isUnit: false))
                 }
             }
+            return parts
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        return [.init(text: compact, isUnit: false)]
     }
 }
 
-private struct SummaryElevationHeartChart: View {
-    let elevation: [HikingElevationChartSample]
-    let heartRate: [HikingHeartRateChartSample]
-
-    private var maxElevation: Int {
-        Int((elevation.map(\.altitude).max() ?? 0).rounded())
-    }
-
-    private var heartStats: (average: Int, minimum: Int, maximum: Int)? {
-        let values = heartRate.map(\.bpm)
-        guard let minValue = values.min(), let maxValue = values.max(), !values.isEmpty else { return nil }
-        let average = values.reduce(0, +) / Double(values.count)
-        return (Int(average.rounded()), Int(minValue.rounded()), Int(maxValue.rounded()))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("고도 \(maxElevation) m")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                if let heartStats {
-                    Text("·")
-                        .foregroundStyle(.white.opacity(0.4))
-                    Text("심박 \(heartStats.average)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Text("\(heartStats.minimum)–\(heartStats.maximum)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                Spacer(minLength: 0)
-            }
-            .monospacedDigit()
-            .summaryTextShadow()
-
-            SummaryChartCanvas(elevation: elevation, heartRate: heartRate)
-                .frame(height: 64)
-        }
-    }
-}
+// MARK: - Chart
 
 private struct SummaryChartCanvas: View {
     let elevation: [HikingElevationChartSample]
     let heartRate: [HikingHeartRateChartSample]
+    let scale: CGFloat
 
     var body: some View {
         Canvas { context, size in
@@ -458,6 +532,12 @@ private struct SummaryChartCanvas: View {
                 return CGPoint(x: x, y: min(max(y, 0), size.height))
             }
 
+            let hair = ShareSummaryTokens.hairlineWidth(scale: scale)
+            var baseline = Path()
+            baseline.move(to: CGPoint(x: 0, y: size.height - hair / 2))
+            baseline.addLine(to: CGPoint(x: size.width, y: size.height - hair / 2))
+            context.stroke(baseline, with: .color(Color(ShareSummaryTokens.hairlineUIColor)), lineWidth: hair)
+
             if elevation.count >= 2 {
                 var area = Path()
                 let first = point(distance: elevation[0].distanceMeters, value: elevation[0].altitude, lower: 0, upper: elevationMax)
@@ -471,14 +551,28 @@ private struct SummaryChartCanvas: View {
                     area.addLine(to: CGPoint(x: end.x, y: size.height))
                 }
                 area.closeSubpath()
-                context.fill(area, with: .color(.white.opacity(0.16)))
+                context.fill(
+                    area,
+                    with: .linearGradient(
+                        Gradient(colors: [
+                            Color(ShareSummaryTokens.inkUIColor).opacity(0.07),
+                            Color(ShareSummaryTokens.inkUIColor).opacity(0.02)
+                        ]),
+                        startPoint: CGPoint(x: 0, y: 0),
+                        endPoint: CGPoint(x: 0, y: size.height)
+                    )
+                )
 
                 var line = Path()
                 line.move(to: first)
                 for sample in elevation.dropFirst() {
                     line.addLine(to: point(distance: sample.distanceMeters, value: sample.altitude, lower: 0, upper: elevationMax))
                 }
-                context.stroke(line, with: .color(.white.opacity(0.92)), lineWidth: 1.5)
+                context.stroke(
+                    line,
+                    with: .color(Color(ShareSummaryTokens.accentUIColor)),
+                    lineWidth: ShareSummaryTokens.graphElevWidth * scale
+                )
             }
 
             if heartRate.count >= 2 {
@@ -488,16 +582,13 @@ private struct SummaryChartCanvas: View {
                 for sample in heartRate.dropFirst() {
                     line.addLine(to: point(distance: sample.distanceMeters, value: sample.bpm, lower: heartMin, upper: heartMax))
                 }
-                context.stroke(line, with: .color(.white.opacity(0.55)), lineWidth: 1.15)
+                context.stroke(
+                    line,
+                    with: .color(Color(ShareSummaryTokens.hrUIColor)),
+                    lineWidth: ShareSummaryTokens.graphHRWidth * scale
+                )
             }
         }
-    }
-}
-
-private extension View {
-    func summaryTextShadow() -> some View {
-        shadow(color: .black.opacity(0.28), radius: 1.5, y: 1)
-            .shadow(color: .black.opacity(0.20), radius: 10, y: 3)
     }
 }
 

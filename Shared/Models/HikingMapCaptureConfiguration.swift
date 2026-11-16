@@ -15,5 +15,13 @@ enum HikingMapCaptureConfiguration {
             emphasisStyle: .default
         )
     }
+
+    /// Share-summary A안 — muted tiles before grayscale post-process.
+    static var shareSummaryMuted: MKMapConfiguration {
+        MKStandardMapConfiguration(
+            elevationStyle: .flat,
+            emphasisStyle: .muted
+        )
+    }
 }
 #endif

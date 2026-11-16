@@ -2,6 +2,9 @@
 //  RouteKilometerMarkerDrawing.swift
 //  Shared
 //
+//  Combined white km/time capsules shared by detail map, share summary,
+//  card export overlays, and flythrough.
+//
 
 #if os(iOS)
 
@@ -21,13 +24,10 @@ struct RouteKilometerLabelRequest {
 }
 
 enum RouteKilometerMarkerDrawing {
-    private static let routeGreen = UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1)
-    private static let timeBlue = UIColor(red: 0, green: 122.0 / 255.0, blue: 1, alpha: 1)
-    /// 시작·종료 점(지름 17) 밖으로 라벨을 띄우는 여유.
-    private static let endpointClearanceRadius: CGFloat = 17 / 2 + 6
+    /// 시작·종료 점(지름 18) 밖으로 라벨을 띄우는 여유.
+    private static let endpointClearanceRadius: CGFloat = 18 / 2 + 6
 
-    /// 겹치는 거리·시간 라벨을 포인트 옆에서만 조금 떼어 놓습니다.
-    /// 반대편, 또는 캡슐 하나 안쪽의 위아래만 허용합니다.
+    /// 겹치는 라벨을 포인트 옆에서만 조금 떼어 놓습니다.
     static func labelShifts(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
@@ -62,14 +62,7 @@ enum RouteKilometerMarkerDrawing {
     ) -> (shift: RouteKilometerLabelShift, rects: [CGRect]) {
         let clearance = endpointClearanceRadius * contentScale
         let labelPadding = 3 * contentScale
-        let anchorLabel = distanceLabel ?? timeLabel ?? ""
-        let anchorScale = RouteKilometerMarkerMetrics.markerLabelScale
-        let anchorHeight = capsuleSize(
-            for: anchorLabel,
-            contentScale: contentScale,
-            labelScale: anchorScale
-        ).height
-        let unit = max(anchorHeight, 12 * contentScale)
+        let unit = max(RouteKilometerMarkerMetrics.labelHeight * contentScale, 12 * contentScale)
         let nudges: [(sideIsPreferred: Bool, multiplier: CGFloat)] = [
             (true, 0),
             (false, 0),
@@ -143,18 +136,17 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
-        drawMarker(
+        drawCombinedMarker(
             distanceLabel: label,
             timeLabel: nil,
             routePoint: routePoint,
             placesLabelOnLeadingSide: placesLabelOnLeadingSide,
             contentScale: contentScale,
-            labelScale: 1,
             in: cgContext
         )
     }
 
-    /// 거리 라벨 옆에 두고, 시간 라벨은 그 위에 간격을 두고 그립니다.
+    /// Combined white capsule: both → `1km 16:50`; km-only / time-only → that part alone.
     static func drawMarker(
         distanceLabel: String?,
         timeLabel: String?,
@@ -165,57 +157,123 @@ enum RouteKilometerMarkerDrawing {
         labelScale: CGFloat = RouteKilometerMarkerMetrics.markerLabelScale,
         in cgContext: CGContext
     ) {
-        guard distanceLabel != nil || timeLabel != nil else { return }
-        drawRouteDot(
-            at: routePoint,
+        _ = labelScale
+        drawCombinedMarker(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
             contentScale: contentScale,
             in: cgContext
         )
+    }
 
-        let anchorLabel = distanceLabel ?? timeLabel ?? ""
-        let anchorCenter = labelCenterPoint(
-            label: anchorLabel,
+    /// Alias kept for share-summary call sites.
+    static func drawShareSummaryMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        placesLabelOnLeadingSide: Bool,
+        verticalOffset: CGFloat = 0,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
+        drawCombinedMarker(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
             routePoint: routePoint,
             placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
             contentScale: contentScale,
-            labelScale: labelScale
+            in: cgContext
         )
-        let shiftedAnchor = CGPoint(x: anchorCenter.x, y: anchorCenter.y + verticalOffset)
-        if let distanceLabel {
-            drawLabelCapsule(
-                label: distanceLabel,
-                at: shiftedAnchor,
-                fill: routeGreen,
-                contentScale: contentScale,
-                labelScale: labelScale,
-                in: cgContext
-            )
+    }
+
+    static func drawCombinedMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        placesLabelOnLeadingSide: Bool,
+        verticalOffset: CGFloat = 0,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
+        guard RouteKilometerMarkerMetrics.combinedLabel(distance: distanceLabel, time: timeLabel) != nil else {
+            return
         }
-        if let timeLabel {
-            let timeSize = capsuleSize(for: timeLabel, contentScale: contentScale, labelScale: labelScale)
-            let timeCenter: CGPoint
-            if let distanceLabel {
-                let distanceHeight = capsuleSize(
-                    for: distanceLabel,
-                    contentScale: contentScale,
-                    labelScale: labelScale
-                ).height
-                let stackGap = 3 * contentScale
-                timeCenter = CGPoint(
-                    x: shiftedAnchor.x,
-                    y: shiftedAnchor.y - distanceHeight / 2 - stackGap - timeSize.height / 2
-                )
-            } else {
-                timeCenter = shiftedAnchor
-            }
-            drawLabelCapsule(
-                label: timeLabel,
-                at: timeCenter,
-                fill: timeBlue,
-                contentScale: contentScale,
-                labelScale: labelScale,
-                in: cgContext
+        drawRouteDot(at: routePoint, contentScale: contentScale, in: cgContext)
+
+        let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
+        let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let timeFont = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+        let height = RouteKilometerMarkerMetrics.labelHeight * contentScale
+        let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
+        let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
+
+        let parts: [(String, UIFont, UIColor)]
+        if let distanceLabel, let timeLabel {
+            parts = [
+                (distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor),
+                (timeLabel, timeFont, RouteKilometerMarkerMetrics.ink2UIColor)
+            ]
+        } else if let distanceLabel {
+            parts = [(distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor)]
+        } else if let timeLabel {
+            parts = [(timeLabel, timeFont, RouteKilometerMarkerMetrics.ink2UIColor)]
+        } else {
+            return
+        }
+
+        var textWidth: CGFloat = 0
+        for (index, part) in parts.enumerated() {
+            if index > 0 { textWidth += innerGap }
+            textWidth += (part.0 as NSString).size(withAttributes: [.font: part.1]).width
+        }
+        let capsuleWidth = textWidth + padH * 2
+        let center = labelCenter(
+            capsuleWidth: capsuleWidth,
+            routePoint: routePoint,
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            contentScale: contentScale
+        )
+        let capsuleRect = CGRect(
+            x: center.x - capsuleWidth / 2,
+            y: center.y - height / 2 + verticalOffset,
+            width: capsuleWidth,
+            height: height
+        )
+        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: height / 2)
+
+        cgContext.saveGState()
+        cgContext.setShadow(
+            offset: CGSize(width: 0, height: 2 * contentScale),
+            blur: 6 * contentScale,
+            color: RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor
+        )
+        cgContext.setFillColor(UIColor.white.cgColor)
+        cgContext.addPath(path.cgPath)
+        cgContext.fillPath()
+        cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
+        cgContext.setLineWidth(max(0.5 * contentScale, 0.5))
+        cgContext.addPath(path.cgPath)
+        cgContext.strokePath()
+        cgContext.restoreGState()
+
+        var cursorX = capsuleRect.minX + padH
+        let midY = capsuleRect.midY
+        for (index, part) in parts.enumerated() {
+            if index > 0 { cursorX += innerGap }
+            let size = (part.0 as NSString).size(withAttributes: [.font: part.1])
+            let origin = CGPoint(x: cursorX, y: midY - size.height / 2)
+            (part.0 as NSString).draw(
+                at: origin,
+                withAttributes: [
+                    .font: part.1,
+                    .foregroundColor: part.2
+                ]
             )
+            cursorX += size.width
         }
     }
 
@@ -225,7 +283,7 @@ enum RouteKilometerMarkerDrawing {
         placesLabelOnLeadingSide: Bool,
         contentScale: CGFloat = 1
     ) -> (size: CGSize, routeDotCenter: CGPoint) {
-        let capsule = capsuleSize(for: label, contentScale: contentScale)
+        let capsule = capsuleSize(distanceLabel: label, timeLabel: nil, contentScale: contentScale)
         let dot = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale
         let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
         let pad = 6 * contentScale
@@ -242,18 +300,15 @@ enum RouteKilometerMarkerDrawing {
         return (CGSize(width: width, height: height), CGPoint(x: routeDotCenterX, y: height / 2))
     }
 
-    private static func labelCenterPoint(
-        label: String,
+    private static func labelCenter(
+        capsuleWidth: CGFloat,
         routePoint: CGPoint,
         placesLabelOnLeadingSide: Bool,
-        contentScale: CGFloat,
-        labelScale: CGFloat = 1
+        contentScale: CGFloat
     ) -> CGPoint {
-        let capsuleWidth = capsuleSize(for: label, contentScale: contentScale, labelScale: labelScale).width
         let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
         let dotRadius = RouteKilometerMarkerMetrics.routeDotDiameter * contentScale / 2
         let offsetX = dotRadius + gap + capsuleWidth / 2
-
         return CGPoint(
             x: routePoint.x + (placesLabelOnLeadingSide ? -offsetX : offsetX),
             y: routePoint.y
@@ -268,63 +323,53 @@ enum RouteKilometerMarkerDrawing {
         verticalOffset: CGFloat,
         contentScale: CGFloat
     ) -> [CGRect] {
-        let anchorLabel = distanceLabel ?? timeLabel ?? ""
-        guard !anchorLabel.isEmpty else { return [] }
-        let labelScale = RouteKilometerMarkerMetrics.markerLabelScale
-        let anchorCenter = labelCenterPoint(
-            label: anchorLabel,
+        let size = capsuleSize(distanceLabel: distanceLabel, timeLabel: timeLabel, contentScale: contentScale)
+        guard size.width > 0 else { return [] }
+        let center = labelCenter(
+            capsuleWidth: size.width,
             routePoint: routePoint,
             placesLabelOnLeadingSide: placesLabelOnLeadingSide,
-            contentScale: contentScale,
-            labelScale: labelScale
+            contentScale: contentScale
         )
-        let shiftedAnchor = CGPoint(x: anchorCenter.x, y: anchorCenter.y + verticalOffset)
-        var rects: [CGRect] = []
-        if let distanceLabel {
-            rects.append(
-                rect(
-                    for: distanceLabel,
-                    center: shiftedAnchor,
-                    contentScale: contentScale,
-                    labelScale: labelScale
-                )
+        return [
+            CGRect(
+                x: center.x - size.width / 2,
+                y: center.y - size.height / 2 + verticalOffset,
+                width: size.width,
+                height: size.height
             )
-            if let timeLabel {
-                let distanceHeight = capsuleSize(
-                    for: distanceLabel,
-                    contentScale: contentScale,
-                    labelScale: labelScale
-                ).height
-                let timeSize = capsuleSize(for: timeLabel, contentScale: contentScale, labelScale: labelScale)
-                let stackGap = 3 * contentScale
-                let timeCenter = CGPoint(
-                    x: shiftedAnchor.x,
-                    y: shiftedAnchor.y - distanceHeight / 2 - stackGap - timeSize.height / 2
-                )
-                rects.append(rect(for: timeLabel, center: timeCenter, contentScale: contentScale, labelScale: labelScale))
-            }
-        } else if let timeLabel {
-            rects.append(rect(for: timeLabel, center: shiftedAnchor, contentScale: contentScale, labelScale: labelScale))
-        }
-        return rects
+        ]
     }
 
-    private static func rect(
-        for label: String,
-        center: CGPoint,
-        contentScale: CGFloat,
-        labelScale: CGFloat = 1
-    ) -> CGRect {
-        let size = capsuleSize(for: label, contentScale: contentScale, labelScale: labelScale)
-        return CGRect(
-            x: center.x - size.width / 2,
-            y: center.y - size.height / 2,
-            width: size.width,
-            height: size.height
+    static func capsuleSize(
+        distanceLabel: String?,
+        timeLabel: String?,
+        contentScale: CGFloat
+    ) -> CGSize {
+        guard RouteKilometerMarkerMetrics.combinedLabel(distance: distanceLabel, time: timeLabel) != nil else {
+            return .zero
+        }
+        let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
+        let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let timeFont = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+        let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
+        let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
+        var textWidth: CGFloat = 0
+        if let distanceLabel, let timeLabel {
+            textWidth = (distanceLabel as NSString).size(withAttributes: [.font: kmFont]).width
+                + innerGap
+                + (timeLabel as NSString).size(withAttributes: [.font: timeFont]).width
+        } else if let distanceLabel {
+            textWidth = (distanceLabel as NSString).size(withAttributes: [.font: kmFont]).width
+        } else if let timeLabel {
+            textWidth = (timeLabel as NSString).size(withAttributes: [.font: timeFont]).width
+        }
+        return CGSize(
+            width: textWidth + padH * 2,
+            height: RouteKilometerMarkerMetrics.labelHeight * contentScale
         )
     }
 
-    /// 겹치면 음수(깊을수록 작음), 모두 비키면 무한대.
     private static func endpointSeparation(
         of rects: [CGRect],
         from endpoints: [CGPoint],
@@ -368,22 +413,6 @@ enum RouteKilometerMarkerDrawing {
         return area
     }
 
-    private static func capsuleSize(
-        for label: String,
-        contentScale: CGFloat,
-        labelScale: CGFloat = 1
-    ) -> CGSize {
-        let font = UIFont.systemFont(ofSize: 10 * contentScale * labelScale, weight: .bold)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let textSize = (label as NSString).size(withAttributes: attributes)
-        let horizontalPadding = 6 * contentScale * labelScale
-        let verticalPadding = 3 * contentScale * labelScale
-        return CGSize(
-            width: textSize.width + horizontalPadding * 2,
-            height: textSize.height + verticalPadding * 2
-        )
-    }
-
     private static func drawRouteDot(
         at center: CGPoint,
         contentScale: CGFloat,
@@ -397,67 +426,13 @@ enum RouteKilometerMarkerDrawing {
             width: diameter,
             height: diameter
         )
-
         cgContext.saveGState()
-        cgContext.setShadow(
-            offset: CGSize(width: 0, height: 1 * contentScale),
-            blur: 1.5 * contentScale,
-            color: UIColor.black.withAlphaComponent(0.18).cgColor
-        )
-        cgContext.setFillColor(routeGreen.cgColor)
+        cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: rect)
-        cgContext.setStrokeColor(UIColor.white.cgColor)
+        cgContext.setStrokeColor(RouteKilometerMarkerMetrics.accentUIColor.cgColor)
         cgContext.setLineWidth(border)
         cgContext.strokeEllipse(in: rect.insetBy(dx: border / 2, dy: border / 2))
         cgContext.restoreGState()
-    }
-
-    private static func drawLabelCapsule(
-        label: String,
-        at center: CGPoint,
-        fill: UIColor,
-        contentScale: CGFloat,
-        labelScale: CGFloat = 1,
-        in cgContext: CGContext
-    ) {
-        let font = UIFont.systemFont(ofSize: 10 * contentScale * labelScale, weight: .bold)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: UIColor.white,
-        ]
-        let capsuleSize = capsuleSize(for: label, contentScale: contentScale, labelScale: labelScale)
-        let capsuleRect = CGRect(
-            x: center.x - capsuleSize.width / 2,
-            y: center.y - capsuleSize.height / 2,
-            width: capsuleSize.width,
-            height: capsuleSize.height
-        )
-        let capsulePath = UIBezierPath(
-            roundedRect: capsuleRect,
-            cornerRadius: capsuleSize.height / 2
-        )
-
-        cgContext.saveGState()
-        cgContext.setShadow(
-            offset: CGSize(width: 0, height: 1 * contentScale),
-            blur: 2 * contentScale,
-            color: UIColor.black.withAlphaComponent(0.2).cgColor
-        )
-        cgContext.setFillColor(fill.cgColor)
-        cgContext.addPath(capsulePath.cgPath)
-        cgContext.fillPath()
-        cgContext.setStrokeColor(UIColor.white.withAlphaComponent(0.9).cgColor)
-        cgContext.setLineWidth(1)
-        cgContext.addPath(capsulePath.cgPath)
-        cgContext.strokePath()
-        cgContext.restoreGState()
-
-        let textSize = (label as NSString).size(withAttributes: attributes)
-        let textOrigin = CGPoint(
-            x: capsuleRect.midX - textSize.width / 2,
-            y: capsuleRect.midY - textSize.height / 2
-        )
-        (label as NSString).draw(at: textOrigin, withAttributes: attributes)
     }
 }
 

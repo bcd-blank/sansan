@@ -588,7 +588,7 @@ struct HikingRecordMapWeatherOverlay: View {
     }
 }
 
-private enum WeatherIconPalette {
+enum WeatherIconPalette {
     static func primary(for code: Int) -> Color {
         switch code {
         case 0:

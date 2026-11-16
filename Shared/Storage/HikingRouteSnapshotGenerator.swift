@@ -5,9 +5,17 @@
 
 #if os(iOS)
 
+import CoreImage
 import CoreLocation
 import MapKit
 import UIKit
+
+enum HikingRouteSnapshotAppearance {
+    /// 상세·썸네일·기록 카드 — 기존 스타일.
+    case standard
+    /// 공유 요약 A안 — 회색 지도, 흰 외곽선 초록 경로, 합친 km 라벨, 끝점 잉크.
+    case shareSummary
+}
 
 enum HikingRouteSnapshotGenerator {
     /// 상세 화면·썸네일용 경로 이미지 (상세 지도와 동일 종횡비).
@@ -42,8 +50,13 @@ enum HikingRouteSnapshotGenerator {
     private static let startPointColor = UIColor(red: 52.0 / 255.0, green: 199.0 / 255.0, blue: 89.0 / 255.0, alpha: 1)
     private static let endPointColor = UIColor(red: 255.0 / 255.0, green: 59.0 / 255.0, blue: 48.0 / 255.0, alpha: 1)
 
-    private static func mapContentScale(for canvasWidth: CGFloat) -> CGFloat {
-        canvasWidth / mapLayoutReferenceWidth
+    private static func mapContentScale(for canvasWidth: CGFloat, appearance: HikingRouteSnapshotAppearance) -> CGFloat {
+        switch appearance {
+        case .standard:
+            return canvasWidth / mapLayoutReferenceWidth
+        case .shareSummary:
+            return ShareSummaryTokens.ptScale(for: canvasWidth)
+        }
     }
 
     /// 캐시된 경로 PNG 위에 공유 옵션(사진 마커·핀 썸네일)만 빠르게 합성합니다.
@@ -58,7 +71,7 @@ enum HikingRouteSnapshotGenerator {
         let canvasSize = baseImage.size
         let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: canvasSize)
         let projector = RegionCoordinateProjector(region: region, canvasSize: canvasSize)
-        let contentScale = mapContentScale(for: canvasSize.width)
+        let contentScale = mapContentScale(for: canvasSize.width, appearance: .standard)
         let format = UIGraphicsImageRendererFormat()
         format.scale = baseImage.scale
         format.opaque = true
@@ -100,6 +113,7 @@ enum HikingRouteSnapshotGenerator {
                     showsDistance: mapOptions.showsDistanceMarkers,
                     showsTime: mapOptions.showsTimeMarkers,
                     contentScale: contentScale,
+                    appearance: .standard,
                     in: context.cgContext
                 )
             }
@@ -230,7 +244,7 @@ enum HikingRouteSnapshotGenerator {
         )
     }
 
-    /// 요약 저장용. 메모 하단부터 거리 상단까지, 경로의 긴 축이 그 영역에 닿게 맞춥니다.
+    /// 요약 저장용. 메모 하단부터 카드 상단까지, 경로의 긴 축이 그 영역에 닿게 맞춥니다.
     @MainActor
     static func fittedMapImage(
         record: SavedHikingSession,
@@ -241,7 +255,8 @@ enum HikingRouteSnapshotGenerator {
         insetBottom: CGFloat = 0,
         insetLeft: CGFloat = 0,
         insetRight: CGFloat = 0,
-        routeFillFraction: CGFloat = 1
+        routeFillFraction: CGFloat = 1,
+        appearance: HikingRouteSnapshotAppearance = .standard
     ) async -> UIImage? {
         let coordinates = HikingSessionMetrics.resolvedDisplayRouteCoordinates(from: record.session)
         guard coordinates.count >= 2 else { return nil }
@@ -257,7 +272,8 @@ enum HikingRouteSnapshotGenerator {
             insetBottom: insetBottom,
             insetLeft: insetLeft,
             insetRight: insetRight,
-            routeFillFraction: routeFillFraction
+            routeFillFraction: routeFillFraction,
+            appearance: appearance
         )
     }
 
@@ -275,7 +291,8 @@ enum HikingRouteSnapshotGenerator {
         insetLeft: CGFloat = 0,
         insetRight: CGFloat = 0,
         routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction,
-        listThumbnailOnly: Bool = false
+        listThumbnailOnly: Bool = false,
+        appearance: HikingRouteSnapshotAppearance = .standard
     ) async -> UIImage? {
         // MKMapSnapshotter 이미지에는 Apple 법적 표기·로고가 포함되지 않습니다(개발자가 직접
         // 그려야 함). 따라서 strip 크롭은 실제 지도를 잘라내 경로를 어긋나게 할 뿐이라 하지 않습니다.
@@ -293,10 +310,13 @@ enum HikingRouteSnapshotGenerator {
         )
         options.size = snapshotCanvas
         options.scale = pixelScale
-        options.preferredConfiguration = HikingMapCaptureConfiguration.standard
-        options.traitCollection = UITraitCollection(
-            userInterfaceStyle: AppExportAppearance.resolvedUserInterfaceStyle()
-        )
+        options.preferredConfiguration = appearance == .shareSummary
+            ? HikingMapCaptureConfiguration.shareSummaryMuted
+            : HikingMapCaptureConfiguration.standard
+        let interfaceStyle: UIUserInterfaceStyle = appearance == .shareSummary
+            ? .light
+            : AppExportAppearance.resolvedUserInterfaceStyle()
+        options.traitCollection = UITraitCollection(userInterfaceStyle: interfaceStyle)
 
         return await withCheckedContinuation { continuation in
             MKMapSnapshotter(options: options).start { snapshot, error in
@@ -306,7 +326,12 @@ enum HikingRouteSnapshotGenerator {
                 }
 
                 let projector = SnapshotCoordinateProjector(snapshot: snapshot)
-                let baseImage = snapshot.image
+                let baseImage: UIImage
+                if appearance == .shareSummary {
+                    baseImage = desaturatedMapImage(snapshot.image) ?? snapshot.image
+                } else {
+                    baseImage = snapshot.image
+                }
                 let image = composite(
                     baseImage: baseImage,
                     projector: projector,
@@ -315,11 +340,26 @@ enum HikingRouteSnapshotGenerator {
                     canvasSize: canvasSize,
                     pixelScale: pixelScale,
                     mapOptions: mapOptions,
-                    listThumbnailOnly: listThumbnailOnly
+                    listThumbnailOnly: listThumbnailOnly,
+                    appearance: appearance
                 )
                 continuation.resume(returning: image)
             }
         }
+    }
+
+    private static func desaturatedMapImage(_ image: UIImage) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIColorControls") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(0, forKey: kCIInputSaturationKey)
+        filter.setValue(0.04, forKey: kCIInputBrightnessKey)
+        filter.setValue(1.02, forKey: kCIInputContrastKey)
+        guard let output = filter.outputImage else { return nil }
+        let context = CIContext(options: nil)
+        guard let rendered = context.createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private static func composite(
@@ -331,9 +371,10 @@ enum HikingRouteSnapshotGenerator {
         pixelScale: CGFloat,
         mapOptions: HikingShareMapExportOptions,
         includesLiveDetailContent: Bool = false,
-        listThumbnailOnly: Bool = false
+        listThumbnailOnly: Bool = false,
+        appearance: HikingRouteSnapshotAppearance = .standard
     ) -> UIImage {
-        let contentScale = mapContentScale(for: canvasSize.width)
+        let contentScale = mapContentScale(for: canvasSize.width, appearance: appearance)
         let format = UIGraphicsImageRendererFormat()
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
@@ -345,6 +386,7 @@ enum HikingRouteSnapshotGenerator {
                     using: projector,
                     coordinates: coordinates,
                     contentScale: contentScale,
+                    appearance: appearance,
                     in: context.cgContext
                 )
             }
@@ -389,6 +431,7 @@ enum HikingRouteSnapshotGenerator {
                         showsDistance: mapOptions.showsDistanceMarkers,
                         showsTime: mapOptions.showsTimeMarkers,
                         contentScale: contentScale,
+                        appearance: appearance,
                         in: context.cgContext
                     )
                 }
@@ -397,10 +440,13 @@ enum HikingRouteSnapshotGenerator {
                 using: projector,
                 coordinates: coordinates,
                 contentScale: contentScale,
+                appearance: appearance,
                 in: context.cgContext
             )
 
-            if mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
+            if appearance != .shareSummary,
+               mapOptions.showsPinnedThumbnails,
+               !record.mapPinnedPhotos.isEmpty {
                 drawPinnedThumbnails(
                     record: record,
                     photos: record.mapPinnedPhotos,
@@ -489,6 +535,7 @@ enum HikingRouteSnapshotGenerator {
         using projector: MapCoordinateProjecting,
         coordinates: [CLLocationCoordinate2D],
         contentScale: CGFloat,
+        appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
         let path = UIBezierPath()
@@ -504,28 +551,66 @@ enum HikingRouteSnapshotGenerator {
             }
         }
 
-        path.lineWidth = detailRouteLineWidth * contentScale
-        UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1).setStroke()
-        path.stroke()
+        switch appearance {
+        case .standard:
+            path.lineWidth = detailRouteLineWidth * contentScale
+            UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1).setStroke()
+            path.stroke()
+        case .shareSummary:
+            cgContext.saveGState()
+            cgContext.setShadow(
+                offset: CGSize(width: 0, height: 1 * contentScale),
+                blur: 1.2 * contentScale,
+                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+            )
+            path.lineWidth = ShareSummaryTokens.routeCasing * contentScale
+            UIColor.white.setStroke()
+            path.stroke()
+            cgContext.restoreGState()
+
+            path.lineWidth = ShareSummaryTokens.routeWidth * contentScale
+            ShareSummaryTokens.accentUIColor.setStroke()
+            path.stroke()
+        }
     }
 
     private static func drawEndpoints(
         using projector: MapCoordinateProjecting,
         coordinates: [CLLocationCoordinate2D],
         contentScale: CGFloat,
+        appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
         guard let start = coordinates.first, let end = coordinates.last else { return }
+        let outer: CGFloat
+        let inner: CGFloat
+        let endFill: UIColor
+        switch appearance {
+        case .standard:
+            outer = detailEndpointOuterDiameter
+            inner = detailEndpointInnerDiameter
+            endFill = endPointColor
+        case .shareSummary:
+            outer = ShareSummaryTokens.markerOuter
+            inner = ShareSummaryTokens.markerInner
+            endFill = ShareSummaryTokens.inkUIColor
+        }
         drawEndpoint(
             at: projector.point(for: start),
             fill: startPointColor,
+            outerDiameter: outer,
+            innerDiameter: inner,
             contentScale: contentScale,
+            appearance: appearance,
             in: cgContext
         )
         drawEndpoint(
             at: projector.point(for: end),
-            fill: endPointColor,
+            fill: endFill,
+            outerDiameter: outer,
+            innerDiameter: inner,
             contentScale: contentScale,
+            appearance: appearance,
             in: cgContext
         )
     }
@@ -533,21 +618,33 @@ enum HikingRouteSnapshotGenerator {
     private static func drawEndpoint(
         at point: CGPoint,
         fill: UIColor,
+        outerDiameter: CGFloat,
+        innerDiameter: CGFloat,
         contentScale: CGFloat,
+        appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
-        let outerDiameter = detailEndpointOuterDiameter * contentScale
-        let innerDiameter = detailEndpointInnerDiameter * contentScale
-        let outerOrigin = outerDiameter / 2
-        let innerInset = (outerDiameter - innerDiameter) / 2
+        let scaledOuter = outerDiameter * contentScale
+        let scaledInner = innerDiameter * contentScale
+        let outerOrigin = scaledOuter / 2
+        let innerInset = (scaledOuter - scaledInner) / 2
         let outer = CGRect(
             x: point.x - outerOrigin,
             y: point.y - outerOrigin,
-            width: outerDiameter,
-            height: outerDiameter
+            width: scaledOuter,
+            height: scaledOuter
         )
+        cgContext.saveGState()
+        if appearance == .shareSummary {
+            cgContext.setShadow(
+                offset: CGSize(width: 0, height: 1 * contentScale),
+                blur: 1.2 * contentScale,
+                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+            )
+        }
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: outer)
+        cgContext.restoreGState()
         cgContext.setFillColor(fill.cgColor)
         cgContext.fillEllipse(in: outer.insetBy(dx: innerInset, dy: innerInset))
     }
@@ -583,6 +680,7 @@ enum HikingRouteSnapshotGenerator {
         showsDistance: Bool,
         showsTime: Bool,
         contentScale: CGFloat,
+        appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
         let markers = HikingSessionMetrics.kilometerMarkerPlacements(from: record.session.points)
@@ -619,7 +717,7 @@ enum HikingRouteSnapshotGenerator {
         )
         for request in requests {
             let shift = shifts[request.kilometer]
-            RouteKilometerMarkerDrawing.drawMarker(
+            RouteKilometerMarkerDrawing.drawCombinedMarker(
                 distanceLabel: request.distanceLabel,
                 timeLabel: request.timeLabel,
                 routePoint: request.routePoint,
