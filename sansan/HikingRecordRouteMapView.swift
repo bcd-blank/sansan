@@ -392,15 +392,37 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
+    /// True self-cross later-suffix overlays (white→green) for the live detail map.
+    private var routeCrossOverlays: [[CLLocationCoordinate2D]] {
+        RouteSelfCrossing.coordinateHits(in: routeCoordinates).map(\.overlayCoordinates)
+    }
+
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        // Continuous polyline (no chunk seams). Share-summary crossing overlays are
-        // snapshot-only; MapKit MapPolyline cannot paint local white→green at crosses.
+        // Continuous white casing + green fill (no chunk join seams).
+        MapPolyline(coordinates: routeCoordinates)
+            .stroke(
+                Color.white.opacity(0.9),
+                style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+            )
         MapPolyline(coordinates: routeCoordinates)
             .stroke(
                 Color(red: 0.12, green: 0.72, blue: 0.45),
                 style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
             )
+        // True-cross only: later suffix white→green so later casing cuts earlier green.
+        ForEach(Array(routeCrossOverlays.enumerated()), id: \.offset) { _, overlay in
+            MapPolyline(coordinates: overlay)
+                .stroke(
+                    Color.white.opacity(0.9),
+                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+                )
+            MapPolyline(coordinates: overlay)
+                .stroke(
+                    Color(red: 0.12, green: 0.72, blue: 0.45),
+                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                )
+        }
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {

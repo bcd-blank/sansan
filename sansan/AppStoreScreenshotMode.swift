@@ -20,6 +20,8 @@ enum AppStoreScreenshotMode: String {
     case detailSaryang = "detail-saryang"
     case detailGahyeon = "detail-gahyeon"
     case detailSamak = "detail-samak"
+    /// 가마지천 상세 — 교차 overlay 캡처.
+    case detailGamaji = "detail-gamaji"
 
     static var current: AppStoreScreenshotMode? {
         // Prefer launch args — SIMCTL_CHILD_* env can stick to a stale value on some runtimes.
@@ -40,7 +42,7 @@ enum AppStoreScreenshotMode: String {
         switch self {
         case .dashboard: false
         case .records, .imported, .kmsc, .kmscDetail, .detailZoom,
-             .detailSaryang, .detailGahyeon, .detailSamak: true
+             .detailSaryang, .detailGahyeon, .detailSamak, .detailGamaji: true
         }
     }
 
@@ -75,6 +77,8 @@ enum AppStoreScreenshotMode: String {
             return UUID(uuidString: "00000000-0000-4000-8000-00000000a820")
         case .detailSamak:
             return UUID(uuidString: "00000000-0000-4000-8000-00000000a610")
+        case .detailGamaji:
+            return UUID(uuidString: "00000000-0000-4000-8000-00000000a415")
         default:
             return nil
         }

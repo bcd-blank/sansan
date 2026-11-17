@@ -9,7 +9,8 @@
 import Foundation
 
 enum KmVoiceGuidancePhraseBuilder {
-    static let recordingStartPhrase = "기록을 시작합니다"
+    /// JW 19:11 — 시작 멘트에 브랜드 「산산」 포함.
+    static let recordingStartPhrase = "산산 기록을 시작합니다."
 
     /// - segmentSeconds: 방금 끝난 1km의 활동 시간(일시정지 제외)
     /// - totalSeconds: 화면 소요 시간(= `sessionData.elapsedTime`, 일시정지 제외 누적)
@@ -24,14 +25,14 @@ enum KmVoiceGuidancePhraseBuilder {
         return "\(km)킬로미터 지점입니다. 이번 구간 \(segment), 총 산행 시간 \(total)입니다."
     }
 
-    /// 종료 안내 — 총 거리 + 소요 시간(분·초, 필요 시 시).
+    /// 종료 안내 — 「산산 기록을 종료합니다.」 + 기존 거리·시간 요약.
     static func recordingEndPhrase(
         distanceMeters: Double,
         totalSeconds: TimeInterval
     ) -> String {
         let distance = formatDistance(distanceMeters)
         let duration = formatDuration(totalSeconds)
-        return "기록을 종료합니다. 총 거리 \(distance), 시간 \(duration)입니다."
+        return "산산 기록을 종료합니다. 총 거리 \(distance), 시간 \(duration)입니다."
     }
 
     /// 한국어 TTS용 시간 조각(문장 끝 「입니다」 없음 — 문구에서 한 번만 붙임).

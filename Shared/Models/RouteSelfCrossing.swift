@@ -1,0 +1,269 @@
+import CoreLocation
+import MapKit
+import CoreGraphics
+
+/// True self-crossing hits on a route polyline (later edge over earlier).
+enum RouteSelfCrossing {
+    struct Hit: Equatable {
+        /// Index of the later edge start vertex (`points[laterEdge] → points[laterEdge+1]`).
+        let laterEdge: Int
+        /// Parametric position on the later edge in `(0, 1)`.
+        let u: CGFloat
+        /// Crossing point in the same space as the input points.
+        let point: CGPoint
+    }
+
+    struct CoordinateHit {
+        let laterEdge: Int
+        let u: Double
+        /// Interpolated map coordinate on the later edge.
+        let coordinate: CLLocationCoordinate2D
+        /// Coordinates of the later overlay: starts slightly before the cross, runs to route end.
+        let overlayCoordinates: [CLLocationCoordinate2D]
+    }
+
+    /// Drop near-duplicates and hairpin spikes so intersection tests stay stable.
+    static func cleanedPoints(_ points: [CGPoint]) -> [CGPoint] {
+        guard points.count >= 3 else { return points }
+        var cleaned: [CGPoint] = [points[0]]
+        for index in 1..<points.count {
+            let candidate = points[index]
+            let last = cleaned[cleaned.count - 1]
+            if hypot(candidate.x - last.x, candidate.y - last.y) < 0.35 { continue }
+            if cleaned.count >= 2 {
+                let a = cleaned[cleaned.count - 2]
+                let b = last
+                let abx = b.x - a.x, aby = b.y - a.y
+                let bcx = candidate.x - b.x, bcy = candidate.y - b.y
+                let abLen = hypot(abx, aby)
+                let bcLen = hypot(bcx, bcy)
+                if abLen > 0.35, bcLen > 0.35 {
+                    let dot = (abx / abLen) * (bcx / bcLen) + (aby / abLen) * (bcy / bcLen)
+                    if dot < -0.95 {
+                        cleaned.removeLast()
+                        if let newLast = cleaned.last,
+                           hypot(candidate.x - newLast.x, candidate.y - newLast.y) < 0.35 {
+                            continue
+                        }
+                    }
+                }
+            }
+            cleaned.append(candidate)
+        }
+        return cleaned.count >= 2 ? cleaned : points
+    }
+
+    /// Screen/canvas-space crossings. `minLoopLength` is in the same units as `points`.
+    static func hits(
+        in points: [CGPoint],
+        minLoopLength: CGFloat,
+        minSeparationEdges: Int = 5,
+        minCrossSin: CGFloat = 0.45,
+        dedupeDistance: CGFloat
+    ) -> [Hit] {
+        let drawPoints = cleanedPoints(points)
+        guard drawPoints.count >= 5 else { return [] }
+        let lastEdge = drawPoints.count - 2
+        var crosses: [Hit] = []
+        for i in 0...lastEdge {
+            let jMin = i + max(2, minSeparationEdges)
+            guard jMin <= lastEdge else { continue }
+            for j in jMin...lastEdge {
+                if pathLength(drawPoints, from: i, to: j) < minLoopLength { continue }
+                guard let hit = segmentIntersection(
+                    drawPoints[i], drawPoints[i + 1],
+                    drawPoints[j], drawPoints[j + 1],
+                    minCrossSin: minCrossSin
+                ) else { continue }
+                crosses.append(Hit(laterEdge: j, u: hit.u, point: hit.point))
+            }
+        }
+        crosses.sort { a, b in
+            a.laterEdge < b.laterEdge || (a.laterEdge == b.laterEdge && a.u < b.u)
+        }
+        var unique: [Hit] = []
+        for cross in crosses {
+            if unique.contains(where: {
+                hypot($0.point.x - cross.point.x, $0.point.y - cross.point.y) < dedupeDistance
+            }) {
+                continue
+            }
+            unique.append(cross)
+        }
+        return unique
+    }
+
+    /// Map-coordinate crossings using `MKMapPoint` Euclidean space.
+    static func coordinateHits(
+        in coordinates: [CLLocationCoordinate2D],
+        minLoopMeters: CLLocationDistance = 60,
+        backPadMeters: CLLocationDistance = 14
+    ) -> [CoordinateHit] {
+        guard coordinates.count >= 5 else { return [] }
+        let mapPoints = coordinates.map { MKMapPoint($0) }
+        let points = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
+        // ~1 map-point ≈ variable meters; convert min loop via mid-route scale.
+        let mid = coordinates[coordinates.count / 2]
+        let meterPerMapPoint = MKMetersPerMapPointAtLatitude(mid.latitude)
+        let minLoop = CGFloat(minLoopMeters / max(meterPerMapPoint, 1e-9))
+        let dedupe = CGFloat(12 / max(meterPerMapPoint, 1e-9))
+        let raw = hits(
+            in: points,
+            minLoopLength: minLoop,
+            dedupeDistance: dedupe
+        )
+        let padMap = CGFloat(backPadMeters / max(meterPerMapPoint, 1e-9))
+        return raw.compactMap { hit -> CoordinateHit? in
+            let j = hit.laterEdge
+            guard j + 1 < coordinates.count else { return nil }
+            let local = overlayPoints(
+                drawPoints: points,
+                hit: hit,
+                backPad: padMap,
+                forwardPad: padMap
+            )
+            guard local.count >= 2 else { return nil }
+            let overlay = local.map {
+                MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
+            }
+            let coord = interpolate(coordinates[j], coordinates[j + 1], t: Double(hit.u))
+            return CoordinateHit(
+                laterEdge: j,
+                u: Double(hit.u),
+                coordinate: coord,
+                overlayCoordinates: overlay
+            )
+        }
+    }
+
+    /// Local later-ribbon points through a cross: `backPad` before + `forwardPad` after.
+    /// Keeps overlay at the X only (avoids re-stroking the whole suffix and inventing seams).
+    static func overlayPoints(
+        drawPoints: [CGPoint],
+        hit: Hit,
+        backPad: CGFloat,
+        forwardPad: CGFloat
+    ) -> [CGPoint] {
+        let j = hit.laterEdge
+        guard j + 1 < drawPoints.count else { return [] }
+        let b0 = drawPoints[j]
+        let b1 = drawPoints[j + 1]
+        let edgeLen = hypot(b1.x - b0.x, b1.y - b0.y)
+        guard edgeLen > 1e-3 else { return [] }
+        let along = hit.u * edgeLen
+
+        var before: [CGPoint] = [hit.point]
+        var remain = backPad
+        if along > 1e-3 {
+            let take = min(remain, along)
+            let t = (along - take) / edgeLen
+            before.append(CGPoint(
+                x: b0.x + (b1.x - b0.x) * t,
+                y: b0.y + (b1.y - b0.y) * t
+            ))
+            remain -= take
+        }
+        var idx = j
+        while remain > 1e-3, idx > 0 {
+            let p1 = drawPoints[idx]
+            let p0 = drawPoints[idx - 1]
+            let seg = hypot(p1.x - p0.x, p1.y - p0.y)
+            if seg < 1e-3 { idx -= 1; continue }
+            let take = min(remain, seg)
+            let t = take / seg
+            before.append(CGPoint(
+                x: p1.x + (p0.x - p1.x) * t,
+                y: p1.y + (p0.y - p1.y) * t
+            ))
+            remain -= take
+            idx -= 1
+            if take < seg - 1e-6 { break }
+        }
+
+        var after: [CGPoint] = []
+        remain = forwardPad
+        let ahead = edgeLen - along
+        if ahead > 1e-3 {
+            let take = min(remain, ahead)
+            let t = (along + take) / edgeLen
+            after.append(CGPoint(
+                x: b0.x + (b1.x - b0.x) * t,
+                y: b0.y + (b1.y - b0.y) * t
+            ))
+            remain -= take
+        }
+        idx = j + 1
+        while remain > 1e-3, idx < drawPoints.count - 1 {
+            let p0 = drawPoints[idx]
+            let p1 = drawPoints[idx + 1]
+            let seg = hypot(p1.x - p0.x, p1.y - p0.y)
+            if seg < 1e-3 { idx += 1; continue }
+            let take = min(remain, seg)
+            let t = take / seg
+            after.append(CGPoint(
+                x: p0.x + (p1.x - p0.x) * t,
+                y: p0.y + (p1.y - p0.y) * t
+            ))
+            remain -= take
+            idx += 1
+            if take < seg - 1e-6 { break }
+        }
+
+        var result: [CGPoint] = before.reversed()
+        result.append(contentsOf: after)
+        return result.count >= 2 ? result : []
+    }
+
+    // MARK: - Private
+
+    private static func interpolate(
+        _ a: CLLocationCoordinate2D,
+        _ b: CLLocationCoordinate2D,
+        t: Double
+    ) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: a.latitude + (b.latitude - a.latitude) * t,
+            longitude: a.longitude + (b.longitude - a.longitude) * t
+        )
+    }
+
+    private static func pathLength(_ points: [CGPoint], from a: Int, to b: Int) -> CGFloat {
+        guard b > a else { return 0 }
+        var length: CGFloat = 0
+        for index in a..<b {
+            length += hypot(points[index + 1].x - points[index].x, points[index + 1].y - points[index].y)
+        }
+        return length
+    }
+
+    private static func orient(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+    }
+
+    private static func segmentIntersection(
+        _ a0: CGPoint, _ a1: CGPoint,
+        _ b0: CGPoint, _ b1: CGPoint,
+        minCrossSin: CGFloat
+    ) -> (point: CGPoint, u: CGFloat)? {
+        let d1 = orient(a0, a1, b0)
+        let d2 = orient(a0, a1, b1)
+        let d3 = orient(b0, b1, a0)
+        let d4 = orient(b0, b1, a1)
+        guard d1 * d2 < 0, d3 * d4 < 0 else { return nil }
+        let denom = (a1.x - a0.x) * (b1.y - b0.y) - (a1.y - a0.y) * (b1.x - b0.x)
+        guard abs(denom) > 1e-6 else { return nil }
+        let t = ((b0.x - a0.x) * (b1.y - b0.y) - (b0.y - a0.y) * (b1.x - b0.x)) / denom
+        let u = ((b0.x - a0.x) * (a1.y - a0.y) - (b0.y - a0.y) * (a1.x - a0.x)) / denom
+        guard t > 0.02, t < 0.98, u > 0.02, u < 0.98 else { return nil }
+        let ax = a1.x - a0.x, ay = a1.y - a0.y
+        let bx = b1.x - b0.x, by = b1.y - b0.y
+        let aLen = hypot(ax, ay), bLen = hypot(bx, by)
+        guard aLen > 1e-3, bLen > 1e-3 else { return nil }
+        let crossMag = abs(ax * by - ay * bx) / (aLen * bLen)
+        guard crossMag > minCrossSin else { return nil }
+        return (
+            point: CGPoint(x: b0.x + u * (b1.x - b0.x), y: b0.y + u * (b1.y - b0.y)),
+            u: u
+        )
+    }
+}
