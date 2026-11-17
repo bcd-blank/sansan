@@ -647,22 +647,38 @@ enum HikingRouteSnapshotGenerator {
                 edge.stroke()
             }
         case .shareSummary:
-            // Continuous path: all white casing, then all green fill (no per-segment joints /
-            // 이음매 흰 틈). Matches MapLibre halo→line; team-lead OK’d 흰전체→초록전체.
-            // Self-cross looks flat; later-over-earlier cut is deferred to crossing-only
-            // layering if needed — do not reintroduce segment seams.
+            // Non-crossing stretch = one continuous stroke (no per-cap 이음매).
+            // After the first real self-cross, redraw the time-suffix as one more continuous
+            // white → green so later casing sits on earlier green — still a single stroke,
+            // not short segment caps.
             let casingW = ShareSummaryTokens.routeCasing * contentScale
             let fillW = ShareSummaryTokens.routeWidth * contentScale
             let white = UIColor.white
             let green = ShareSummaryTokens.accentUIColor
+            let minLoopLength = max(casingW * 12, 80 * contentScale)
 
-            let full = UIBezierPath()
-            full.lineCapStyle = .round
-            full.lineJoinStyle = .round
-            full.move(to: points[0])
-            for point in points.dropFirst() {
-                full.addLine(to: point)
+            func makePath(from start: Int, to end: Int, cap: CGLineCap) -> UIBezierPath {
+                let path = UIBezierPath()
+                path.lineCapStyle = cap
+                path.lineJoinStyle = .round
+                path.move(to: points[start])
+                guard end > start else { return path }
+                for index in (start + 1)...end {
+                    path.addLine(to: points[index])
+                }
+                return path
             }
+
+            func strokeWhiteThenGreen(_ path: UIBezierPath) {
+                path.lineWidth = casingW
+                white.setStroke()
+                path.stroke()
+                path.lineWidth = fillW
+                green.setStroke()
+                path.stroke()
+            }
+
+            let full = makePath(from: 0, to: points.count - 1, cap: .round)
 
             cgContext.saveGState()
             cgContext.setShadow(
@@ -675,12 +691,65 @@ enum HikingRouteSnapshotGenerator {
             full.stroke()
             cgContext.restoreGState()
 
-            full.lineWidth = casingW
-            white.setStroke()
-            full.stroke()
-            full.lineWidth = fillW
-            green.setStroke()
-            full.stroke()
+            strokeWhiteThenGreen(full)
+
+            func orient(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+                (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+            }
+            func edgesCross(_ i: Int, _ j: Int) -> Bool {
+                let a0 = points[i], a1 = points[i + 1]
+                let b0 = points[j], b1 = points[j + 1]
+                let d1 = orient(a0, a1, b0)
+                let d2 = orient(a0, a1, b1)
+                let d3 = orient(b0, b1, a0)
+                let d4 = orient(b0, b1, a1)
+                return d1 * d2 < 0 && d3 * d4 < 0
+            }
+            func pathLength(from a: Int, to b: Int) -> CGFloat {
+                guard b > a else { return 0 }
+                var length: CGFloat = 0
+                for index in a..<b {
+                    length += hypot(
+                        points[index + 1].x - points[index].x,
+                        points[index + 1].y - points[index].y
+                    )
+                }
+                return length
+            }
+
+            var firstLaterEdge: Int?
+            if points.count >= 4 {
+                let lastEdge = points.count - 2
+                for i in 0...lastEdge {
+                    let jMin = i + 2
+                    guard jMin <= lastEdge else { continue }
+                    for j in jMin...lastEdge {
+                        if pathLength(from: i, to: j) < minLoopLength { continue }
+                        if edgesCross(i, j) {
+                            firstLaterEdge = min(firstLaterEdge ?? j, j)
+                        }
+                    }
+                }
+            }
+
+            if let lateStart = firstLaterEdge, lateStart < points.count - 1 {
+                // Butt at the crossing start avoids a round white disc mid-path; round the
+                // true route end with a matching cap disc after the continuous suffix stroke.
+                let suffix = makePath(from: lateStart, to: points.count - 1, cap: .butt)
+                strokeWhiteThenGreen(suffix)
+                let end = points[points.count - 1]
+                for (diameter, color) in [(casingW, white), (fillW, green)] {
+                    let radius = diameter / 2
+                    let rect = CGRect(
+                        x: end.x - radius,
+                        y: end.y - radius,
+                        width: diameter,
+                        height: diameter
+                    )
+                    color.setFill()
+                    UIBezierPath(ovalIn: rect).fill()
+                }
+            }
         }
     }
 
