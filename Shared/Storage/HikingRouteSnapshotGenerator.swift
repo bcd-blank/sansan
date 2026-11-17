@@ -712,14 +712,12 @@ enum HikingRouteSnapshotGenerator {
                 cgContext.restoreGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             } else {
-                // Android 6a62d1e: normal SRC_OVER. White without AA (AA vs map = gray halo).
-                // Do NOT use .copy — copy+AA green over hard white shrinks the opaque green core
-                // (흰 덩어리·초록 실가늘어짐).
+                // Android 6a62d1e: one continuous Path stroke. White AA-off (AA vs map =
+                // gray halo); green AA-on. SRC_OVER — never .copy.
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
                 cgContext.setBlendMode(.normal)
-                // White AA-on: continuous smooth dual rails (AA-off reads as 톱니·점선 at zoom).
-                // No shadow — soft AA edge ≠ gray halo from setShadow.
+                // Continuous dual rails: AA-on white + green over one path (single stroke each).
                 cgContext.setShouldAntialias(true)
                 cgContext.setAllowsAntialiasing(true)
                 path.lineWidth = casingWidth
@@ -772,24 +770,21 @@ enum HikingRouteSnapshotGenerator {
             return
         }
 
-        // Android 6a62d1e: detect + walk RAW GPS polyline (cleaning can erase tight X /
-        // straighten the later curve into a long bar). Draw continuous base on cleaned.
+        // Android 6a62d1e drawShareRoute — same algorithm:
+        // detect crosses on RAW; stroke continuous BASE on cleaned (one Path);
+        // bridge = short later piece around the hit, ONE path stroke (not stitched
+        // micro-polylines). Length casing×1.75 / ×2.35; white butt AA-off; green round AA-on.
         let rawPoints = points
         let drawPoints = RouteSelfCrossing.cleanedPoints(rawPoints)
         guard drawPoints.count >= 2 else { return }
 
-        // Bridge length ≈ casing × 3~4 total (half each side); green a bit longer.
-        // iOS later segment is nearly straight at gamajicheon — Android 1.75 half reads
-        // shorter there because its GPS chord is diagonal. Use 1.5/2.0 so screen span
-        // matches Android AFTER (~casing×3) and stops short of the 1km disc.
         let minLoopLength = max(casingWidth * 8, 48 * contentScale)
-        let whiteHalf = casingWidth * 1.5
-        let greenHalf = casingWidth * 2.0
+        let whiteHalf = casingWidth * 1.75
+        let greenHalf = casingWidth * 2.35
         let bridgeCasing = casingWidth
         let bridgeFill = fillWidth
-        // Android: detect on RAW (사량도 near-miss). Fallback cleaned if raw misses.
+
         var bridgeSource = rawPoints
-        var bridgeSourceName = "raw"
         var hits = RouteSelfCrossing.hits(
             in: rawPoints,
             minLoopLength: minLoopLength,
@@ -800,7 +795,6 @@ enum HikingRouteSnapshotGenerator {
         )
         if hits.isEmpty {
             bridgeSource = drawPoints
-            bridgeSourceName = "clean"
             hits = RouteSelfCrossing.hits(
                 in: drawPoints,
                 minLoopLength: minLoopLength,
@@ -812,14 +806,8 @@ enum HikingRouteSnapshotGenerator {
         }
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d raw=%d clean=%d src=%@ whiteHalf=%.1f casing/fill=%.2f/%.2f",
-            hits.count,
-            rawPoints.count,
-            drawPoints.count,
-            bridgeSourceName,
-            whiteHalf,
-            bridgeCasing,
-            bridgeFill
+            "[km-label] route crosses unique=%d raw=%d clean=%d whiteHalf=%.1f casing/fill=%.2f/%.2f",
+            hits.count, rawPoints.count, drawPoints.count, whiteHalf, bridgeCasing, bridgeFill
         )
         for hit in hits {
             NSLog(
@@ -829,78 +817,130 @@ enum HikingRouteSnapshotGenerator {
         }
         #endif
 
-        let full = UIBezierPath()
+        // Base: one continuous path stroke (Android pathOf + drawPath×2).
+        // Catmull-Rom→cubic so CG joins aren't 톱니·조각; still a single Path.stroke.
+        let strokePoints = Self.simplifiedBridgePoints(
+            drawPoints,
+            epsilon: max(0.55 * contentScale, 0.4)
+        )
+        let full = Self.continuousStrokePath(strokePoints)
         full.lineCapStyle = .round
         full.lineJoinStyle = .round
-        full.move(to: drawPoints[0])
-        for index in 1..<drawPoints.count {
-            full.addLine(to: drawPoints[index])
-        }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Short later-path bridge. No punch / no resample.
-        // Trim pad so butt ends stop outside km-dot discs (horizontal white under marker).
-        // Markers still draw above. White AA-on → continuous smooth rails (AA-off = 톱니).
-        // Android: full casing×3 bridge even when a km-dot sits ~7pt from the cross;
-        // markers paint after and cover the overlap. Trimming here made the bridge too
-        // short vs Android AFTER (55–56px screen span).
+        // Bridge: Android shareRoutePointsAround → pathFromPoints → single drawPath.
+        // One UIBezierPath.stroke per layer — never stroke segment-by-segment (조각 레일).
         for hit in hits {
-            let whitePts = RouteSelfCrossing.overlayPoints(
-                drawPoints: bridgeSource,
-                hit: hit,
-                backPad: whiteHalf,
-                forwardPad: whiteHalf
+            let whitePts = Self.simplifiedBridgePoints(
+                RouteSelfCrossing.overlayPoints(
+                    drawPoints: bridgeSource,
+                    hit: hit,
+                    backPad: whiteHalf,
+                    forwardPad: whiteHalf
+                ),
+                epsilon: max(0.7 * contentScale, 0.5)
             )
-            let greenPts = RouteSelfCrossing.overlayPoints(
-                drawPoints: bridgeSource,
-                hit: hit,
-                backPad: greenHalf,
-                forwardPad: greenHalf
+            let greenPts = Self.simplifiedBridgePoints(
+                RouteSelfCrossing.overlayPoints(
+                    drawPoints: bridgeSource,
+                    hit: hit,
+                    backPad: greenHalf,
+                    forwardPad: greenHalf
+                ),
+                epsilon: max(0.7 * contentScale, 0.5)
             )
             guard whitePts.count >= 2, greenPts.count >= 2 else { continue }
 
-            func strokeCurve(_ pts: [CGPoint], width: CGFloat, color: UIColor, cap: CGLineCap, antialias: Bool) {
+            func strokeBridge(_ pts: [CGPoint], width: CGFloat, color: UIColor, cap: CGLineCap, antialias: Bool) {
+                let path = Self.continuousStrokePath(pts)
+                path.lineWidth = width
+                path.lineCapStyle = cap
+                path.lineJoinStyle = .round
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
                 cgContext.setBlendMode(.normal)
                 cgContext.setShouldAntialias(antialias)
                 cgContext.setAllowsAntialiasing(antialias)
-                cgContext.setLineJoin(.round)
-                cgContext.setLineCap(cap)
-                cgContext.setStrokeColor(color.cgColor)
-                cgContext.setLineWidth(width)
-                cgContext.move(to: pts[0])
-                for p in pts.dropFirst() {
-                    cgContext.addLine(to: p)
-                }
-                cgContext.strokePath()
+                color.setStroke()
+                path.stroke() // single continuous stroke
                 cgContext.restoreGState()
             }
 
-            // White butt + AA-on: smooth continuous dual rails, hard underpass cut.
-            // Green round AA-on covers butts on-line (Android proportion).
-            strokeCurve(whitePts, width: bridgeCasing, color: white, cap: .butt, antialias: true)
-            strokeCurve(greenPts, width: bridgeFill, color: green, cap: .round, antialias: true)
+            // One continuous path each: white butt then longer green round (Android order).
+            // AA-on so bridge rails stay continuous with the base (no 톱니 at joins).
+            strokeBridge(whitePts, width: bridgeCasing, color: white, cap: .butt, antialias: true)
+            strokeBridge(greenPts, width: bridgeFill, color: green, cap: .round, antialias: true)
 
             cgContext.setShadow(offset: .zero, blur: 0, color: nil)
 
             #if DEBUG
             var polyLen: CGFloat = 0
-            var minX = whitePts[0].x, maxX = whitePts[0].x
-            var minY = whitePts[0].y, maxY = whitePts[0].y
             for i in 0..<(whitePts.count - 1) {
                 polyLen += hypot(whitePts[i + 1].x - whitePts[i].x, whitePts[i + 1].y - whitePts[i].y)
-                minX = min(minX, whitePts[i + 1].x); maxX = max(maxX, whitePts[i + 1].x)
-                minY = min(minY, whitePts[i + 1].y); maxY = max(maxY, whitePts[i + 1].y)
             }
-            let span = hypot(maxX - minX, maxY - minY)
             NSLog(
-                "[km-label] bridge at (%.1f,%.1f) pts=%d/%d len=%.1f span=%.1f half=%.1f/%.1f w=%.2f/%.2f",
-                hit.point.x, hit.point.y, whitePts.count, greenPts.count, polyLen, span,
+                "[km-label] bridge at (%.1f,%.1f) pts=%d len=%.1f half=%.1f/%.1f w=%.2f/%.2f",
+                hit.point.x, hit.point.y, whitePts.count, polyLen,
                 whiteHalf, greenHalf, bridgeCasing, bridgeFill
             )
             #endif
         }
+    }
+
+    /// Single continuous stroke path: Catmull-Rom → cubics (no polyline join teeth).
+    private static func continuousStrokePath(_ points: [CGPoint]) -> UIBezierPath {
+        let path = UIBezierPath()
+        guard points.count >= 2 else { return path }
+        path.move(to: points[0])
+        if points.count == 2 {
+            path.addLine(to: points[1])
+            return path
+        }
+        for i in 0..<(points.count - 1) {
+            let p0 = points[max(0, i - 1)]
+            let p1 = points[i]
+            let p2 = points[i + 1]
+            let p3 = points[min(points.count - 1, i + 2)]
+            let cp1 = CGPoint(
+                x: p1.x + (p2.x - p0.x) / 6,
+                y: p1.y + (p2.y - p0.y) / 6
+            )
+            let cp2 = CGPoint(
+                x: p2.x - (p3.x - p1.x) / 6,
+                y: p2.y - (p3.y - p1.y) / 6
+            )
+            path.addCurve(to: p2, controlPoint1: cp1, controlPoint2: cp2)
+        }
+        return path
+    }
+
+    /// Drop GPS micro-wiggles on a short bridge while keeping endpoints + shape (one path).
+    private static func simplifiedBridgePoints(_ points: [CGPoint], epsilon: CGFloat) -> [CGPoint] {
+        guard points.count > 2, epsilon > 0 else { return points }
+        func perpDist(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let len2 = dx * dx + dy * dy
+            if len2 < 1e-8 { return hypot(p.x - a.x, p.y - a.y) }
+            return abs((p.x - a.x) * dy - (p.y - a.y) * dx) / sqrt(len2)
+        }
+        func douglas(_ pts: [CGPoint]) -> [CGPoint] {
+            guard pts.count > 2 else { return pts }
+            var maxD: CGFloat = 0
+            var idx = 0
+            let a = pts[0], b = pts[pts.count - 1]
+            for i in 1..<(pts.count - 1) {
+                let d = perpDist(pts[i], a, b)
+                if d > maxD { maxD = d; idx = i }
+            }
+            if maxD <= epsilon {
+                return [a, b]
+            }
+            let left = douglas(Array(pts[0...idx]))
+            let right = douglas(Array(pts[idx...]))
+            return left.dropLast() + right
+        }
+        let simplified = douglas(points)
+        return simplified.count >= 2 ? simplified : points
     }
 
     private static func drawEndpoints(
