@@ -234,9 +234,10 @@ enum ShareSummaryTokens {
         return headerBottomNoMemo + memoGapFromTitle + CGFloat(lines) * memoLineHeight
     }
 
-    /// Top inset keeps marker outer edge below headerBottom + routeClearance.
+    /// Top inset = title/memo bottom + routeClearance (JW: path hugs title when memo-none).
+    /// Marker pad stays on side/bottom insets only — top pad was leaving a false “memo” band.
     static func mapTopInset(memoLineCount: Int) -> CGFloat {
-        headerBottom(memoLineCount: memoLineCount) + routeClearance + markerOuter / 2
+        headerBottom(memoLineCount: memoLineCount) + routeClearance
     }
 
     /// Y where the solid paper fade ends (headerBottom + routeClearance), before the 96pt falloff.

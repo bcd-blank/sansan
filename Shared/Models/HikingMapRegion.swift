@@ -121,8 +121,9 @@ enum HikingMapRegion {
         // Screen-pt height of the route bbox after fit.
         let routeScreenHeight = route.size.height / scale
         let contentCenterY: CGFloat
-        if verticalAlign == .top, scaleW >= scaleH - 1e-9 {
-            // Width-limited: pin route top to insetTop (title bottom + token clearance).
+        if verticalAlign == .top {
+            // Always pin route bbox top to insetTop (memo-none: title bottom + clearance).
+            // Height-limited routes already fill the content height → same as center.
             contentCenterY = insetTop + CGFloat(routeScreenHeight) / 2
         } else {
             contentCenterY = insetTop + contentHeight / 2

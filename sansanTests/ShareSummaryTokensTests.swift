@@ -61,9 +61,9 @@ final class ShareSummaryTokensTests: XCTestCase {
     }
 
     func testMapInsetsIncludeMarkerRadius() {
-        // Route fit top = title bottom (104) + routeClearance (16) + marker pad (9) — Android routeInsetsPx.
+        // Route fit top = title bottom (104) + routeClearance (16). Side/bottom still use marker pad.
         let top = ShareSummaryTokens.mapTopInset(memoLineCount: 0)
-        XCTAssertEqual(top, 104 + 16 + 9, accuracy: 0.01)
+        XCTAssertEqual(top, 104 + 16, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.mapBottomInset, 324.5 + 32 + 9, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.mapSideInset, 24, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.mapMarkerInsetPad, 9, accuracy: 0.01)

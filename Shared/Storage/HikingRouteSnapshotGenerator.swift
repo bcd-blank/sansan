@@ -647,46 +647,111 @@ enum HikingRouteSnapshotGenerator {
                 edge.stroke()
             }
         case .shareSummary:
-            // MapLibre-like two passes over time-ordered edges:
-            // 1) all white casings (later overwrites earlier at crossings)
-            // 2) all green fills (later green sits on earlier; later casing halo cuts earlier green)
-            // Single full-path stroke cannot express crossing z-order; per-edge round caps stay
-            // continuous on dense GPS samples.
+            // JW: time-ordered short segments — each: white casing → green fill (repeat).
+            // Forbidden: all-white then all-green (flat X). Never keep a self-crossing inside
+            // one stroke (that also flattens). Split before sharp turns / self-cross / max len.
             let casingW = ShareSummaryTokens.routeCasing * contentScale
             let fillW = ShareSummaryTokens.routeWidth * contentScale
+            let minSegmentLength = max(casingW * 2.5, fillW * 3, 16 * contentScale)
+            let maxSegmentLength = max(minSegmentLength * 3, 48 * contentScale)
+            let turnBreakCos: CGFloat = 0 // ≥90° turn → new segment
+            let white = UIColor.white
+            let green = ShareSummaryTokens.accentUIColor
 
-            func strokeEdge(from a: CGPoint, to b: CGPoint, width: CGFloat, color: UIColor) {
-                let edge = UIBezierPath()
-                edge.lineCapStyle = .round
-                edge.lineJoinStyle = .round
-                edge.move(to: a)
-                edge.addLine(to: b)
-                edge.lineWidth = width
-                color.setStroke()
-                edge.stroke()
+            func segmentsCross(_ a0: CGPoint, _ a1: CGPoint, _ b0: CGPoint, _ b1: CGPoint) -> Bool {
+                func cross(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+                    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+                }
+                let d1 = cross(a0, a1, b0)
+                let d2 = cross(a0, a1, b1)
+                let d3 = cross(b0, b1, a0)
+                let d4 = cross(b0, b1, a1)
+                return d1 * d2 < 0 && d3 * d4 < 0
             }
 
-            cgContext.saveGState()
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: 1 * contentScale),
-                blur: 1.2 * contentScale,
-                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
-            )
-            for index in 1..<points.count {
-                strokeEdge(from: points[index - 1], to: points[index], width: casingW, color: .white)
+            func strokeSegment(from start: Int, to end: Int, shadow: Bool) {
+                let path = UIBezierPath()
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                path.move(to: points[start])
+                for index in (start + 1)...end {
+                    path.addLine(to: points[index])
+                }
+                if shadow {
+                    cgContext.saveGState()
+                    cgContext.setShadow(
+                        offset: CGSize(width: 0, height: 1 * contentScale),
+                        blur: 1.2 * contentScale,
+                        color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+                    )
+                    path.lineWidth = casingW
+                    white.setStroke()
+                    path.stroke()
+                    cgContext.restoreGState()
+                }
+                path.lineWidth = casingW
+                white.setStroke()
+                path.stroke()
+                path.lineWidth = fillW
+                green.setStroke()
+                path.stroke()
             }
-            cgContext.restoreGState()
 
-            for index in 1..<points.count {
-                strokeEdge(from: points[index - 1], to: points[index], width: casingW, color: .white)
-            }
-            for index in 1..<points.count {
-                strokeEdge(
-                    from: points[index - 1],
-                    to: points[index],
-                    width: fillW,
-                    color: ShareSummaryTokens.accentUIColor
+            var start = 0
+            var isFirst = true
+            while start < points.count - 1 {
+                var end = start + 1
+                var length = hypot(
+                    points[end].x - points[start].x,
+                    points[end].y - points[start].y
                 )
+                while end < points.count - 1 {
+                    let next = end + 1
+                    let inbound = CGPoint(
+                        x: points[end].x - points[end - 1].x,
+                        y: points[end].y - points[end - 1].y
+                    )
+                    let outbound = CGPoint(
+                        x: points[next].x - points[end].x,
+                        y: points[next].y - points[end].y
+                    )
+                    let inLen = hypot(inbound.x, inbound.y)
+                    let outLen = hypot(outbound.x, outbound.y)
+                    if inLen > 0.5, outLen > 0.5 {
+                        let cosTurn = (inbound.x * outbound.x + inbound.y * outbound.y) / (inLen * outLen)
+                        if cosTurn < turnBreakCos {
+                            break
+                        }
+                    }
+                    // Refuse to grow into a self-crossing stroke (flat X inside one segment).
+                    let newEdge0 = points[end]
+                    let newEdge1 = points[next]
+                    var crossesSelf = false
+                    if end - start >= 2 {
+                        for i in start..<(end - 1) {
+                            if segmentsCross(points[i], points[i + 1], newEdge0, newEdge1) {
+                                crossesSelf = true
+                                break
+                            }
+                        }
+                    }
+                    if crossesSelf { break }
+
+                    let edgeLen = hypot(
+                        points[next].x - points[end].x,
+                        points[next].y - points[end].y
+                    )
+                    if length >= minSegmentLength, length + edgeLen > maxSegmentLength {
+                        break
+                    }
+                    length += edgeLen
+                    end = next
+                }
+
+                strokeSegment(from: start, to: end, shadow: isFirst)
+                isFirst = false
+                if end >= points.count - 1 { break }
+                start = end
             }
         }
     }
