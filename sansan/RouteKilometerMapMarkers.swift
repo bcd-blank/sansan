@@ -88,12 +88,47 @@ struct RouteKilometerCombinedLabelCapsule: View {
 struct RouteKilometerHorizontalMarker: View {
     var distanceText: String?
     var timeText: String?
-    let placesLabelOnLeadingSide: Bool
-    var verticalOffset: CGFloat = 0
+    /// Capsule center relative to the km-dot center (final-spec v3).
+    var centerOffset: CGPoint = .zero
     /// When false, draw only the km dot (thinning hid this label).
     var showsLabel: Bool = true
 
-    private let gap = RouteKilometerMarkerMetrics.labelGap
+    /// Legacy convenience for call sites that still pass L/R + vertical.
+    init(
+        distanceText: String?,
+        timeText: String?,
+        placesLabelOnLeadingSide: Bool,
+        verticalOffset: CGFloat = 0,
+        showsLabel: Bool = true
+    ) {
+        let width = RouteKilometerMarkerDrawing.capsuleSize(
+            distanceLabel: distanceText,
+            timeLabel: timeText,
+            contentScale: 1
+        ).width
+        let shift = RouteKilometerLabelShift(
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
+            capsuleWidth: width > 0 ? width : 72,
+            contentScale: 1
+        )
+        self.distanceText = distanceText
+        self.timeText = timeText
+        self.centerOffset = shift.centerOffset
+        self.showsLabel = showsLabel
+    }
+
+    init(
+        distanceText: String?,
+        timeText: String?,
+        centerOffset: CGPoint,
+        showsLabel: Bool = true
+    ) {
+        self.distanceText = distanceText
+        self.timeText = timeText
+        self.centerOffset = centerOffset
+        self.showsLabel = showsLabel
+    }
 
     var body: some View {
         ZStack {
@@ -102,23 +137,9 @@ struct RouteKilometerHorizontalMarker: View {
                RouteKilometerMarkerMetrics.combinedLabel(distance: distanceText, time: timeText) != nil {
                 RouteKilometerCombinedLabelCapsule(distanceText: distanceText, timeText: timeText)
                     .fixedSize()
-                    .offset(x: horizontalOffset(capsuleWidth: capsuleWidth), y: verticalOffset)
+                    .offset(x: centerOffset.x, y: centerOffset.y)
             }
         }
-    }
-
-    private var capsuleWidth: CGFloat {
-        RouteKilometerMarkerDrawing.capsuleSize(
-            distanceLabel: distanceText,
-            timeLabel: timeText,
-            contentScale: 1
-        ).width
-    }
-
-    private func horizontalOffset(capsuleWidth: CGFloat) -> CGFloat {
-        // labelGap = center → near edge (S7).
-        let distance = gap + capsuleWidth / 2
-        return placesLabelOnLeadingSide ? -distance : distance
     }
 }
 

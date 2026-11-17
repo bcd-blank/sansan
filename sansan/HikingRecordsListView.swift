@@ -737,16 +737,31 @@ struct HikingRecordsListView: View {
         if mode.showsKMSCBrowser {
             showsKMSCBrowser = true
         }
-        if mode.opensShortDetailRecord {
-            let shortID = UUID(uuidString: "00000000-0000-4000-8000-00000000a428")!
-            // Seed may land a moment after appear; retry briefly.
+        if let seedID = mode.opensSeededDetailRecordID {
+            // Seed may land after appear; match by id or displayName (title).
+            let nameHint: String? = {
+                switch mode {
+                case .detailSaryang: return "사량도"
+                case .detailSamak: return "삼악산"
+                case .detailZoom, .detailGahyeon: return "가현산"
+                default: return nil
+                }
+            }()
             Task { @MainActor in
-                for _ in 0..<20 {
-                    if store.records.contains(where: { $0.id == shortID }) {
-                        detailRoute = RecordDetailRoute(recordID: shortID)
+                for _ in 0..<50 {
+                    store.reloadForCurrentUser()
+                    if store.records.contains(where: { $0.id == seedID }) {
+                        detailRoute = RecordDetailRoute(recordID: seedID)
                         return
                     }
-                    try? await Task.sleep(for: .milliseconds(250))
+                    if let nameHint,
+                       let match = store.records.first(where: {
+                           ($0.displayName ?? "").contains(nameHint)
+                       }) {
+                        detailRoute = RecordDetailRoute(recordID: match.id)
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(300))
                 }
             }
         }

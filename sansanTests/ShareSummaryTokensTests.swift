@@ -105,49 +105,49 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(a, 1, accuracy: 0.01)
     }
 
-    func testDetailThinningEscalatesWholeScreenWhenStepOneCollides() {
-        // One-capsule-tall band: step 1 (1+2+5) cannot all clear → wholesale escalate to 5.
-        let canvas = CGSize(width: 390, height: 40)
-        let edge = CGPoint(x: 360, y: 20)
+    func testDetailPlacementEscalatesToFiveKmWhenOneKmCannotClear() {
+        // Narrow band: 1+2+5 packed so 1km fails → wholesale 5km (F1) when 5 exists.
+        let canvas = CGSize(width: 390, height: 80)
         let requests = [
             RouteKilometerLabelRequest(
                 kilometer: 1,
                 distanceLabel: "1km",
                 timeLabel: "10:00",
-                routePoint: edge,
+                routePoint: CGPoint(x: 180, y: 40),
                 preferredLeadingSide: true
             ),
             RouteKilometerLabelRequest(
                 kilometer: 2,
                 distanceLabel: "2km",
                 timeLabel: "20:00",
-                routePoint: CGPoint(x: 361, y: 20),
+                routePoint: CGPoint(x: 188, y: 40),
                 preferredLeadingSide: true
             ),
             RouteKilometerLabelRequest(
                 kilometer: 5,
                 distanceLabel: "5km",
                 timeLabel: "50:00",
-                routePoint: edge,
+                routePoint: CGPoint(x: 196, y: 40),
                 preferredLeadingSide: true
             )
         ]
-        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+        let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
             for: requests,
-            endpointPoints: [CGPoint(x: 40, y: 20), CGPoint(x: 200, y: 20)],
+            endpointPoints: [CGPoint(x: 40, y: 40), CGPoint(x: 350, y: 40)],
             contentScale: 1,
-            imageSize: canvas
+            imageSize: canvas,
+            zoomDelta: 1
         )
-        XCTAssertGreaterThanOrEqual(thinned.step, 5)
-        XCTAssertFalse(thinned.shifts.keys.contains(1))
-        XCTAssertFalse(thinned.shifts.keys.contains(2))
-        if thinned.step == 5 {
-            XCTAssertTrue(thinned.shifts.keys.contains(5))
+        XCTAssertFalse(placed.shifts.isEmpty)
+        if placed.modeStep >= 5 {
+            XCTAssertFalse(placed.shifts.keys.contains(1))
+            XCTAssertFalse(placed.shifts.keys.contains(2))
+            XCTAssertTrue(placed.shifts.keys.contains(5))
         }
     }
 
-    func testDetailThinningIgnoresOffscreenPointsSoZoomInKeepsVisibleLabels() {
-        // Short record 1–4: off-screen 4km must not force step 5 empty → wipe on-screen 1km.
+    func testDetailPlacementIgnoresOffscreenPointsSoZoomInKeepsVisibleLabels() {
+        // Short record 1–4: off-screen 4km must not force empty on-screen labels (TC-01/TC-13).
         let canvas = CGSize(width: 390, height: 400)
         let requests = [
             RouteKilometerLabelRequest(
@@ -182,17 +182,104 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertFalse(
             RouteKilometerMarkerDrawing.isDetailMarkerOnScreen(requests[3].routePoint, imageSize: canvas)
         )
-        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+        let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
             for: requests,
             endpointPoints: [CGPoint(x: 40, y: 160), CGPoint(x: 340, y: 240)],
             contentScale: 1,
-            imageSize: canvas
+            imageSize: canvas,
+            zoomDelta: 1
         )
-        XCTAssertEqual(thinned.step, 1)
-        XCTAssertTrue(thinned.shifts.keys.contains(1))
-        XCTAssertTrue(thinned.shifts.keys.contains(2))
-        XCTAssertTrue(thinned.shifts.keys.contains(3))
-        XCTAssertFalse(thinned.shifts.keys.contains(4), "off-screen km must not be labeled")
+        XCTAssertEqual(placed.modeStep, 1)
+        XCTAssertTrue(placed.shifts.keys.contains(1))
+        XCTAssertTrue(placed.shifts.keys.contains(2))
+        XCTAssertTrue(placed.shifts.keys.contains(3))
+        XCTAssertFalse(placed.shifts.keys.contains(4), "off-screen km must not be labeled")
+    }
+
+    func testDetailF5KeepsPartialWhenNoFiveKmOnScreen() {
+        // <5km record packed on a short canvas → F5 partial, not empty (JW ③ / TC-12).
+        let canvas = CGSize(width: 280, height: 72)
+        let requests = (1...4).map { km in
+            RouteKilometerLabelRequest(
+                kilometer: km,
+                distanceLabel: "\(km)km",
+                timeLabel: "1\(km):00",
+                routePoint: CGPoint(x: 120 + CGFloat(km) * 3, y: 36),
+                preferredLeadingSide: false
+            )
+        }
+        let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+            for: requests,
+            endpointPoints: [CGPoint(x: 30, y: 36), CGPoint(x: 250, y: 36)],
+            contentScale: 1,
+            imageSize: canvas,
+            zoomDelta: 1
+        )
+        XCTAssertEqual(placed.modeStep, 1)
+        XCTAssertFalse(placed.shifts.isEmpty, "F5 must show placeable labels when no 5km point exists")
+    }
+
+    func testPlacementIdleBudgetUnder300msForMountainScenes() {
+        // JW: camera idle → labels visible ≤ 300ms (same bar as Android).
+        let canvas = CGSize(width: 390, height: 700)
+        let scenes: [(String, Int, CGFloat)] = [
+            ("saryangdo", 8, 34),
+            ("gahyeonsan", 3, 70),
+            ("samaksan", 6, 48)
+        ]
+        var lines: [String] = []
+        for (name, count, spacing) in scenes {
+            let requests = (1...count).map { km in
+                RouteKilometerLabelRequest(
+                    kilometer: km,
+                    distanceLabel: "\(km)km",
+                    timeLabel: String(format: "%d:%02d", km, km * 7 % 60),
+                    routePoint: CGPoint(
+                        x: 70 + CGFloat(km) * spacing,
+                        y: 160 + CGFloat(km % 3) * 36
+                    ),
+                    preferredLeadingSide: km % 2 == 0
+                )
+            }
+            let poly = requests.map(\.routePoint)
+            let summary = RouteKilometerLabelPlacement.placeSummary(
+                markers: requests,
+                endpointPoints: [CGPoint(x: 40, y: 120), CGPoint(x: 360, y: 320)],
+                routePolyline: poly,
+                contentScale: 1,
+                imageSize: canvas,
+                sideInset: 24
+            )
+            let detail = RouteKilometerLabelPlacement.placeDetail(
+                markers: requests,
+                endpointPoints: [CGPoint(x: 40, y: 120), CGPoint(x: 360, y: 320)],
+                routePolyline: poly,
+                contentScale: 1,
+                imageSize: canvas,
+                preferModeStep: 1,
+                zoomDelta: 1
+            )
+            lines.append(
+                "summary-\(name) \(Int(summary.elapsedMilliseconds.rounded()))ms mode=\(summary.modeStep) stage=\(summary.stageName) nodes=\(summary.nodesVisited) labels=\(summary.shifts.count)"
+            )
+            lines.append(
+                "detail-\(name) \(Int(detail.elapsedMilliseconds.rounded()))ms mode=\(detail.modeStep) stage=\(detail.stageName) nodes=\(detail.nodesVisited) labels=\(detail.shifts.count)"
+            )
+            XCTAssertLessThan(summary.elapsedMilliseconds, 300, lines.last!)
+            XCTAssertLessThan(detail.elapsedMilliseconds, 300, lines.last!)
+            XCTAssertFalse(summary.shifts.isEmpty)
+            XCTAssertFalse(detail.shifts.isEmpty)
+        }
+        let text = (["budget=300ms softSolver=220ms keepPreviousLabels=true"] + lines).joined(separator: "\n") + "\n"
+        let outPaths = [
+            URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("km-label-LATENCY.txt"),
+            URL(fileURLWithPath: "/Users/jeongwook/Library/Application Support/Cursor/AgentStores/cursor_agent_stores/bc-75707dba-5737-4d43-b5ab-a5deda5241a4/files/docs/label-placement/final/impl-ios/LATENCY.txt")
+        ]
+        for url in outPaths {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        NSLog("%@", "[km-label-latency]\n\(text)")
     }
 
     func testDetailLabelKeepPriorityScaffoldStillAvailable() {

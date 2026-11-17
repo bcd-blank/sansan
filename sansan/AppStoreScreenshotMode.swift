@@ -17,15 +17,30 @@ enum AppStoreScreenshotMode: String {
     case kmscDetail = "kmsc-detail"
     /// Opens 모음 → short seeded 4.28km detail for km-label zoom captures.
     case detailZoom = "detail-zoom"
+    case detailSaryang = "detail-saryang"
+    case detailGahyeon = "detail-gahyeon"
+    case detailSamak = "detail-samak"
 
     static var current: AppStoreScreenshotMode? {
-        ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"].flatMap(AppStoreScreenshotMode.init(rawValue:))
+        if let env = ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"],
+           let mode = AppStoreScreenshotMode(rawValue: env) {
+            return mode
+        }
+        // simctl launch args are more reliable than SIMCTL_CHILD_* on some runtimes.
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "-SANSAN_SCREENSHOT"),
+           args.index(after: idx) < args.endIndex,
+           let mode = AppStoreScreenshotMode(rawValue: args[args.index(after: idx)]) {
+            return mode
+        }
+        return nil
     }
 
     var opensRecordsTab: Bool {
         switch self {
         case .dashboard: false
-        case .records, .imported, .kmsc, .kmscDetail, .detailZoom: true
+        case .records, .imported, .kmsc, .kmscDetail, .detailZoom,
+             .detailSaryang, .detailGahyeon, .detailSamak: true
         }
     }
 
@@ -48,7 +63,21 @@ enum AppStoreScreenshotMode: String {
     }
 
     var opensShortDetailRecord: Bool {
-        self == .detailZoom
+        self == .detailZoom || self == .detailGahyeon
+    }
+
+    /// Seeded record UUID to open for label-placement captures (nil = no auto-open).
+    var opensSeededDetailRecordID: UUID? {
+        switch self {
+        case .detailZoom, .detailGahyeon:
+            return UUID(uuidString: "00000000-0000-4000-8000-00000000a428")
+        case .detailSaryang:
+            return UUID(uuidString: "00000000-0000-4000-8000-00000000a820")
+        case .detailSamak:
+            return UUID(uuidString: "00000000-0000-4000-8000-00000000a610")
+        default:
+            return nil
+        }
     }
 }
 

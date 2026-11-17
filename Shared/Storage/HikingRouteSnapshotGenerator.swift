@@ -799,47 +799,49 @@ enum HikingRouteSnapshotGenerator {
                 preferredLeadingSide: marker.placesLabelOnLeadingSide
             )
         }
-        // Share-summary: clamp capsules to canvas × side inset 24 (impl4 #2). Detail map keeps legacy.
+        // Share-summary: final-spec v3 placement; clamp to canvas × side inset 24.
         let clampBounds = appearance == .shareSummary
-        let imageSize = clampBounds ? canvasSize : .zero
+        let imageSize = clampBounds ? canvasSize : canvasSize
+        let sideInset = clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
+        let routePolyline = coordinates.map { projector.point(for: $0) }
         let shifts = RouteKilometerMarkerDrawing.labelShifts(
             for: requests,
             endpointPoints: endpoints,
             contentScale: contentScale,
             imageSize: imageSize,
-            sideInset: clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
+            sideInset: sideInset,
+            routePolyline: routePolyline
         )
         for request in requests {
-            var placesLeading = shifts[request.kilometer]?.placesLabelOnLeadingSide
-                ?? request.preferredLeadingSide
-            var vertical = shifts[request.kilometer]?.verticalOffset ?? 0
-            // Draw-time safety: if chosen side still overflows, flip (Android impl4).
-            if clampBounds, imageSize.width > 1 {
-                let trial = RouteKilometerMarkerDrawing.capsuleSize(
-                    distanceLabel: request.distanceLabel,
-                    timeLabel: request.timeLabel,
-                    contentScale: contentScale
-                )
-                let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
-                let offsetX = gap + trial.width / 2
-                let centerX = request.routePoint.x + (placesLeading ? -offsetX : offsetX)
-                let left = centerX - trial.width / 2
-                let right = centerX + trial.width / 2
+            let size = RouteKilometerMarkerDrawing.capsuleSize(
+                distanceLabel: request.distanceLabel,
+                timeLabel: request.timeLabel,
+                contentScale: contentScale
+            )
+            let fallback = RouteKilometerLabelShift(
+                placesLabelOnLeadingSide: request.preferredLeadingSide,
+                verticalOffset: 0,
+                capsuleWidth: size.width > 0 ? size.width : 72,
+                contentScale: contentScale
+            )
+            var offset = shifts[request.kilometer]?.centerOffset ?? fallback.centerOffset
+            // Draw-time safety: if capsule still overflows, flip horizontally (impl4).
+            if clampBounds, imageSize.width > 1, size.width > 0 {
+                let centerX = request.routePoint.x + offset.x
+                let left = centerX - size.width / 2
+                let right = centerX + size.width / 2
                 let inset = ShareSummaryTokens.kmLabelBoundsInset * contentScale
-                if right > imageSize.width - inset + 0.5, !placesLeading {
-                    placesLeading = true
-                    vertical = 0
-                } else if left < inset - 0.5, placesLeading {
-                    placesLeading = false
-                    vertical = 0
+                if right > imageSize.width - inset + 0.5 {
+                    offset.x = -abs(offset.x)
+                } else if left < inset - 0.5 {
+                    offset.x = abs(offset.x)
                 }
             }
             RouteKilometerMarkerDrawing.drawCombinedMarker(
                 distanceLabel: request.distanceLabel,
                 timeLabel: request.timeLabel,
                 routePoint: request.routePoint,
-                placesLabelOnLeadingSide: placesLeading,
-                verticalOffset: vertical,
+                centerOffset: offset,
                 contentScale: contentScale,
                 in: cgContext
             )

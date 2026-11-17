@@ -36,8 +36,13 @@ struct HikingRecordRouteMapView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var kilometerMarkerPlacements: [RouteKilometerMarkerPlacement] = []
     @State private var kilometerLabelShifts: [Int: RouteKilometerLabelShift] = [:]
-    /// Kilometers that keep a blue combined capsule after hideSteps thinning; dots always draw.
+    /// Kilometers that keep a blue combined capsule after thinning; dots always draw.
     @State private var labeledKilometers: Set<Int> = []
+    /// Detail placement mode: 1km or wholesale 5km (spec §7).
+    @State private var kilometerLabelModeStep: Int = 1
+    @State private var lastLabelLayoutZoom: Double?
+    /// Generation token — stale background layouts are dropped; previous labels stay until apply.
+    @State private var kilometerLabelLayoutGeneration: UInt64 = 0
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
 
@@ -198,7 +203,7 @@ struct HikingRecordRouteMapView: View {
             }
             .mapStyle(.standard(elevation: .flat))
             .onMapCameraChange(frequency: .onEnd) { context in
-                updateKilometerLabelShifts(proxy: proxy)
+                updateKilometerLabelShifts(proxy: proxy, cameraDistance: context.camera.distance)
                 guard isLiveRegistryActive else { return }
                 LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
                     recordID: recordID,
@@ -207,13 +212,13 @@ struct HikingRecordRouteMapView: View {
                 )
             }
             .onChange(of: kilometerMarkerPlacements) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
             }
             .onChange(of: showsDistanceMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
             }
             .onChange(of: showsTimeMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
             }
             .background {
                 RouteMapVisibleRenderRegistrar(recordID: recordID)
@@ -228,7 +233,7 @@ struct HikingRecordRouteMapView: View {
                 }
             }
             .onAppear {
-                updateKilometerLabelShifts(proxy: proxy)
+                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
                 // 저장 시점에 화면 지도가 실제로 보여주는 영역을 그대로 가져와 클론에 적용합니다.
                 // (onMapCameraChange가 초기 프로그램적 카메라에서 안 뜨는 경우 대비)
                 LiveRouteMapSnapshotRegistry.shared.registerVisibleRectProvider(recordID: recordID) {
@@ -262,10 +267,13 @@ struct HikingRecordRouteMapView: View {
         case .fit:
             fitRouteInView(animated: false)
         case .zoomIn:
-            // Zoom into the first ~1–2km so some later km dots leave the viewport.
-            let centerIndex = min(routeCoordinates.count / 4, max(routeCoordinates.count - 1, 0))
+            // Zoom near the end so mid/late km stay on-screen (TC-01: 3·4km on ~4.28km).
+            let centerIndex = min(
+                max(Int(Double(routeCoordinates.count) * 0.72), 0),
+                routeCoordinates.count - 1
+            )
             let center = routeCoordinates[centerIndex]
-            let span = MKCoordinateSpan(latitudeDelta: 0.004, longitudeDelta: 0.004)
+            let span = MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
             mapPosition = .region(MKCoordinateRegion(center: center, span: span))
         }
     }
@@ -290,9 +298,9 @@ struct HikingRecordRouteMapView: View {
         return rect.isNull ? nil : rect
     }
 
-    /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
-    /// Detail map: #007AFF capsules; visible-only + wholesale hideSteps. Camera onEnd re-runs.
-    private func updateKilometerLabelShifts(proxy: MapProxy) {
+    /// Detail map: #007AFF capsules; final-spec v3. Camera idle → background layout ≤~300ms.
+    /// Previous labels stay until the new result applies (no blank flash).
+    private func updateKilometerLabelShifts(proxy: MapProxy, cameraDistance: Double?) {
         guard mapWidth > 1, mapHeight > 1,
               let start = routeCoordinates.first,
               let startPoint = proxy.convert(start, to: .local) else { return }
@@ -303,6 +311,14 @@ struct HikingRecordRouteMapView: View {
             endpoints.append(endPoint)
         }
         var requests: [RouteKilometerLabelRequest] = []
+        var polyline: [CGPoint] = []
+        // Sparse path samples for clearance — full route is decimated again in the solver.
+        let strideN = max(1, routeCoordinates.count / 80)
+        for (idx, coordinate) in routeCoordinates.enumerated() where idx % strideN == 0 || idx == routeCoordinates.count - 1 {
+            if let point = proxy.convert(coordinate, to: .local) {
+                polyline.append(point)
+            }
+        }
         for marker in kilometerMarkerPlacements {
             let distance = showsDistanceMarkers ? marker.labelText : nil
             let time = showsTimeMarkers ? kilometerArrivalLabels[marker.kilometer] : nil
@@ -318,21 +334,61 @@ struct HikingRecordRouteMapView: View {
                 )
             )
         }
-        // Off-screen km dots are filtered inside thinnedDetailLabelShifts; camera onEnd re-evaluates.
-        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
-            for: requests,
-            endpointPoints: endpoints,
-            contentScale: 1,
-            imageSize: CGSize(width: mapWidth, height: mapHeight),
-            sideInset: RouteKilometerMarkerMetrics.detailLabelSideInset,
-            verticalInset: RouteKilometerMarkerMetrics.detailLabelVerticalInset
-        )
-        let nextLabeled = Set(thinned.shifts.keys)
-        if thinned.shifts != kilometerLabelShifts {
-            kilometerLabelShifts = thinned.shifts
+
+        let zoomDelta: Double
+        if let cameraDistance, let last = lastLabelLayoutZoom, last > 0 {
+            zoomDelta = log2(max(cameraDistance, 1) / last)
+        } else {
+            zoomDelta = 1
         }
-        if nextLabeled != labeledKilometers {
-            labeledKilometers = nextLabeled
+        if let cameraDistance {
+            lastLabelLayoutZoom = cameraDistance
+        }
+
+        let imageSize = CGSize(width: mapWidth, height: mapHeight)
+        let preferStep = kilometerLabelModeStep
+        kilometerLabelLayoutGeneration &+= 1
+        let generation = kilometerLabelLayoutGeneration
+        let idleAt = CFAbsoluteTimeGetCurrent()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+                for: requests,
+                endpointPoints: endpoints,
+                contentScale: 1,
+                imageSize: imageSize,
+                routePolyline: polyline,
+                preferModeStep: preferStep,
+                zoomDelta: zoomDelta
+            )
+            let idleToVisibleMs = (CFAbsoluteTimeGetCurrent() - idleAt) * 1000
+            DispatchQueue.main.async {
+                guard generation == kilometerLabelLayoutGeneration else { return }
+#if DEBUG
+                print(
+                    String(
+                        format: "[km-label] mode=%d stage=%@ nodes=%d solver=%.1fms idle→visible=%.1fms labels=%d partial=%@",
+                        placed.modeStep,
+                        placed.stageName,
+                        placed.nodesVisited,
+                        placed.elapsedMilliseconds,
+                        idleToVisibleMs,
+                        placed.shifts.count,
+                        placed.partial ? "yes" : "no"
+                    )
+                )
+#endif
+                if placed.modeStep != kilometerLabelModeStep {
+                    kilometerLabelModeStep = placed.modeStep
+                }
+                let nextLabeled = Set(placed.shifts.keys)
+                if placed.shifts != kilometerLabelShifts {
+                    kilometerLabelShifts = placed.shifts
+                }
+                if nextLabeled != labeledKilometers {
+                    labeledKilometers = nextLabeled
+                }
+            }
         }
     }
 
@@ -369,11 +425,14 @@ struct HikingRecordRouteMapView: View {
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         let shift = kilometerLabelShifts[marker.kilometer]
                         let showsLabel = labeledKilometers.contains(marker.kilometer)
+                        let fallback = RouteKilometerLabelShift(
+                            placesLabelOnLeadingSide: marker.placesLabelOnLeadingSide,
+                            verticalOffset: 0
+                        )
                         RouteKilometerHorizontalMarker(
                             distanceText: distanceText,
                             timeText: timeText,
-                            placesLabelOnLeadingSide: shift?.placesLabelOnLeadingSide ?? marker.placesLabelOnLeadingSide,
-                            verticalOffset: shift?.verticalOffset ?? 0,
+                            centerOffset: shift?.centerOffset ?? fallback.centerOffset,
                             showsLabel: showsLabel
                         )
                         .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }

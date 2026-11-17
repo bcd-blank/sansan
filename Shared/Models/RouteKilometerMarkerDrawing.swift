@@ -10,31 +10,77 @@
 
 import UIKit
 
-struct RouteKilometerLabelShift: Equatable {
-    var placesLabelOnLeadingSide: Bool
-    var verticalOffset: CGFloat
-}
-
-struct RouteKilometerLabelRequest {
-    let kilometer: Int
-    let distanceLabel: String?
-    let timeLabel: String?
-    let routePoint: CGPoint
-    let preferredLeadingSide: Bool
-}
-
 enum RouteKilometerMarkerDrawing {
     /// 시작·종료 점(지름 18) 밖으로 라벨을 띄우는 여유.
     private static let endpointClearanceRadius: CGFloat = 18 / 2 + 6
 
-    /// 겹치는 라벨을 포인트 옆에서만 조금 떼어 놓습니다.
-    /// When `imageSize` is set, capsules must stay inside the canvas (impl4 #2 / Android `imageBoundsPenalty`).
+    /// Share-summary / card: final-spec v3 placement (16 dirs + aligned, rings A–D).
     static func labelShifts(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
         contentScale: CGFloat,
         imageSize: CGSize = .zero,
-        sideInset: CGFloat = 0
+        sideInset: CGFloat = 0,
+        routePolyline: [CGPoint] = []
+    ) -> [Int: RouteKilometerLabelShift] {
+        guard !markers.isEmpty else { return [:] }
+        let size = imageSize.width > 1 ? imageSize : CGSize(width: 2000, height: 2000)
+        let result = RouteKilometerLabelPlacement.placeSummary(
+            markers: markers,
+            endpointPoints: endpointPoints,
+            routePolyline: routePolyline,
+            contentScale: contentScale,
+            imageSize: size,
+            sideInset: sideInset
+        )
+        if !result.shifts.isEmpty { return result.shifts }
+        // Extreme fallback: legacy L/R nudges so drawing never blanks all labels.
+        return legacyLabelShifts(
+            for: markers,
+            endpointPoints: endpointPoints,
+            contentScale: contentScale,
+            imageSize: imageSize,
+            sideInset: sideInset
+        )
+    }
+
+    /// Detail-map: final-spec v3 + F1–F5 (visible-only, wholesale 1→5, F5 partial).
+    static func thinnedDetailLabelShifts(
+        for markers: [RouteKilometerLabelRequest],
+        endpointPoints: [CGPoint],
+        contentScale: CGFloat,
+        imageSize: CGSize,
+        sideInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelSideInset,
+        verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset,
+        routePolyline: [CGPoint] = [],
+        preferModeStep: Int = 1,
+        zoomDelta: Double = 1 // treat first layout like a zoom change → start at 1km
+    ) -> RouteKilometerPlacementResult {
+        _ = sideInset
+        _ = verticalInset
+        return RouteKilometerLabelPlacement.placeDetail(
+            markers: markers,
+            endpointPoints: endpointPoints,
+            routePolyline: routePolyline,
+            contentScale: contentScale,
+            imageSize: imageSize,
+            preferModeStep: preferModeStep,
+            zoomDelta: zoomDelta
+        )
+    }
+
+    /// Km-dot center inside the map view — off-screen points are excluded from thinning.
+    static func isDetailMarkerOnScreen(_ point: CGPoint, imageSize: CGSize) -> Bool {
+        RouteKilometerLabelPlacement.isOnScreen(point, size: imageSize)
+    }
+
+    /// Legacy sequential L/R placement (fallback only).
+    private static func legacyLabelShifts(
+        for markers: [RouteKilometerLabelRequest],
+        endpointPoints: [CGPoint],
+        contentScale: CGFloat,
+        imageSize: CGSize,
+        sideInset: CGFloat
     ) -> [Int: RouteKilometerLabelShift] {
         var occupied: [CGRect] = []
         var shifts: [Int: RouteKilometerLabelShift] = [:]
@@ -55,65 +101,6 @@ enum RouteKilometerMarkerDrawing {
             occupied.append(contentsOf: placed.rects)
         }
         return shifts
-    }
-
-    /// Detail-map thinning (JW active): visible-only km dots + wholesale hideSteps [1,5,10…].
-    /// At step 1 every on-screen label stays (no per-label hide). If the whole set cannot
-    /// place clear, escalate the screen to the next step. Dots always drawn by caller.
-    static func thinnedDetailLabelShifts(
-        for markers: [RouteKilometerLabelRequest],
-        endpointPoints: [CGPoint],
-        contentScale: CGFloat,
-        imageSize: CGSize,
-        sideInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelSideInset,
-        verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset
-    ) -> (step: Int, shifts: [Int: RouteKilometerLabelShift]) {
-        let visible = markers.filter { isDetailMarkerOnScreen($0.routePoint, imageSize: imageSize) }
-        guard !visible.isEmpty else { return (1, [:]) }
-
-        let steps = RouteKilometerMarkerMetrics.detailLabelHideSteps
-        var lastShifts: [Int: RouteKilometerLabelShift] = [:]
-        var lastStep = steps.last ?? 1
-        for step in steps {
-            let subset: [RouteKilometerLabelRequest]
-            if step <= 1 {
-                subset = visible
-            } else {
-                subset = visible.filter { $0.kilometer % step == 0 }
-            }
-            if subset.isEmpty {
-                // Record shorter than step → labels off, dots stay (caller).
-                return (step, [:])
-            }
-            if let shifts = labelShiftsClear(
-                for: subset,
-                endpointPoints: endpointPoints,
-                contentScale: contentScale,
-                imageSize: imageSize,
-                sideInset: sideInset,
-                verticalInset: verticalInset
-            ) {
-                return (step, shifts)
-            }
-            lastStep = step
-            lastShifts = labelShifts(
-                for: subset,
-                endpointPoints: endpointPoints,
-                contentScale: contentScale,
-                imageSize: imageSize,
-                sideInset: sideInset
-            )
-        }
-        return (lastStep, lastShifts)
-    }
-
-    /// Km-dot center inside the map view — off-screen points are excluded from thinning.
-    static func isDetailMarkerOnScreen(_ point: CGPoint, imageSize: CGSize) -> Bool {
-        guard imageSize.width > 1, imageSize.height > 1 else { return false }
-        return point.x >= 0
-            && point.x <= imageSize.width
-            && point.y >= 0
-            && point.y <= imageSize.height
     }
 
     /// Inactive (JW): per-label hide with keep priority 10× → 5× → rest.
@@ -422,6 +409,35 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
+        let size = capsuleSize(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            contentScale: contentScale
+        )
+        let legacy = RouteKilometerLabelShift(
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
+            capsuleWidth: size.width > 0 ? size.width : 72,
+            contentScale: contentScale
+        )
+        drawCombinedMarker(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: legacy.centerOffset,
+            contentScale: contentScale,
+            in: cgContext
+        )
+    }
+
+    static func drawCombinedMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
         guard RouteKilometerMarkerMetrics.combinedLabel(distance: distanceLabel, time: timeLabel) != nil else {
             return
         }
@@ -457,15 +473,13 @@ enum RouteKilometerMarkerDrawing {
             textWidth += (part.0 as NSString).size(withAttributes: [.font: part.1]).width
         }
         let capsuleWidth = textWidth + padH * 2
-        let center = labelCenter(
-            capsuleWidth: capsuleWidth,
-            routePoint: routePoint,
-            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
-            contentScale: contentScale
+        let center = CGPoint(
+            x: routePoint.x + centerOffset.x,
+            y: routePoint.y + centerOffset.y
         )
         let capsuleRect = CGRect(
             x: center.x - capsuleWidth / 2,
-            y: center.y - height / 2 + verticalOffset,
+            y: center.y - height / 2,
             width: capsuleWidth,
             height: height
         )
