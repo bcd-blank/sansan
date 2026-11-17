@@ -55,12 +55,14 @@ enum RouteSelfCrossing {
 
     /// Screen/canvas-space crossings. Pass already-cleaned points; indices match that array.
     /// `minLoopLength` is in the same units as `points`.
+    /// `proximityDistance`: also treat near-parallel approaches within this gap as crosses.
     static func hits(
         in points: [CGPoint],
         minLoopLength: CGFloat,
         minSeparationEdges: Int = 5,
-        minCrossSin: CGFloat = 0.45,
-        dedupeDistance: CGFloat
+        minCrossSin: CGFloat = 0.18,
+        dedupeDistance: CGFloat,
+        proximityDistance: CGFloat = 0
     ) -> [Hit] {
         // Do not re-clean — laterEdge must stay aligned with the caller's drawPoints.
         guard points.count >= 5 else { return [] }
@@ -71,12 +73,23 @@ enum RouteSelfCrossing {
             guard jMin <= lastEdge else { continue }
             for j in jMin...lastEdge {
                 if pathLength(points, from: i, to: j) < minLoopLength { continue }
-                guard let hit = segmentIntersection(
+                if let hit = segmentIntersection(
                     points[i], points[i + 1],
                     points[j], points[j + 1],
                     minCrossSin: minCrossSin
-                ) else { continue }
-                crosses.append(Hit(laterEdge: j, u: hit.u, point: hit.point))
+                ) {
+                    crosses.append(Hit(laterEdge: j, u: hit.u, point: hit.point))
+                    continue
+                }
+                // Near-parallel proximity: ribbons visually cross even without a strict X.
+                if proximityDistance > 0,
+                   let near = segmentProximity(
+                    points[i], points[i + 1],
+                    points[j], points[j + 1],
+                    maxDistance: proximityDistance
+                   ) {
+                    crosses.append(Hit(laterEdge: j, u: near.u, point: near.point))
+                }
             }
         }
         crosses.sort { a, b in
@@ -115,7 +128,9 @@ enum RouteSelfCrossing {
         let raw = hits(
             in: points,
             minLoopLength: minLoop,
-            dedupeDistance: dedupe
+            minCrossSin: 0.18,
+            dedupeDistance: dedupe,
+            proximityDistance: CGFloat(8 / max(meterPerMapPoint, 1e-9))
         )
         let padMap = CGFloat(padMeters / max(meterPerMapPoint, 1e-9))
         return raw.compactMap { hit -> CoordinateHit? in
@@ -125,7 +140,7 @@ enum RouteSelfCrossing {
                 drawPoints: points,
                 hit: hit,
                 backPad: padMap,
-                forwardPad: nil // suffix → end (same as share summary)
+                forwardPad: padMap
             )
             guard local.count >= 2 else { return nil }
             let overlay = local.map {
@@ -141,14 +156,12 @@ enum RouteSelfCrossing {
         }
     }
 
-    /// Later-ribbon overlay: `backPad` before the cross, then along the later path.
-    /// - `forwardPad == nil` → continue to the route end (suffix bridge; clearest 3D cut).
-    /// - otherwise → local bridge of `forwardPad` after the cross.
+    /// Local later-ribbon bridge: `backPad` before + `forwardPad` after the cross.
     static func overlayPoints(
         drawPoints: [CGPoint],
         hit: Hit,
         backPad: CGFloat,
-        forwardPad: CGFloat?
+        forwardPad: CGFloat
     ) -> [CGPoint] {
         let j = hit.laterEdge
         guard j + 1 < drawPoints.count else { return [] }
@@ -187,42 +200,32 @@ enum RouteSelfCrossing {
         }
 
         var after: [CGPoint] = []
-        if let forwardPad {
-            remain = forwardPad
-            let ahead = edgeLen - along
-            if ahead > 1e-3 {
-                let take = min(remain, ahead)
-                let t = (along + take) / edgeLen
-                after.append(CGPoint(
-                    x: b0.x + (b1.x - b0.x) * t,
-                    y: b0.y + (b1.y - b0.y) * t
-                ))
-                remain -= take
-            }
-            idx = j + 1
-            while remain > 1e-3, idx < drawPoints.count - 1 {
-                let p0 = drawPoints[idx]
-                let p1 = drawPoints[idx + 1]
-                let seg = hypot(p1.x - p0.x, p1.y - p0.y)
-                if seg < 1e-3 { idx += 1; continue }
-                let take = min(remain, seg)
-                let t = take / seg
-                after.append(CGPoint(
-                    x: p0.x + (p1.x - p0.x) * t,
-                    y: p0.y + (p1.y - p0.y) * t
-                ))
-                remain -= take
-                idx += 1
-                if take < seg - 1e-6 { break }
-            }
-        } else {
-            // Full later suffix → end.
-            if hit.u < 0.999 {
-                after.append(b1)
-            }
-            if j + 2 <= drawPoints.count - 1 {
-                after.append(contentsOf: drawPoints[(j + 2)...])
-            }
+        remain = forwardPad
+        let ahead = edgeLen - along
+        if ahead > 1e-3 {
+            let take = min(remain, ahead)
+            let t = (along + take) / edgeLen
+            after.append(CGPoint(
+                x: b0.x + (b1.x - b0.x) * t,
+                y: b0.y + (b1.y - b0.y) * t
+            ))
+            remain -= take
+        }
+        idx = j + 1
+        while remain > 1e-3, idx < drawPoints.count - 1 {
+            let p0 = drawPoints[idx]
+            let p1 = drawPoints[idx + 1]
+            let seg = hypot(p1.x - p0.x, p1.y - p0.y)
+            if seg < 1e-3 { idx += 1; continue }
+            let take = min(remain, seg)
+            let t = take / seg
+            after.append(CGPoint(
+                x: p0.x + (p1.x - p0.x) * t,
+                y: p0.y + (p1.y - p0.y) * t
+            ))
+            remain -= take
+            idx += 1
+            if take < seg - 1e-6 { break }
         }
 
         var result: [CGPoint] = before.reversed()
@@ -281,5 +284,37 @@ enum RouteSelfCrossing {
             point: CGPoint(x: b0.x + u * (b1.x - b0.x), y: b0.y + u * (b1.y - b0.y)),
             u: u
         )
+    }
+
+    /// Closest approach between two segments when they nearly graze (parallel proximity).
+    private static func segmentProximity(
+        _ a0: CGPoint, _ a1: CGPoint,
+        _ b0: CGPoint, _ b1: CGPoint,
+        maxDistance: CGFloat
+    ) -> (point: CGPoint, u: CGFloat)? {
+        let ax = a1.x - a0.x, ay = a1.y - a0.y
+        let bx = b1.x - b0.x, by = b1.y - b0.y
+        let aLen = hypot(ax, ay), bLen = hypot(bx, by)
+        guard aLen > 1e-3, bLen > 1e-3 else { return nil }
+        // Sample a few parameters on the later edge; keep the closest mid-segment pair.
+        var bestDist = CGFloat.greatestFiniteMagnitude
+        var bestU: CGFloat = 0.5
+        var bestPoint = b0
+        for sample in 1...8 {
+            let u = CGFloat(sample) / 9
+            let bp = CGPoint(x: b0.x + bx * u, y: b0.y + by * u)
+            // Project bp onto earlier segment.
+            let apx = bp.x - a0.x, apy = bp.y - a0.y
+            let t = max(0, min(1, (apx * ax + apy * ay) / (aLen * aLen)))
+            let ap = CGPoint(x: a0.x + ax * t, y: a0.y + ay * t)
+            let dist = hypot(bp.x - ap.x, bp.y - ap.y)
+            if dist < bestDist {
+                bestDist = dist
+                bestU = u
+                bestPoint = bp
+            }
+        }
+        guard bestDist <= maxDistance, bestDist > 0.35 else { return nil }
+        return (point: bestPoint, u: bestU)
     }
 }

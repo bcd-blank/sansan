@@ -656,9 +656,9 @@ enum HikingRouteSnapshotGenerator {
                 in: cgContext
             )
         case .shareSummary:
-            // JW/팀장: continuous Path (white→green, no join seams) + white→green overlay
-            // only at true self-crossings. `-SANSAN_ROUTE_CHUNKS` exports the old chunk
-            // before for compare captures.
+            // JW/팀장: continuous Path (white→green, no join seams) + local white→green
+            // overlay only at true self-crossings. No gray shadow on AFTER.
+            // `-SANSAN_ROUTE_CHUNKS` exports the old chunk before for compare captures.
             let forceChunks = ProcessInfo.processInfo.arguments.contains("-SANSAN_ROUTE_CHUNKS")
                 || ProcessInfo.processInfo.environment["SANSAN_ROUTE_CHUNKS"] == "1"
             drawContinuousRouteWithCrossOverlays(
@@ -668,7 +668,7 @@ enum HikingRouteSnapshotGenerator {
                 fillWidth: ShareSummaryTokens.routeWidth * contentScale,
                 white: .white,
                 green: ShareSummaryTokens.accentUIColor,
-                shadow: true,
+                shadow: false,
                 forceChunks: forceChunks,
                 in: cgContext
             )
@@ -748,19 +748,25 @@ enum HikingRouteSnapshotGenerator {
 
         let drawPoints = RouteSelfCrossing.cleanedPoints(points)
         let minLoopLength = max(casingWidth * 14, 72 * contentScale)
-        // Start slightly before the X so twin rails fully cut earlier green (not a butt seam).
-        let backPad = max(casingWidth * 2.2, fillWidth * 3.0, 16 * contentScale)
+        // 팀장 19:36 — local bridge only: ±(casing×3~4). White butt; green longer so
+        // butt ends stay covered and BOTH rails cut earlier green (not one-sided).
+        let whitePad = casingWidth * 3.75
+        let greenPad = casingWidth * 4.5
         let hits = RouteSelfCrossing.hits(
             in: drawPoints,
             minLoopLength: minLoopLength,
-            dedupeDistance: max(casingWidth * 1.5, 12 * contentScale)
+            // Include shallower / near-parallel crossings (was 0.45 — missed grazes).
+            minCrossSin: 0.18,
+            dedupeDistance: max(casingWidth * 1.5, 12 * contentScale),
+            proximityDistance: casingWidth * 0.55
         )
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d points=%d backPad=%.1f",
+            "[km-label] route crosses unique=%d points=%d whitePad=%.1f greenPad=%.1f",
             hits.count,
             drawPoints.count,
-            backPad
+            whitePad,
+            greenPad
         )
         for hit in hits {
             NSLog(
@@ -779,37 +785,57 @@ enum HikingRouteSnapshotGenerator {
         }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Suffix overlay (cross−backPad → end): later white→green on top of earlier ribbon.
+        // Local straight bridge along later edge direction (팀장: ±두께×3~4 조각만).
+        // Straight segment keeps BOTH white rails cutting earlier green; polyline follow
+        // was melting one side into the vertical arm.
         for hit in hits {
-            let overlayPts = RouteSelfCrossing.overlayPoints(
-                drawPoints: drawPoints,
-                hit: hit,
-                backPad: backPad,
-                forwardPad: nil
-            )
-            guard overlayPts.count >= 2 else { continue }
-            let overlay = UIBezierPath()
-            overlay.lineCapStyle = .butt
-            overlay.lineJoinStyle = .round
-            overlay.move(to: overlayPts[0])
-            for index in 1..<overlayPts.count {
-                overlay.addLine(to: overlayPts[index])
+            let j = hit.laterEdge
+            guard j + 1 < drawPoints.count else { continue }
+            let b0 = drawPoints[j]
+            let b1 = drawPoints[j + 1]
+            let dx = b1.x - b0.x
+            let dy = b1.y - b0.y
+            let edgeLen = hypot(dx, dy)
+            guard edgeLen > 1e-3 else { continue }
+            let ux = dx / edgeLen
+            let uy = dy / edgeLen
+
+            func bridgePath(half: CGFloat) -> CGPath {
+                let a = CGPoint(x: hit.point.x - ux * half, y: hit.point.y - uy * half)
+                let b = CGPoint(x: hit.point.x + ux * half, y: hit.point.y + uy * half)
+                let path = CGMutablePath()
+                path.move(to: a)
+                path.addLine(to: b)
+                return path
             }
-            // Opaque CG strokes — UIBezierPath.stroke can soft-blend and hide rails.
+
             cgContext.saveGState()
-            cgContext.setBlendMode(.normal)
-            cgContext.setAllowsAntialiasing(true)
-            cgContext.addPath(overlay.cgPath)
-            cgContext.setStrokeColor(white.cgColor)
-            cgContext.setLineWidth(casingWidth)
-            cgContext.setLineCap(.butt)
+            cgContext.setShouldAntialias(true)
             cgContext.setLineJoin(.round)
+            cgContext.setLineCap(.butt)
+
+            // Opaque white first (butt) — punches through earlier green on BOTH sides.
+            cgContext.setBlendMode(.copy)
+            cgContext.addPath(bridgePath(half: whitePad))
+            cgContext.setStrokeColor(UIColor.white.cgColor)
+            cgContext.setLineWidth(casingWidth)
             cgContext.strokePath()
-            cgContext.addPath(overlay.cgPath)
+
+            // Longer green covers white butt ends; rails remain in the middle.
+            cgContext.setBlendMode(.copy)
+            cgContext.addPath(bridgePath(half: greenPad))
             cgContext.setStrokeColor(green.cgColor)
             cgContext.setLineWidth(fillWidth)
             cgContext.strokePath()
+
             cgContext.restoreGState()
+
+            #if DEBUG
+            NSLog(
+                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) whitePad=%.1f",
+                hit.point.x, hit.point.y, ux, uy, whitePad
+            )
+            #endif
         }
     }
 
