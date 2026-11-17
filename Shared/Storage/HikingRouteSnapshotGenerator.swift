@@ -764,30 +764,26 @@ enum HikingRouteSnapshotGenerator {
         }
 
         let drawPoints = RouteSelfCrossing.cleanedPoints(points)
-        let minLoopLength = max(casingWidth * 14, 72 * contentScale)
-        // 팀장: local later ribbon. Wide white + narrow green + explicit L/R rails.
-        let whitePad = casingWidth * 4.5
-        let greenPad = casingWidth * 5.25
-        let bridgeWhiteWidth = casingWidth * 1.55
-        let bridgeGreenWidth = fillWidth * 0.72
-        let railWidth = max((bridgeWhiteWidth - bridgeGreenWidth) * 0.5, 1.6 * contentScale)
+        // Android tip 6a62d1e / 299c8e7: short bridge only — half ≈ casing×1.75 / ×2.35
+        // (total length ≈ casing×3.5~4.7). Widths match the normal ribbon (no oversize).
+        let minLoopLength = max(casingWidth * 8, 48 * contentScale)
+        let whiteHalf = casingWidth * 1.75
+        let greenHalf = casingWidth * 2.35
         let hits = RouteSelfCrossing.hits(
             in: drawPoints,
             minLoopLength: minLoopLength,
-            // True X only — proximity false-positives painted rails along the whole ribbon.
-            minCrossSin: 0.35,
-            dedupeDistance: max(casingWidth * 2.5, 18 * contentScale),
-            proximityDistance: 0
+            // Match Android (~≥12°); proximity only for near-miss true crosses.
+            minCrossSin: 0.21,
+            dedupeDistance: max(casingWidth * 2.0, 16 * contentScale),
+            proximityDistance: casingWidth * 0.65
         )
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d points=%d whitePad=%.1f bridgeW=%.1f/%.1f rail=%.1f",
+            "[km-label] route crosses unique=%d points=%d whiteHalf=%.1f greenHalf=%.1f",
             hits.count,
             drawPoints.count,
-            whitePad,
-            bridgeWhiteWidth,
-            bridgeGreenWidth,
-            railWidth
+            whiteHalf,
+            greenHalf
         )
         for hit in hits {
             NSLog(
@@ -806,23 +802,11 @@ enum HikingRouteSnapshotGenerator {
         }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Local later-path overlay: opaque twin rails that cut earlier green on BOTH sides.
+        // Short STRAIGHT bridge along later-edge direction (GPS polyline wiggle → white blob).
+        // Widths = normal casing/fill; white butt; green longer + round to cover butts.
         for hit in hits {
-            let local = RouteSelfCrossing.overlayPoints(
-                drawPoints: drawPoints,
-                hit: hit,
-                backPad: whitePad,
-                forwardPad: whitePad
-            )
-            let greenLocal = RouteSelfCrossing.overlayPoints(
-                drawPoints: drawPoints,
-                hit: hit,
-                backPad: greenPad,
-                forwardPad: greenPad
-            )
-            guard local.count >= 2, greenLocal.count >= 2 else { continue }
-
             let j = hit.laterEdge
+            guard j + 1 < drawPoints.count else { continue }
             let b0 = drawPoints[j]
             let b1 = drawPoints[j + 1]
             let dx = b1.x - b0.x
@@ -831,55 +815,46 @@ enum HikingRouteSnapshotGenerator {
             guard edgeLen > 1e-3 else { continue }
             let ux = dx / edgeLen
             let uy = dy / edgeLen
-            // Perpendicular — explicit left/right rails (centered stroke alone was one-sided).
-            let nx = -uy
-            let ny = ux
-            let railOffset = bridgeGreenWidth * 0.5 + railWidth * 0.5
 
-            func polyPath(_ pts: [CGPoint], ox: CGFloat = 0, oy: CGFloat = 0) -> CGPath {
+            func bridgePath(half: CGFloat) -> CGPath {
+                let a = CGPoint(x: hit.point.x - ux * half, y: hit.point.y - uy * half)
+                let b = CGPoint(x: hit.point.x + ux * half, y: hit.point.y + uy * half)
                 let path = CGMutablePath()
-                path.move(to: CGPoint(x: pts[0].x + ox, y: pts[0].y + oy))
-                for p in pts.dropFirst() {
-                    path.addLine(to: CGPoint(x: p.x + ox, y: p.y + oy))
-                }
+                path.move(to: a)
+                path.addLine(to: b)
                 return path
             }
 
             cgContext.saveGState()
             cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            cgContext.setBlendMode(.copy)
+
+            // White: butt, no AA (AA vs map reads as gray halo — Android same).
             cgContext.setShouldAntialias(false)
             cgContext.setAllowsAntialiasing(false)
             cgContext.setLineJoin(.miter)
             cgContext.setLineCap(.butt)
-            cgContext.setBlendMode(.copy)
-
-            // 1) Wide white bed
-            cgContext.addPath(polyPath(local))
+            cgContext.addPath(bridgePath(half: whiteHalf))
             cgContext.setStrokeColor(UIColor.white.cgColor)
-            cgContext.setLineWidth(bridgeWhiteWidth)
+            cgContext.setLineWidth(casingWidth)
             cgContext.strokePath()
 
-            // 2) Narrower green so white rails remain
-            cgContext.addPath(polyPath(greenLocal))
+            // Green: same fill width; round caps cover white butts on-line.
+            cgContext.setShouldAntialias(true)
+            cgContext.setAllowsAntialiasing(true)
+            cgContext.setLineCap(.round)
+            cgContext.addPath(bridgePath(half: greenHalf))
             cgContext.setStrokeColor(green.cgColor)
-            cgContext.setLineWidth(bridgeGreenWidth)
+            cgContext.setLineWidth(fillWidth)
             cgContext.strokePath()
-
-            // 3) Force BOTH rails (L/R) through earlier green — independent of bed centering.
-            cgContext.setStrokeColor(UIColor.white.cgColor)
-            cgContext.setLineWidth(railWidth)
-            for sign: CGFloat in [-1, 1] {
-                cgContext.addPath(polyPath(local, ox: nx * railOffset * sign, oy: ny * railOffset * sign))
-                cgContext.strokePath()
-            }
 
             cgContext.restoreGState()
             cgContext.setShadow(offset: .zero, blur: 0, color: nil)
 
             #if DEBUG
             NSLog(
-                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) pts=%d railOff=%.1f",
-                hit.point.x, hit.point.y, ux, uy, local.count, railOffset
+                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) half=%.1f/%.1f",
+                hit.point.x, hit.point.y, ux, uy, whiteHalf, greenHalf
             )
             #endif
         }
