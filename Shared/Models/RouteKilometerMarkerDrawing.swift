@@ -490,11 +490,8 @@ enum RouteKilometerMarkerDrawing {
         let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: height / 2)
 
         cgContext.saveGState()
-        cgContext.setShadow(
-            offset: CGSize(width: 0, height: 2 * contentScale),
-            blur: 6 * contentScale,
-            color: RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor
-        )
+        // No capsule drop-shadow — share-summary AFTER must show white+green only.
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.addPath(path.cgPath)
         cgContext.fillPath()

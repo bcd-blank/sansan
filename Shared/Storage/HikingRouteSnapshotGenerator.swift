@@ -690,8 +690,13 @@ enum HikingRouteSnapshotGenerator {
     ) {
         guard points.count >= 2 else { return }
 
+        // Never leave a stale CG shadow on the context (share-summary AFTER must be shadow-free).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+
         func strokeWhiteThenGreen(_ path: UIBezierPath, withShadow: Bool) {
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             if withShadow {
+                // Legacy chunk-before only — AFTER passes withShadow: false.
                 cgContext.saveGState()
                 cgContext.setShadow(
                     offset: CGSize(width: 0, height: 1 * contentScale),
@@ -702,14 +707,26 @@ enum HikingRouteSnapshotGenerator {
                 white.setStroke()
                 path.stroke()
                 cgContext.restoreGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             } else {
+                // Opaque copy — no AA fringe / gray halo against the map.
+                cgContext.saveGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                cgContext.setBlendMode(.copy)
                 path.lineWidth = casingWidth
                 white.setStroke()
                 path.stroke()
+                path.lineWidth = fillWidth
+                green.setStroke()
+                path.stroke()
+                cgContext.restoreGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                return
             }
             path.lineWidth = fillWidth
             green.setStroke()
             path.stroke()
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
         }
 
         if forceChunks {
@@ -748,25 +765,29 @@ enum HikingRouteSnapshotGenerator {
 
         let drawPoints = RouteSelfCrossing.cleanedPoints(points)
         let minLoopLength = max(casingWidth * 14, 72 * contentScale)
-        // 팀장 19:36 — local bridge only: ±(casing×3~4). White butt; green longer so
-        // butt ends stay covered and BOTH rails cut earlier green (not one-sided).
-        let whitePad = casingWidth * 3.75
-        let greenPad = casingWidth * 4.5
+        // 팀장: local later ribbon. Wide white + narrow green + explicit L/R rails.
+        let whitePad = casingWidth * 4.5
+        let greenPad = casingWidth * 5.25
+        let bridgeWhiteWidth = casingWidth * 1.55
+        let bridgeGreenWidth = fillWidth * 0.72
+        let railWidth = max((bridgeWhiteWidth - bridgeGreenWidth) * 0.5, 1.6 * contentScale)
         let hits = RouteSelfCrossing.hits(
             in: drawPoints,
             minLoopLength: minLoopLength,
-            // Include shallower / near-parallel crossings (was 0.45 — missed grazes).
-            minCrossSin: 0.18,
-            dedupeDistance: max(casingWidth * 1.5, 12 * contentScale),
-            proximityDistance: casingWidth * 0.55
+            // True X only — proximity false-positives painted rails along the whole ribbon.
+            minCrossSin: 0.35,
+            dedupeDistance: max(casingWidth * 2.5, 18 * contentScale),
+            proximityDistance: 0
         )
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d points=%d whitePad=%.1f greenPad=%.1f",
+            "[km-label] route crosses unique=%d points=%d whitePad=%.1f bridgeW=%.1f/%.1f rail=%.1f",
             hits.count,
             drawPoints.count,
             whitePad,
-            greenPad
+            bridgeWhiteWidth,
+            bridgeGreenWidth,
+            railWidth
         )
         for hit in hits {
             NSLog(
@@ -785,12 +806,23 @@ enum HikingRouteSnapshotGenerator {
         }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Local straight bridge along later edge direction (팀장: ±두께×3~4 조각만).
-        // Straight segment keeps BOTH white rails cutting earlier green; polyline follow
-        // was melting one side into the vertical arm.
+        // Local later-path overlay: opaque twin rails that cut earlier green on BOTH sides.
         for hit in hits {
+            let local = RouteSelfCrossing.overlayPoints(
+                drawPoints: drawPoints,
+                hit: hit,
+                backPad: whitePad,
+                forwardPad: whitePad
+            )
+            let greenLocal = RouteSelfCrossing.overlayPoints(
+                drawPoints: drawPoints,
+                hit: hit,
+                backPad: greenPad,
+                forwardPad: greenPad
+            )
+            guard local.count >= 2, greenLocal.count >= 2 else { continue }
+
             let j = hit.laterEdge
-            guard j + 1 < drawPoints.count else { continue }
             let b0 = drawPoints[j]
             let b1 = drawPoints[j + 1]
             let dx = b1.x - b0.x
@@ -799,41 +831,55 @@ enum HikingRouteSnapshotGenerator {
             guard edgeLen > 1e-3 else { continue }
             let ux = dx / edgeLen
             let uy = dy / edgeLen
+            // Perpendicular — explicit left/right rails (centered stroke alone was one-sided).
+            let nx = -uy
+            let ny = ux
+            let railOffset = bridgeGreenWidth * 0.5 + railWidth * 0.5
 
-            func bridgePath(half: CGFloat) -> CGPath {
-                let a = CGPoint(x: hit.point.x - ux * half, y: hit.point.y - uy * half)
-                let b = CGPoint(x: hit.point.x + ux * half, y: hit.point.y + uy * half)
+            func polyPath(_ pts: [CGPoint], ox: CGFloat = 0, oy: CGFloat = 0) -> CGPath {
                 let path = CGMutablePath()
-                path.move(to: a)
-                path.addLine(to: b)
+                path.move(to: CGPoint(x: pts[0].x + ox, y: pts[0].y + oy))
+                for p in pts.dropFirst() {
+                    path.addLine(to: CGPoint(x: p.x + ox, y: p.y + oy))
+                }
                 return path
             }
 
             cgContext.saveGState()
-            cgContext.setShouldAntialias(true)
-            cgContext.setLineJoin(.round)
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            cgContext.setShouldAntialias(false)
+            cgContext.setAllowsAntialiasing(false)
+            cgContext.setLineJoin(.miter)
             cgContext.setLineCap(.butt)
-
-            // Opaque white first (butt) — punches through earlier green on BOTH sides.
             cgContext.setBlendMode(.copy)
-            cgContext.addPath(bridgePath(half: whitePad))
+
+            // 1) Wide white bed
+            cgContext.addPath(polyPath(local))
             cgContext.setStrokeColor(UIColor.white.cgColor)
-            cgContext.setLineWidth(casingWidth)
+            cgContext.setLineWidth(bridgeWhiteWidth)
             cgContext.strokePath()
 
-            // Longer green covers white butt ends; rails remain in the middle.
-            cgContext.setBlendMode(.copy)
-            cgContext.addPath(bridgePath(half: greenPad))
+            // 2) Narrower green so white rails remain
+            cgContext.addPath(polyPath(greenLocal))
             cgContext.setStrokeColor(green.cgColor)
-            cgContext.setLineWidth(fillWidth)
+            cgContext.setLineWidth(bridgeGreenWidth)
             cgContext.strokePath()
+
+            // 3) Force BOTH rails (L/R) through earlier green — independent of bed centering.
+            cgContext.setStrokeColor(UIColor.white.cgColor)
+            cgContext.setLineWidth(railWidth)
+            for sign: CGFloat in [-1, 1] {
+                cgContext.addPath(polyPath(local, ox: nx * railOffset * sign, oy: ny * railOffset * sign))
+                cgContext.strokePath()
+            }
 
             cgContext.restoreGState()
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
 
             #if DEBUG
             NSLog(
-                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) whitePad=%.1f",
-                hit.point.x, hit.point.y, ux, uy, whitePad
+                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) pts=%d railOff=%.1f",
+                hit.point.x, hit.point.y, ux, uy, local.count, railOffset
             )
             #endif
         }
@@ -900,13 +946,8 @@ enum HikingRouteSnapshotGenerator {
             height: scaledOuter
         )
         cgContext.saveGState()
-        if appearance == .shareSummary {
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: 1 * contentScale),
-                blur: 1.2 * contentScale,
-                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
-            )
-        }
+        // Share-summary AFTER: no endpoint shadow (팀장 — 그림자 0).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: outer)
         cgContext.restoreGState()
