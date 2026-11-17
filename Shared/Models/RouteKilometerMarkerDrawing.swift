@@ -672,6 +672,10 @@ enum RouteKilometerMarkerDrawing {
             height: diameter
         )
         cgContext.saveGState()
+        // Topmost, crisp disc — AA on so the white fill + green ring stay round over the route.
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+        cgContext.setShouldAntialias(true)
+        cgContext.setAllowsAntialiasing(true)
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: rect)
         cgContext.setStrokeColor(RouteKilometerMarkerMetrics.accentUIColor.cgColor)

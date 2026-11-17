@@ -482,16 +482,12 @@ enum HikingRouteSnapshotGenerator {
             if !includesLiveDetailContent {
                 // Route + short cross bridges first; km markers / labels always on top
                 // (Android decorateSummaryMap: drawShareRoute → endpoints → label blits).
-                // Punch bridge under km-dot discs so markers aren't painted over.
-                let punchPoints: [CGPoint] = (record.session.kilometerMarkers ?? []).map {
-                    projector.point(for: $0.coordinate)
-                }
+                // No punch holes (they break rails). Marker centers only trim bridge ends.
                 drawRoute(
                     using: projector,
                     coordinates: coordinates,
                     contentScale: contentScale,
                     appearance: appearance,
-                    bridgePunchPoints: punchPoints,
                     in: context.cgContext
                 )
             }
@@ -642,7 +638,6 @@ enum HikingRouteSnapshotGenerator {
         coordinates: [CLLocationCoordinate2D],
         contentScale: CGFloat,
         appearance: HikingRouteSnapshotAppearance,
-        bridgePunchPoints: [CGPoint] = [],
         in cgContext: CGContext
     ) {
         let points = coordinates.map { projector.point(for: $0) }
@@ -661,7 +656,6 @@ enum HikingRouteSnapshotGenerator {
                 green: UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1),
                 shadow: false,
                 forceChunks: false,
-                bridgePunchPoints: bridgePunchPoints,
                 in: cgContext
             )
         case .shareSummary:
@@ -679,7 +673,6 @@ enum HikingRouteSnapshotGenerator {
                 green: ShareSummaryTokens.accentUIColor,
                 shadow: false,
                 forceChunks: forceChunks,
-                bridgePunchPoints: bridgePunchPoints,
                 in: cgContext
             )
         }
@@ -696,7 +689,6 @@ enum HikingRouteSnapshotGenerator {
         green: UIColor,
         shadow: Bool,
         forceChunks: Bool,
-        bridgePunchPoints: [CGPoint] = [],
         in cgContext: CGContext
     ) {
         guard points.count >= 2 else { return }
@@ -726,13 +718,13 @@ enum HikingRouteSnapshotGenerator {
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
                 cgContext.setBlendMode(.normal)
-                cgContext.setShouldAntialias(false)
-                cgContext.setAllowsAntialiasing(false)
+                // White AA-on: continuous smooth dual rails (AA-off reads as 톱니·점선 at zoom).
+                // No shadow — soft AA edge ≠ gray halo from setShadow.
+                cgContext.setShouldAntialias(true)
+                cgContext.setAllowsAntialiasing(true)
                 path.lineWidth = casingWidth
                 white.setStroke()
                 path.stroke()
-                cgContext.setShouldAntialias(true)
-                cgContext.setAllowsAntialiasing(true)
                 path.lineWidth = fillWidth
                 green.setStroke()
                 path.stroke()
@@ -780,29 +772,51 @@ enum HikingRouteSnapshotGenerator {
             return
         }
 
-        // Detect + bridge on cleaned polyline so GPS micro-wiggles don't fatten white rails.
-        // Hits are true segment intersections (not km-marker positions). Markers draw above.
-        let drawPoints = RouteSelfCrossing.cleanedPoints(points)
+        // Android 6a62d1e: detect + walk RAW GPS polyline (cleaning can erase tight X /
+        // straighten the later curve into a long bar). Draw continuous base on cleaned.
+        let rawPoints = points
+        let drawPoints = RouteSelfCrossing.cleanedPoints(rawPoints)
         guard drawPoints.count >= 2 else { return }
 
-        // Bridge length ≈ casing × 3~4 (half each side); green longer than white.
+        // Bridge length ≈ casing × 3~4 total (half each side); green a bit longer.
+        // iOS later segment is nearly straight at gamajicheon — Android 1.75 half reads
+        // shorter there because its GPS chord is diagonal. Use 1.5/2.0 so screen span
+        // matches Android AFTER (~casing×3) and stops short of the 1km disc.
         let minLoopLength = max(casingWidth * 8, 48 * contentScale)
-        let whiteHalf = casingWidth * 1.75
-        let greenHalf = casingWidth * 2.35
+        let whiteHalf = casingWidth * 1.5
+        let greenHalf = casingWidth * 2.0
         let bridgeCasing = casingWidth
         let bridgeFill = fillWidth
-        let hits = RouteSelfCrossing.hits(
-            in: drawPoints,
+        // Android: detect on RAW (사량도 near-miss). Fallback cleaned if raw misses.
+        var bridgeSource = rawPoints
+        var bridgeSourceName = "raw"
+        var hits = RouteSelfCrossing.hits(
+            in: rawPoints,
             minLoopLength: minLoopLength,
-            minCrossSin: 0.21,
-            dedupeDistance: max(casingWidth * 2.0, 16 * contentScale),
+            minSeparationEdges: 2,
+            minCrossSin: 0.20,
+            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
             proximityDistance: casingWidth * 0.65
         )
+        if hits.isEmpty {
+            bridgeSource = drawPoints
+            bridgeSourceName = "clean"
+            hits = RouteSelfCrossing.hits(
+                in: drawPoints,
+                minLoopLength: minLoopLength,
+                minSeparationEdges: 2,
+                minCrossSin: 0.20,
+                dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+                proximityDistance: casingWidth * 0.65
+            )
+        }
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d points=%d whiteHalf=%.1f casing/fill=%.2f/%.2f",
+            "[km-label] route crosses unique=%d raw=%d clean=%d src=%@ whiteHalf=%.1f casing/fill=%.2f/%.2f",
             hits.count,
+            rawPoints.count,
             drawPoints.count,
+            bridgeSourceName,
             whiteHalf,
             bridgeCasing,
             bridgeFill
@@ -824,58 +838,30 @@ enum HikingRouteSnapshotGenerator {
         }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Short curved later-path bridge (Android shareRoutePointsAround). Follow path curve.
-        // Punch under km-dot discs — markers stay topmost without bridge overpainting them.
-        let punchRadius = RouteKilometerMarkerMetrics.routeDotDiameter * 0.5 * contentScale
-            + 1.5 * contentScale
+        // Short later-path bridge. No punch / no resample.
+        // Trim pad so butt ends stop outside km-dot discs (horizontal white under marker).
+        // Markers still draw above. White AA-on → continuous smooth rails (AA-off = 톱니).
+        // Android: full casing×3 bridge even when a km-dot sits ~7pt from the cross;
+        // markers paint after and cover the overlap. Trimming here made the bridge too
+        // short vs Android AFTER (55–56px screen span).
         for hit in hits {
-            let whitePts = Self.resamplePolyline(
-                RouteSelfCrossing.overlayPoints(
-                    drawPoints: drawPoints,
-                    hit: hit,
-                    backPad: whiteHalf,
-                    forwardPad: whiteHalf
-                ),
-                spacing: max(1.2 * contentScale, 0.75)
+            let whitePts = RouteSelfCrossing.overlayPoints(
+                drawPoints: bridgeSource,
+                hit: hit,
+                backPad: whiteHalf,
+                forwardPad: whiteHalf
             )
-            let greenPts = Self.resamplePolyline(
-                RouteSelfCrossing.overlayPoints(
-                    drawPoints: drawPoints,
-                    hit: hit,
-                    backPad: greenHalf,
-                    forwardPad: greenHalf
-                ),
-                spacing: max(1.2 * contentScale, 0.75)
+            let greenPts = RouteSelfCrossing.overlayPoints(
+                drawPoints: bridgeSource,
+                hit: hit,
+                backPad: greenHalf,
+                forwardPad: greenHalf
             )
             guard whitePts.count >= 2, greenPts.count >= 2 else { continue }
 
             func strokeCurve(_ pts: [CGPoint], width: CGFloat, color: UIColor, cap: CGLineCap, antialias: Bool) {
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-                if !bridgePunchPoints.isEmpty {
-                    // Even-odd: big rect minus km-dot circles → bridge skips marker discs.
-                    var clip = CGRect.null
-                    for p in pts { clip = clip.union(CGRect(x: p.x - width, y: p.y - width, width: width * 2, height: width * 2)) }
-                    for m in bridgePunchPoints {
-                        clip = clip.union(CGRect(
-                            x: m.x - punchRadius - width,
-                            y: m.y - punchRadius - width,
-                            width: (punchRadius + width) * 2,
-                            height: (punchRadius + width) * 2
-                        ))
-                    }
-                    clip = clip.insetBy(dx: -2, dy: -2)
-                    cgContext.addRect(clip)
-                    for m in bridgePunchPoints {
-                        cgContext.addEllipse(in: CGRect(
-                            x: m.x - punchRadius,
-                            y: m.y - punchRadius,
-                            width: punchRadius * 2,
-                            height: punchRadius * 2
-                        ))
-                    }
-                    cgContext.clip(using: .evenOdd)
-                }
                 cgContext.setBlendMode(.normal)
                 cgContext.setShouldAntialias(antialias)
                 cgContext.setAllowsAntialiasing(antialias)
@@ -891,58 +877,30 @@ enum HikingRouteSnapshotGenerator {
                 cgContext.restoreGState()
             }
 
-            // White butt + AA → smooth rails; green round AA-off → opaque fill core over white.
+            // White butt + AA-on: smooth continuous dual rails, hard underpass cut.
+            // Green round AA-on covers butts on-line (Android proportion).
             strokeCurve(whitePts, width: bridgeCasing, color: white, cap: .butt, antialias: true)
-            strokeCurve(greenPts, width: bridgeFill, color: green, cap: .round, antialias: false)
+            strokeCurve(greenPts, width: bridgeFill, color: green, cap: .round, antialias: true)
 
             cgContext.setShadow(offset: .zero, blur: 0, color: nil)
 
             #if DEBUG
             var polyLen: CGFloat = 0
+            var minX = whitePts[0].x, maxX = whitePts[0].x
+            var minY = whitePts[0].y, maxY = whitePts[0].y
             for i in 0..<(whitePts.count - 1) {
                 polyLen += hypot(whitePts[i + 1].x - whitePts[i].x, whitePts[i + 1].y - whitePts[i].y)
+                minX = min(minX, whitePts[i + 1].x); maxX = max(maxX, whitePts[i + 1].x)
+                minY = min(minY, whitePts[i + 1].y); maxY = max(maxY, whitePts[i + 1].y)
             }
+            let span = hypot(maxX - minX, maxY - minY)
             NSLog(
-                "[km-label] bridge at (%.1f,%.1f) pts=%d/%d len=%.1f half=%.1f/%.1f w=%.2f/%.2f",
-                hit.point.x, hit.point.y, whitePts.count, greenPts.count, polyLen,
+                "[km-label] bridge at (%.1f,%.1f) pts=%d/%d len=%.1f span=%.1f half=%.1f/%.1f w=%.2f/%.2f",
+                hit.point.x, hit.point.y, whitePts.count, greenPts.count, polyLen, span,
                 whiteHalf, greenHalf, bridgeCasing, bridgeFill
             )
             #endif
         }
-    }
-
-    /// Evenly spaced samples along a polyline — drops GPS micro-wiggle that fattens strokes.
-    private static func resamplePolyline(_ points: [CGPoint], spacing: CGFloat) -> [CGPoint] {
-        guard points.count >= 2, spacing > 1e-3 else { return points }
-        var out: [CGPoint] = [points[0]]
-        var carry = spacing
-        for i in 0..<(points.count - 1) {
-            var a = points[i]
-            let b = points[i + 1]
-            var seg = hypot(b.x - a.x, b.y - a.y)
-            guard seg > 1e-6 else { continue }
-            var ux = (b.x - a.x) / seg
-            var uy = (b.y - a.y) / seg
-            while carry <= seg {
-                a = CGPoint(x: a.x + ux * carry, y: a.y + uy * carry)
-                out.append(a)
-                seg -= carry
-                carry = spacing
-                let left = hypot(b.x - a.x, b.y - a.y)
-                if left > 1e-6 {
-                    ux = (b.x - a.x) / left
-                    uy = (b.y - a.y) / left
-                    seg = left
-                } else {
-                    seg = 0
-                }
-            }
-            carry -= seg
-        }
-        if let last = points.last, let prev = out.last, hypot(last.x - prev.x, last.y - prev.y) > 0.25 {
-            out.append(last)
-        }
-        return out.count >= 2 ? out : points
     }
 
     private static func drawEndpoints(

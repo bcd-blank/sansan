@@ -314,7 +314,9 @@ enum RouteSelfCrossing {
                 bestPoint = bp
             }
         }
-        guard bestDist <= maxDistance, bestDist > 0.35 else { return nil }
+        // Android shareSegmentClosest: any gap ≤ proximity counts (including near-zero
+        // parallel grazes). Do not reject sub-0.35 gaps — that dropped 사량도.
+        guard bestDist <= maxDistance else { return nil }
         return (point: bestPoint, u: bestU)
     }
 }
