@@ -480,11 +480,14 @@ enum HikingRouteSnapshotGenerator {
             }
 
             if !includesLiveDetailContent {
+                // Base ribbon only — cross bridges redraw after km dots so a 1km white
+                // disc cannot punch through the overlay green (흰 넓게·초록 실).
                 drawRoute(
                     using: projector,
                     coordinates: coordinates,
                     contentScale: contentScale,
                     appearance: appearance,
+                    pass: .base,
                     in: context.cgContext
                 )
             }
@@ -542,6 +545,18 @@ enum HikingRouteSnapshotGenerator {
                 appearance: appearance,
                 in: context.cgContext
             )
+
+            // True-cross bridges on top of km dots / endpoints (Android later-over-earlier).
+            if !includesLiveDetailContent {
+                drawRoute(
+                    using: projector,
+                    coordinates: coordinates,
+                    contentScale: contentScale,
+                    appearance: appearance,
+                    pass: .crossOverlays,
+                    in: context.cgContext
+                )
+            }
 
             if appearance != .shareSummary,
                mapOptions.showsPinnedThumbnails,
@@ -630,11 +645,19 @@ enum HikingRouteSnapshotGenerator {
     private static let detailEndpointOuterDiameter: CGFloat = 17
     private static let detailEndpointInnerDiameter: CGFloat = 11
 
+    /// Split so cross bridges can paint above km dots.
+    private enum RouteDrawPass {
+        case base
+        case crossOverlays
+        case all
+    }
+
     private static func drawRoute(
         using projector: MapCoordinateProjecting,
         coordinates: [CLLocationCoordinate2D],
         contentScale: CGFloat,
         appearance: HikingRouteSnapshotAppearance,
+        pass: RouteDrawPass = .all,
         in cgContext: CGContext
     ) {
         let points = coordinates.map { projector.point(for: $0) }
@@ -653,6 +676,7 @@ enum HikingRouteSnapshotGenerator {
                 green: UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1),
                 shadow: false,
                 forceChunks: false,
+                pass: pass,
                 in: cgContext
             )
         case .shareSummary:
@@ -670,6 +694,7 @@ enum HikingRouteSnapshotGenerator {
                 green: ShareSummaryTokens.accentUIColor,
                 shadow: false,
                 forceChunks: forceChunks,
+                pass: pass,
                 in: cgContext
             )
         }
@@ -686,6 +711,7 @@ enum HikingRouteSnapshotGenerator {
         green: UIColor,
         shadow: Bool,
         forceChunks: Bool,
+        pass: RouteDrawPass = .all,
         in cgContext: CGContext
     ) {
         guard points.count >= 2 else { return }
@@ -709,13 +735,19 @@ enum HikingRouteSnapshotGenerator {
                 cgContext.restoreGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             } else {
-                // Opaque copy — no AA fringe / gray halo against the map.
+                // Android 6a62d1e: normal SRC_OVER. White without AA (AA vs map = gray halo).
+                // Do NOT use .copy — copy+AA green over hard white shrinks the opaque green core
+                // (흰 덩어리·초록 실가늘어짐).
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-                cgContext.setBlendMode(.copy)
+                cgContext.setBlendMode(.normal)
+                cgContext.setShouldAntialias(false)
+                cgContext.setAllowsAntialiasing(false)
                 path.lineWidth = casingWidth
                 white.setStroke()
                 path.stroke()
+                cgContext.setShouldAntialias(true)
+                cgContext.setAllowsAntialiasing(true)
                 path.lineWidth = fillWidth
                 green.setStroke()
                 path.stroke()
@@ -731,6 +763,8 @@ enum HikingRouteSnapshotGenerator {
 
         if forceChunks {
             // Legacy chronological chunks — later white→green stacks at joins/crosses.
+            // Chunk before has no separate overlay pass.
+            guard pass != .crossOverlays else { return }
             let maxChunkPx: CGFloat = 28 * contentScale
             let maxVerticesPerChunk = 12
             var startIdx = 0
@@ -763,52 +797,68 @@ enum HikingRouteSnapshotGenerator {
             return
         }
 
+        // Android 6a62d1e: detect + overlay on RAW screen polyline; base on cleaned.
+        let rawPoints = points
         let drawPoints = RouteSelfCrossing.cleanedPoints(points)
-        // Android tip 6a62d1e / 299c8e7: short bridge only — half ≈ casing×1.75 / ×2.35
-        // (total length ≈ casing×3.5~4.7). Widths match the normal ribbon (no oversize).
+        guard drawPoints.count >= 2 else { return }
+
+        // Bridge length ≈ casing×3–4; green longer than white so butts never show on-line.
         let minLoopLength = max(casingWidth * 8, 48 * contentScale)
         let whiteHalf = casingWidth * 1.75
         let greenHalf = casingWidth * 2.35
+        // Stroke widths = same routeCasing / routeWidth as the continuous ribbon (no ×scale again,
+        // no casing+fill, no rail-only multipliers).
+        let bridgeCasing = casingWidth
+        let bridgeFill = fillWidth
         let hits = RouteSelfCrossing.hits(
-            in: drawPoints,
+            in: rawPoints,
             minLoopLength: minLoopLength,
-            // Match Android (~≥12°); proximity only for near-miss true crosses.
             minCrossSin: 0.21,
             dedupeDistance: max(casingWidth * 2.0, 16 * contentScale),
             proximityDistance: casingWidth * 0.65
         )
         #if DEBUG
-        NSLog(
-            "[km-label] route crosses unique=%d points=%d whiteHalf=%.1f greenHalf=%.1f",
-            hits.count,
-            drawPoints.count,
-            whiteHalf,
-            greenHalf
-        )
-        for hit in hits {
+        if pass != .base {
             NSLog(
-                "[km-label] cross at (%.1f,%.1f) laterEdge=%d u=%.3f",
-                hit.point.x, hit.point.y, hit.laterEdge, hit.u
+                "[km-label] route crosses unique=%d raw=%d cleaned=%d whiteHalf=%.1f casing/fill=%.2f/%.2f",
+                hits.count,
+                rawPoints.count,
+                drawPoints.count,
+                whiteHalf,
+                bridgeCasing,
+                bridgeFill
             )
+            for hit in hits {
+                NSLog(
+                    "[km-label] cross at (%.1f,%.1f) laterEdge=%d u=%.3f",
+                    hit.point.x, hit.point.y, hit.laterEdge, hit.u
+                )
+            }
         }
         #endif
 
-        let full = UIBezierPath()
-        full.lineCapStyle = .round
-        full.lineJoinStyle = .round
-        full.move(to: drawPoints[0])
-        for index in 1..<drawPoints.count {
-            full.addLine(to: drawPoints[index])
+        if pass != .crossOverlays {
+            let full = UIBezierPath()
+            full.lineCapStyle = .round
+            full.lineJoinStyle = .round
+            full.move(to: drawPoints[0])
+            for index in 1..<drawPoints.count {
+                full.addLine(to: drawPoints[index])
+            }
+            strokeWhiteThenGreen(full, withShadow: shadow)
         }
-        strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Short STRAIGHT bridge along later-edge direction (GPS polyline wiggle → white blob).
-        // Widths = normal casing/fill; white butt; green longer + round to cover butts.
+        guard pass != .base else { return }
+
+        // Short STRAIGHT bridge along later-edge tangent (Android casing×3–4).
+        // GPS polyline overlay fattens white when the local segment zigzags.
+        // SRC_OVER only — never `.copy` (copy+AA green over hard white → thin green core).
+        // Both strokes AA-off so opaque widths match routeCasing/routeWidth exactly.
         for hit in hits {
             let j = hit.laterEdge
-            guard j + 1 < drawPoints.count else { continue }
-            let b0 = drawPoints[j]
-            let b1 = drawPoints[j + 1]
+            guard j + 1 < rawPoints.count else { continue }
+            let b0 = rawPoints[j]
+            let b1 = rawPoints[j + 1]
             let dx = b1.x - b0.x
             let dy = b1.y - b0.y
             let edgeLen = hypot(dx, dy)
@@ -816,36 +866,32 @@ enum HikingRouteSnapshotGenerator {
             let ux = dx / edgeLen
             let uy = dy / edgeLen
 
-            func bridgePath(half: CGFloat) -> CGPath {
+            func addSegment(half: CGFloat) {
                 let a = CGPoint(x: hit.point.x - ux * half, y: hit.point.y - uy * half)
                 let b = CGPoint(x: hit.point.x + ux * half, y: hit.point.y + uy * half)
-                let path = CGMutablePath()
-                path.move(to: a)
-                path.addLine(to: b)
-                return path
+                cgContext.move(to: a)
+                cgContext.addLine(to: b)
             }
 
             cgContext.saveGState()
             cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-            cgContext.setBlendMode(.copy)
-
-            // White: butt, no AA (AA vs map reads as gray halo — Android same).
+            cgContext.setBlendMode(.normal)
             cgContext.setShouldAntialias(false)
             cgContext.setAllowsAntialiasing(false)
-            cgContext.setLineJoin(.miter)
+            cgContext.setLineJoin(.round)
+
+            // White butt — width locked to route casing.
             cgContext.setLineCap(.butt)
-            cgContext.addPath(bridgePath(half: whiteHalf))
-            cgContext.setStrokeColor(UIColor.white.cgColor)
-            cgContext.setLineWidth(casingWidth)
+            cgContext.setStrokeColor(white.cgColor)
+            cgContext.setLineWidth(bridgeCasing)
+            addSegment(half: whiteHalf)
             cgContext.strokePath()
 
-            // Green: same fill width; round caps cover white butts on-line.
-            cgContext.setShouldAntialias(true)
-            cgContext.setAllowsAntialiasing(true)
+            // Green round — same fill width as base ribbon; covers white butts on-line.
             cgContext.setLineCap(.round)
-            cgContext.addPath(bridgePath(half: greenHalf))
             cgContext.setStrokeColor(green.cgColor)
-            cgContext.setLineWidth(fillWidth)
+            cgContext.setLineWidth(bridgeFill)
+            addSegment(half: greenHalf)
             cgContext.strokePath()
 
             cgContext.restoreGState()
@@ -853,8 +899,8 @@ enum HikingRouteSnapshotGenerator {
 
             #if DEBUG
             NSLog(
-                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) half=%.1f/%.1f",
-                hit.point.x, hit.point.y, ux, uy, whiteHalf, greenHalf
+                "[km-label] bridge at (%.1f,%.1f) dir=(%.2f,%.2f) half=%.1f/%.1f w=%.2f/%.2f",
+                hit.point.x, hit.point.y, ux, uy, whiteHalf, greenHalf, bridgeCasing, bridgeFill
             )
             #endif
         }
