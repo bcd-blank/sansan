@@ -13,16 +13,11 @@ enum UITestSupport {
     /// 고정 UUID — 재실행 시 동일 시드, 실기록 wipe 금지.
     private static let seedSessionID = UUID(uuidString: "00000000-0000-4000-8000-00000000a001")!
     private static let seedPhotoID = UUID(uuidString: "00000000-0000-4000-8000-00000000b001")!
-    /// 가현산급 짧은 기록 (≈4.28km, km 점 1–4) — detail label zoom 검증용.
-    private static let shortSeedSessionID = UUID(uuidString: "00000000-0000-4000-8000-00000000a428")!
-    /// 사량도급 (~8.2km) — 요약·상세 라벨 배치 검증.
-    private static let saryangSeedSessionID = UUID(uuidString: "00000000-0000-4000-8000-00000000a820")!
-    /// 삼악산급 (~6.1km).
-    private static let samakSeedSessionID = UUID(uuidString: "00000000-0000-4000-8000-00000000a610")!
 
-    static var gahyeonsanSeedID: UUID { shortSeedSessionID }
-    static var saryangdoSeedID: UUID { saryangSeedSessionID }
-    static var samaksanSeedID: UUID { samakSeedSessionID }
+    static var gahyeonsanSeedID: UUID { UITestMountainPathFixtures.gahyeonsan.id }
+    static var saryangdoSeedID: UUID { UITestMountainPathFixtures.saryangdo.id }
+    static var samaksanSeedID: UUID { UITestMountainPathFixtures.samaksan.id }
+    static var gamajicheonSeedID: UUID { UITestMountainPathFixtures.gamajicheon.id }
 
     private static var didSeedPlacementRecords = false
 
@@ -34,20 +29,22 @@ enum UITestSupport {
             guard !didSeedPlacementRecords else { return }
             didSeedPlacementRecords = true
             reseedsPlacementRecords()
+            exportSummariesIfNeeded()
         }
     }
 
     private static func reseedsPlacementRecords() {
         let store = HikingRecordStore.shared
-        for id in [seedSessionID, shortSeedSessionID, saryangSeedSessionID, samakSeedSessionID] {
+        let ids = UITestMountainPathFixtures.all.map(\.id) + [seedSessionID]
+        for id in ids {
             if store.records.contains(where: { $0.id == id }) {
                 store.delete(id: id)
             }
         }
         seedDummyRecordIfNeeded()
-        seedShortGahyeonsanLikeRecordIfNeeded()
-        seedSaryangdoLikeRecordIfNeeded()
-        seedSamaksanLikeRecordIfNeeded()
+        for fixture in UITestMountainPathFixtures.all {
+            seedFixture(fixture)
+        }
     }
 
     static var shouldSkipHealthAuthorization: Bool { skipHealthAuth }
@@ -105,140 +102,110 @@ enum UITestSupport {
         store.save(session)
     }
 
-    /// ≈4.28km eastbound path → km markers 1–4 for zoom label thinning captures.
-    private static func seedShortGahyeonsanLikeRecordIfNeeded() {
+    /// JW 실경로(jw-feedback 장면과 동일 기록) — 파일명=산 이름, 오표기 금지.
+    private static func seedFixture(_ fixture: UITestMountainPathFixtures.Fixture) {
         let store = HikingRecordStore.shared
-        if store.records.contains(where: { $0.id == shortSeedSessionID }) { return }
+        if store.records.contains(where: { $0.id == fixture.id }) { return }
         guard UserDataPaths.isUserSelected else { return }
 
-        let started = Date().addingTimeInterval(-7_200)
-        // Near 가현산; ~4.28km due east (1° lon ≈ 87.8km at this lat).
-        let startLat = 37.6895
-        let startLon = 126.9780
-        let targetMeters: Double = 4_280
-        let metersPerDegLon = 111_320.0 * cos(startLat * .pi / 180.0)
-        let endLon = startLon + (targetMeters / metersPerDegLon)
-        let pointCount = 120
-        var points: [HikingPoint] = []
-        for i in 0..<pointCount {
-            let t = Double(i) / Double(pointCount - 1)
-            let lat = startLat + sin(t * .pi) * 0.001 // gentle arc, stays ~4.3km
-            let lon = startLon + (endLon - startLon) * t
-            points.append(
-                HikingPoint(
-                    latitude: lat,
-                    longitude: lon,
-                    altitude: 180 + t * 40,
-                    timestamp: started.addingTimeInterval(t * 5_400)
-                )
+        let started = Date().addingTimeInterval(-fixture.elapsedTime - 600)
+        let points: [HikingPoint] = fixture.points.map { p in
+            HikingPoint(
+                latitude: p.lat,
+                longitude: p.lon,
+                altitude: p.alt,
+                timestamp: started.addingTimeInterval(p.offset)
             )
         }
-        var total: Double = 0
+        var measured: Double = 0
         for i in 1..<points.count {
             let a = CLLocation(latitude: points[i - 1].latitude, longitude: points[i - 1].longitude)
             let b = CLLocation(latitude: points[i].latitude, longitude: points[i].longitude)
-            total += b.distance(from: a)
+            measured += b.distance(from: a)
         }
         let session = HikingSessionData(
-            sessionID: shortSeedSessionID,
+            sessionID: fixture.id,
             state: .idle,
             startedAt: started,
-            totalDistance: total,
-            elapsedTime: 5_400,
-            currentAltitude: points.last?.altitude ?? 180,
+            totalDistance: max(measured, fixture.totalDistance * 0.98),
+            elapsedTime: fixture.elapsedTime,
+            currentAltitude: points.last?.altitude ?? 0,
             points: points,
             photos: [],
-            stepCount: Int(total / 0.7),
-            activeEnergyKilocalories: 320,
-            elevationGainMeters: 90
+            stepCount: fixture.stepCount > 0 ? fixture.stepCount : Int(measured / 0.7),
+            activeEnergyKilocalories: fixture.activeEnergyKilocalories,
+            elevationGainMeters: fixture.elevationGainMeters
         )
         store.save(session)
-        store.renameRecord(id: shortSeedSessionID, title: "가현산(시드 4.28km)")
+        store.renameRecord(id: fixture.id, title: fixture.title)
     }
 
-    private static func seedSaryangdoLikeRecordIfNeeded() {
-        seedArcRecordIfNeeded(
-            id: saryangSeedSessionID,
-            title: "사량도(시드 8.2km)",
-            startLat: 34.8410,
-            startLon: 128.1980,
-            targetMeters: 8_200,
-            pointCount: 200,
-            latWiggle: 0.0008
-        )
-    }
+    /// `SANSAN_EXPORT_SUMMARIES=1` → Documents/label-placement/ios-summary-*.png
+    private static func exportSummariesIfNeeded() {
+        let env = ProcessInfo.processInfo.environment["SANSAN_EXPORT_SUMMARIES"]
+        let arg = ProcessInfo.processInfo.arguments.contains("-SANSAN_EXPORT_SUMMARIES")
+        guard env == "1" || arg else { return }
+        Task { @MainActor in
+            // Wait for summaryImageRenderer wiring + seed rename.
+            try? await Task.sleep(for: .seconds(2))
+            let store = HikingRecordStore.shared
+            store.reloadForCurrentUser()
+            let dir = UserDataPaths.documentsDirectory
+                .appendingPathComponent("label-placement", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let map: [(String, UUID)] = [
+                ("saryangdo", saryangdoSeedID),
+                ("gahyeonsan", gahyeonsanSeedID),
+                ("samaksan", samaksanSeedID),
+                ("gamajicheon", gamajicheonSeedID),
+            ]
+            for (name, id) in map {
+                guard let record = store.records.first(where: { $0.id == id }) else {
+                    print("[km-label] summary export missing seed \(name)")
+                    continue
+                }
+                // Force summary style renderer path.
+                let previous = HikingRecordImageSavePreferences.style
+                HikingRecordImageSavePreferences.style = .summary
+                defer { HikingRecordImageSavePreferences.style = previous }
+                guard let image = await store.shareImage(for: id) else {
+                    print("[km-label] summary export render failed \(name) title=\(record.displayName ?? "?")")
+                    continue
+                }
+                let url = dir.appendingPathComponent("ios-summary-\(name).png")
+                if let data = image.pngData() {
+                    try? data.write(to: url, options: .atomic)
+                    print("[km-label] wrote \(url.lastPathComponent) title=\(record.displayName ?? "") dist=\(Int(record.session.totalDistance))m")
+                }
+            }
 
-    private static func seedSamaksanLikeRecordIfNeeded() {
-        seedArcRecordIfNeeded(
-            id: samakSeedSessionID,
-            title: "삼악산(시드 6.1km)",
-            startLat: 37.8780,
-            startLon: 127.6950,
-            targetMeters: 6_100,
-            pointCount: 160,
-            latWiggle: 0.0006
-        )
-    }
+            // 가마지천: 메모없음 / 메모있음 (경로 fit top = title bottom + clearance, Android 동일).
+            let gamaID = gamajicheonSeedID
+            if store.records.contains(where: { $0.id == gamaID }) {
+                let previous = HikingRecordImageSavePreferences.style
+                HikingRecordImageSavePreferences.style = .summary
+                defer { HikingRecordImageSavePreferences.style = previous }
 
-    private static func seedArcRecordIfNeeded(
-        id: UUID,
-        title: String,
-        startLat: Double,
-        startLon: Double,
-        targetMeters: Double,
-        pointCount: Int,
-        latWiggle: Double
-    ) {
-        let store = HikingRecordStore.shared
-        if store.records.contains(where: { $0.id == id }) { return }
-        guard UserDataPaths.isUserSelected else { return }
+                store.updateMemo(id: gamaID, memo: "")
+                if let image = await store.shareImage(for: gamaID), let data = image.pngData() {
+                    let url = dir.appendingPathComponent("ios-summary-gamajicheon-memo-none.png")
+                    try? data.write(to: url, options: .atomic)
+                    print("[km-label] wrote \(url.lastPathComponent)")
+                }
 
-        let started = Date().addingTimeInterval(-10_800)
-        // Build by stepping fixed meters so total ≈ target (avoid lon-degree drift).
-        let metersPerDegLat = 110_540.0
-        let metersPerDegLon = 111_320.0 * cos(startLat * .pi / 180.0)
-        var points: [HikingPoint] = []
-        var lat = startLat
-        var lon = startLon
-        points.append(
-            HikingPoint(latitude: lat, longitude: lon, altitude: 50, timestamp: started)
-        )
-        let step = targetMeters / Double(pointCount - 1)
-        for i in 1..<pointCount {
-            let t = Double(i) / Double(pointCount - 1)
-            lon += step / metersPerDegLon
-            lat = startLat + sin(t * .pi) * latWiggle
-            points.append(
-                HikingPoint(
-                    latitude: lat,
-                    longitude: lon,
-                    altitude: 50 + t * 200,
-                    timestamp: started.addingTimeInterval(t * 8_000)
-                )
-            )
+                store.updateMemo(id: gamaID, memo: "가마지천 따라 한 바퀴. 저녁 산책.")
+                if let image = await store.shareImage(for: gamaID), let data = image.pngData() {
+                    let url = dir.appendingPathComponent("ios-summary-gamajicheon-memo-on.png")
+                    try? data.write(to: url, options: .atomic)
+                    print("[km-label] wrote \(url.lastPathComponent)")
+                }
+                // Leave memo cleared so default gamajicheon summary stays memo-none.
+                store.updateMemo(id: gamaID, memo: "")
+            }
+            // Signal done
+            let done = dir.appendingPathComponent("SUMMARIES_DONE.txt")
+            try? "ok\n".write(to: done, atomically: true, encoding: .utf8)
         }
-        var total: Double = 0
-        for i in 1..<points.count {
-            let a = CLLocation(latitude: points[i - 1].latitude, longitude: points[i - 1].longitude)
-            let b = CLLocation(latitude: points[i].latitude, longitude: points[i].longitude)
-            total += b.distance(from: a)
-        }
-        _ = metersPerDegLat
-        let session = HikingSessionData(
-            sessionID: id,
-            state: .idle,
-            startedAt: started,
-            totalDistance: total,
-            elapsedTime: 8_000,
-            currentAltitude: points.last?.altitude ?? 50,
-            points: points,
-            photos: [],
-            stepCount: Int(total / 0.7),
-            activeEnergyKilocalories: total / 15,
-            elevationGainMeters: 180
-        )
-        store.save(session)
-        store.renameRecord(id: id, title: title)
     }
 
     private static func syntheticTrailImage() -> UIImage {

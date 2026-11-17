@@ -626,39 +626,59 @@ enum HikingRouteSnapshotGenerator {
         appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
-        let path = UIBezierPath()
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-
-        for (index, coordinate) in coordinates.enumerated() {
-            let point = projector.point(for: coordinate)
-            if index == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
+        let points = coordinates.map { projector.point(for: $0) }
+        guard points.count >= 2 else { return }
 
         switch appearance {
         case .standard:
-            path.lineWidth = detailRouteLineWidth * contentScale
-            UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1).setStroke()
-            path.stroke()
+            // Time-ordered edges so later green covers earlier at self-crossings.
+            let green = UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1)
+            let width = detailRouteLineWidth * contentScale
+            for index in 1..<points.count {
+                let edge = UIBezierPath()
+                edge.lineCapStyle = .round
+                edge.lineJoinStyle = .round
+                edge.move(to: points[index - 1])
+                edge.addLine(to: points[index])
+                edge.lineWidth = width
+                green.setStroke()
+                edge.stroke()
+            }
         case .shareSummary:
+            // Ambient casing shadow underlay (full path) — soft drop only.
+            let underlay = UIBezierPath()
+            underlay.lineCapStyle = .round
+            underlay.lineJoinStyle = .round
+            for (index, point) in points.enumerated() {
+                if index == 0 { underlay.move(to: point) } else { underlay.addLine(to: point) }
+            }
             cgContext.saveGState()
             cgContext.setShadow(
                 offset: CGSize(width: 0, height: 1 * contentScale),
                 blur: 1.2 * contentScale,
                 color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
             )
-            path.lineWidth = ShareSummaryTokens.routeCasing * contentScale
+            underlay.lineWidth = ShareSummaryTokens.routeCasing * contentScale
             UIColor.white.setStroke()
-            path.stroke()
+            underlay.stroke()
             cgContext.restoreGState()
 
-            path.lineWidth = ShareSummaryTokens.routeWidth * contentScale
-            ShareSummaryTokens.accentUIColor.setStroke()
-            path.stroke()
+            // Time-ordered edges: white casing → green fill so later overwrites earlier at crossings.
+            let casingW = ShareSummaryTokens.routeCasing * contentScale
+            let fillW = ShareSummaryTokens.routeWidth * contentScale
+            for index in 1..<points.count {
+                let edge = UIBezierPath()
+                edge.lineCapStyle = .round
+                edge.lineJoinStyle = .round
+                edge.move(to: points[index - 1])
+                edge.addLine(to: points[index])
+                edge.lineWidth = casingW
+                UIColor.white.setStroke()
+                edge.stroke()
+                edge.lineWidth = fillW
+                ShareSummaryTokens.accentUIColor.setStroke()
+                edge.stroke()
+            }
         }
     }
 
@@ -804,37 +824,67 @@ enum HikingRouteSnapshotGenerator {
         let imageSize = clampBounds ? canvasSize : canvasSize
         let sideInset = clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
         let routePolyline = coordinates.map { projector.point(for: $0) }
-        let shifts = RouteKilometerMarkerDrawing.labelShifts(
-            for: requests,
+        // Snapshot is offline — allow full search under the 300ms interactive budget.
+        let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
+        RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
+        defer { RouteKilometerLabelPlacement.softTimeBudgetSeconds = previousBudget }
+        let placement = RouteKilometerLabelPlacement.placeSummary(
+            markers: requests,
             endpointPoints: endpoints,
+            routePolyline: routePolyline,
             contentScale: contentScale,
             imageSize: imageSize,
             sideInset: sideInset,
-            routePolyline: routePolyline
+            pathHalfWidth: ShareSummaryTokens.routeCasing / 2
         )
+        var shifts = placement.shifts
+        if shifts.isEmpty {
+            // Extreme fallback only when the solver returned nothing.
+            shifts = RouteKilometerMarkerDrawing.labelShifts(
+                for: requests,
+                endpointPoints: endpoints,
+                contentScale: contentScale,
+                imageSize: imageSize,
+                sideInset: sideInset,
+                routePolyline: routePolyline
+            )
+        }
+        // Spec §6/§7: dots for every km; labels only where the solver placed a shift
+        // (5km mode → non-multiples stay dot-only). Never invent fallback label offsets.
         for request in requests {
+            RouteKilometerMarkerDrawing.drawRouteDot(
+                at: request.routePoint,
+                contentScale: contentScale,
+                in: cgContext
+            )
+            guard var offset = shifts[request.kilometer]?.centerOffset else { continue }
             let size = RouteKilometerMarkerDrawing.capsuleSize(
                 distanceLabel: request.distanceLabel,
                 timeLabel: request.timeLabel,
                 contentScale: contentScale
             )
-            let fallback = RouteKilometerLabelShift(
-                placesLabelOnLeadingSide: request.preferredLeadingSide,
-                verticalOffset: 0,
-                capsuleWidth: size.width > 0 ? size.width : 72,
-                contentScale: contentScale
-            )
-            var offset = shifts[request.kilometer]?.centerOffset ?? fallback.centerOffset
-            // Draw-time safety: if capsule still overflows, flip horizontally (impl4).
             if clampBounds, imageSize.width > 1, size.width > 0 {
                 let centerX = request.routePoint.x + offset.x
                 let left = centerX - size.width / 2
                 let right = centerX + size.width / 2
                 let inset = ShareSummaryTokens.kmLabelBoundsInset * contentScale
+                var flipped = offset
                 if right > imageSize.width - inset + 0.5 {
-                    offset.x = -abs(offset.x)
+                    flipped.x = -abs(offset.x)
                 } else if left < inset - 0.5 {
-                    offset.x = abs(offset.x)
+                    flipped.x = abs(offset.x)
+                }
+                if flipped != offset {
+                    let trial = [request.kilometer: RouteKilometerLabelShift(centerOffset: flipped)]
+                    let hits = RouteKilometerLabelPlacement.auditCollisions(
+                        shifts: trial,
+                        markers: [request],
+                        endpointPoints: endpoints,
+                        routePolyline: routePolyline,
+                        contentScale: contentScale,
+                        pathHalfWidth: ShareSummaryTokens.routeCasing / 2
+                    )
+                    if hits.isZero { offset = flipped }
                 }
             }
             RouteKilometerMarkerDrawing.drawCombinedMarker(

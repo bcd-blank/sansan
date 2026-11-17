@@ -312,8 +312,8 @@ struct HikingRecordRouteMapView: View {
         }
         var requests: [RouteKilometerLabelRequest] = []
         var polyline: [CGPoint] = []
-        // Sparse path samples for clearance — full route is decimated again in the solver.
-        let strideN = max(1, routeCoordinates.count / 80)
+        // Dense enough screen-space samples so path clearance cannot miss bends.
+        let strideN = max(1, routeCoordinates.count / 220)
         for (idx, coordinate) in routeCoordinates.enumerated() where idx % strideN == 0 || idx == routeCoordinates.count - 1 {
             if let point = proxy.convert(coordinate, to: .local) {
                 polyline.append(point)

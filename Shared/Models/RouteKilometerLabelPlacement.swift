@@ -70,7 +70,9 @@ enum RouteKilometerLabelPlacement {
     static let tangentWeight: CGFloat = 3
     static let nodeBudget: Int = 200_000
     /// Soft wall-clock budget for interactive detail layout (JW: idle→visible ≤ 300ms).
-    static let softTimeBudgetSeconds: CFTimeInterval = 0.22
+    /// Leave headroom under 300ms for main-thread apply after background solve.
+    /// Tests may raise this to isolate correctness from the wall-clock soft cut.
+    static var softTimeBudgetSeconds: CFTimeInterval = 0.28
     static let maxCandidatesPerLabel: Int = 48
     static let zoomHysteresis: Double = 0.05
     static let kmDotRadius: CGFloat = 5
@@ -123,6 +125,21 @@ enum RouteKilometerLabelPlacement {
         var edgeInset: CGFloat
         var bottomInset: CGFloat
         var allowFiveKmFallback: Bool
+        /// Half-width of drawn route (casing/halo outer edge) in **screen pt** before × contentScale.
+        var pathHalfWidth: CGFloat
+    }
+
+    /// Per-capture collision counts in screen coordinates (pt). Complete only when all are 0.
+    struct CollisionCounts: Equatable {
+        var labelLabel: Int
+        var labelPoint: Int
+        var labelPath: Int
+
+        var isZero: Bool { labelLabel == 0 && labelPoint == 0 && labelPath == 0 }
+
+        var line: String {
+            "label-label=\(labelLabel) label-point=\(labelPoint) label-path=\(labelPath)"
+        }
     }
 
     // MARK: Public API
@@ -133,7 +150,8 @@ enum RouteKilometerLabelPlacement {
         routePolyline: [CGPoint] = [],
         contentScale: CGFloat,
         imageSize: CGSize,
-        sideInset: CGFloat
+        sideInset: CGFloat,
+        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2
     ) -> RouteKilometerPlacementResult {
         let ctx = Context(
             markers: markers,
@@ -145,7 +163,8 @@ enum RouteKilometerLabelPlacement {
             contentScale: contentScale,
             edgeInset: sideInset,
             bottomInset: sideInset,
-            allowFiveKmFallback: true
+            allowFiveKmFallback: true,
+            pathHalfWidth: pathHalfWidth
         )
         return place(context: ctx, preferModeStep: 1, stopAfterStage: nil)
     }
@@ -154,6 +173,7 @@ enum RouteKilometerLabelPlacement {
     /// - Parameters:
     ///   - preferModeStep: last mode (1 or 5) for F4 pan hysteresis
     ///   - zoomDelta: camera zoom change since last layout (F3 when |Δ| > 0.05)
+    ///   - pathHalfWidth: half of detail route stroke in screen pt (default 2.5 for 5pt stroke)
     static func placeDetail(
         markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
@@ -162,7 +182,8 @@ enum RouteKilometerLabelPlacement {
         contentScale: CGFloat,
         imageSize: CGSize,
         preferModeStep: Int,
-        zoomDelta: Double
+        zoomDelta: Double,
+        pathHalfWidth: CGFloat = 4
     ) -> RouteKilometerPlacementResult {
         let ctx = Context(
             markers: markers,
@@ -174,7 +195,8 @@ enum RouteKilometerLabelPlacement {
             contentScale: contentScale,
             edgeInset: 8,
             bottomInset: 8,
-            allowFiveKmFallback: true
+            allowFiveKmFallback: true,
+            pathHalfWidth: pathHalfWidth
         )
         // F3: zoom change → always rejudge from 1km.
         if abs(zoomDelta) > zoomHysteresis {
@@ -206,7 +228,8 @@ enum RouteKilometerLabelPlacement {
         var nodes = 0
         let deadline = t0 + softTimeBudgetSeconds
         var ctx = context
-        ctx.routePolyline = decimatePolyline(context.routePolyline, maxPoints: 64)
+        // Screen-space collision polyline (same decimate used by `auditCollisions`).
+        ctx.routePolyline = collisionPolyline(context.routePolyline)
         let visible = ctx.markers.filter { isOnScreen($0.routePoint, size: ctx.imageSize) }
         guard !visible.isEmpty else {
             return result(step: 1, shifts: [:], stage: "-", nodes: 0, t0: t0, partial: false)
@@ -246,13 +269,15 @@ enum RouteKilometerLabelPlacement {
             }
             // F5: no on-screen 5km (or 5km also failed) → stage-D partial (placeable labels only).
             if let partial = one.bestPartial {
+                // Soft-budget races can leave `full` nil even when every label was placed.
+                let complete = partial.shifts.count == visible.count
                 return result(
                     step: 1,
                     shifts: partial.shifts,
-                    stage: "\(partial.stage)/partial",
+                    stage: complete ? partial.stage : "\(partial.stage)/partial",
                     nodes: nodes,
                     t0: t0,
-                    partial: true
+                    partial: !complete
                 )
             }
             return result(step: 1, shifts: [:], stage: "fail", nodes: nodes, t0: t0, partial: true)
@@ -303,15 +328,25 @@ enum RouteKilometerLabelPlacement {
         return result(step: 5, shifts: [:], stage: "fail", nodes: nodes, t0: t0, partial: true)
     }
 
+    /// Shared decimate for place + audit so clearance checks stay consistent.
+    static func collisionPolyline(_ poly: [CGPoint], maxPoints: Int = 220) -> [CGPoint] {
+        decimatePolyline(poly, maxPoints: maxPoints)
+    }
+
     private static func decimatePolyline(_ poly: [CGPoint], maxPoints: Int) -> [CGPoint] {
         guard poly.count > maxPoints, maxPoints > 2 else { return poly }
         let step = Double(poly.count - 1) / Double(maxPoints - 1)
         var out: [CGPoint] = []
         out.reserveCapacity(maxPoints)
+        var last = -1
         for i in 0..<maxPoints {
             let idx = min(poly.count - 1, Int((Double(i) * step).rounded()))
-            out.append(poly[idx])
+            if idx != last {
+                out.append(poly[idx])
+                last = idx
+            }
         }
+        if out.last != poly.last { out.append(poly.last!) }
         return out
     }
 
@@ -591,8 +626,14 @@ enum RouteKilometerLabelPlacement {
         }
 
         if !context.routePolyline.isEmpty {
-            let pathClear = clear.route * scale
-            if pathHitsCapsule(cand: cand, polyline: context.routePolyline, clearance: pathClear) {
+            // Spec §2: screen-pt distance from path centerline to capsule ≥ pathHalf + clear.route
+            // (halo/casing outer edge + extra clearance). Interior ⇒ dist 0.
+            let pathClear = (context.pathHalfWidth + clear.route) * scale
+            if pathHitsCapsule(
+                cand: cand,
+                polyline: context.routePolyline,
+                clearance: pathClear
+            ) {
                 return false
             }
         }
@@ -608,25 +649,118 @@ enum RouteKilometerLabelPlacement {
         return true
     }
 
-    private static func pathHitsCapsule(cand: Candidate, polyline: [CGPoint], clearance: CGFloat) -> Bool {
-        for s in capsuleSamplePoints(center: cand.center, width: cand.width, height: cand.height) {
-            if distanceToPolyline(s, polyline) < clearance { return true }
+    /// True when any polyline sample is closer than `clearance` to the capsule **solid**
+    /// in screen coordinates (`outlineDistance` is 0 inside the capsule).
+    private static func pathHitsCapsule(
+        cand: Candidate,
+        polyline: [CGPoint],
+        clearance: CGFloat
+    ) -> Bool {
+        guard polyline.count >= 2 else { return false }
+        let pad = clearance + 2
+        let left = cand.center.x - cand.width / 2 - pad
+        let right = cand.center.x + cand.width / 2 + pad
+        let top = cand.center.y - cand.height / 2 - pad
+        let bottom = cand.center.y + cand.height / 2 + pad
+        let step: CGFloat = 4
+        for i in 0..<(polyline.count - 1) {
+            let a = polyline[i]
+            let b = polyline[i + 1]
+            let segMinX = min(a.x, b.x)
+            let segMaxX = max(a.x, b.x)
+            let segMinY = min(a.y, b.y)
+            let segMaxY = max(a.y, b.y)
+            if segMaxX < left || segMinX > right || segMaxY < top || segMinY > bottom { continue }
+            let len = hypot(b.x - a.x, b.y - a.y)
+            let n = max(1, Int(ceil(len / step)))
+            for k in 0...n {
+                let t = CGFloat(k) / CGFloat(n)
+                let p = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+                let d = outlineDistance(
+                    point: p,
+                    center: cand.center,
+                    width: cand.width,
+                    height: cand.height
+                )
+                if d < clearance { return true }
+            }
         }
         return false
     }
 
-    private static func capsuleSamplePoints(center: CGPoint, width: CGFloat, height: CGFloat) -> [CGPoint] {
-        let r = height / 2
-        var pts: [CGPoint] = [center]
-        let left = CGPoint(x: center.x - width / 2 + r, y: center.y)
-        let right = CGPoint(x: center.x + width / 2 - r, y: center.y)
-        pts.append(left)
-        pts.append(right)
-        for t in stride(from: 0.0, through: 1.0, by: 0.25) {
-            pts.append(CGPoint(x: left.x + (right.x - left.x) * t, y: center.y - r))
-            pts.append(CGPoint(x: left.x + (right.x - left.x) * t, y: center.y + r))
+    /// Audit placed shifts against markers/endpoints/polyline in **screen pt**.
+    static func auditCollisions(
+        shifts: [Int: RouteKilometerLabelShift],
+        markers: [RouteKilometerLabelRequest],
+        endpointPoints: [CGPoint],
+        routePolyline: [CGPoint],
+        contentScale: CGFloat,
+        pathHalfWidth: CGFloat,
+        clear: Clearance = .strict
+    ) -> CollisionCounts {
+        let scale = contentScale
+        let placed: [(km: Int, center: CGPoint, w: CGFloat, h: CGFloat)] = markers.compactMap { m in
+            guard let shift = shifts[m.kilometer] else { return nil }
+            let size = RouteKilometerMarkerDrawing.capsuleSize(
+                distanceLabel: m.distanceLabel,
+                timeLabel: m.timeLabel,
+                contentScale: contentScale
+            )
+            let w = size.width > 0 ? size.width : 72 * scale
+            let h = size.height > 0 ? size.height : 24 * scale
+            let center = CGPoint(
+                x: m.routePoint.x + shift.centerOffset.x,
+                y: m.routePoint.y + shift.centerOffset.y
+            )
+            return (m.kilometer, center, w, h)
         }
-        return pts
+        var labelLabel = 0
+        var labelPoint = 0
+        var labelPath = 0
+        let labelNeed = clear.label * scale
+        let pointPad = clear.pointExtra * scale
+        let pathNeed = (pathHalfWidth + clear.route) * scale
+
+        for i in 0..<placed.count {
+            for j in (i + 1)..<placed.count {
+                let gap = distCapsules(
+                    c1: placed[i].center, w1: placed[i].w, h1: placed[i].h,
+                    c2: placed[j].center, w2: placed[j].w, h2: placed[j].h
+                )
+                if gap < labelNeed { labelLabel += 1 }
+            }
+        }
+
+        let dots: [(CGPoint, CGFloat)] =
+            markers.map { ($0.routePoint, kmDotRadius * scale) }
+            + endpointPoints.map { ($0, endpointRadius * scale) }
+        for lab in placed {
+            for (p, r) in dots {
+                let d = outlineDistance(point: p, center: lab.center, width: lab.w, height: lab.h)
+                if d < r + pointPad { labelPoint += 1 }
+            }
+        }
+
+        let poly = collisionPolyline(routePolyline)
+        if poly.count >= 2 {
+            for lab in placed {
+                let cand = Candidate(
+                    center: lab.center,
+                    dir: CGVector(dx: 1, dy: 0),
+                    distance: 0,
+                    isAligned: false,
+                    relaxed: false,
+                    baseCost: 0,
+                    dirIndex: 0,
+                    width: lab.w,
+                    height: lab.h
+                )
+                if pathHitsCapsule(cand: cand, polyline: poly, clearance: pathNeed) {
+                    labelPath += 1
+                }
+            }
+        }
+        return CollisionCounts(labelLabel: labelLabel, labelPoint: labelPoint, labelPath: labelPath)
     }
 
     private static func distanceToPolyline(_ p: CGPoint, _ poly: [CGPoint]) -> CGFloat {

@@ -52,12 +52,16 @@ final class ShareSummaryTokensTests: XCTestCase {
     }
 
     func testMemoHeaderBottoms() {
+        // Android ShareSummaryTokens.HEADER_BOTTOM_NONE/1/3 — memo height 0 when absent.
         XCTAssertEqual(ShareSummaryTokens.headerBottom(memoLineCount: 0), 104, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.headerBottom(memoLineCount: 1), 129, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.headerBottom(memoLineCount: 3), 163, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.memoLineCount(nil, canvasWidth: 430), 0)
+        XCTAssertEqual(ShareSummaryTokens.memoLineCount("  ", canvasWidth: 430), 0)
     }
 
     func testMapInsetsIncludeMarkerRadius() {
+        // Route fit top = title bottom (104) + routeClearance (16) + marker pad (9) — Android routeInsetsPx.
         let top = ShareSummaryTokens.mapTopInset(memoLineCount: 0)
         XCTAssertEqual(top, 104 + 16 + 9, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.mapBottomInset, 324.5 + 32 + 9, accuracy: 0.01)
@@ -270,7 +274,7 @@ final class ShareSummaryTokensTests: XCTestCase {
             XCTAssertFalse(summary.shifts.isEmpty)
             XCTAssertFalse(detail.shifts.isEmpty)
         }
-        let text = (["budget=300ms softSolver=220ms keepPreviousLabels=true"] + lines).joined(separator: "\n") + "\n"
+        let text = (["budget=300ms softSolver=280ms keepPreviousLabels=true"] + lines).joined(separator: "\n") + "\n"
         let outPaths = [
             URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("km-label-LATENCY.txt"),
             URL(fileURLWithPath: "/Users/jeongwook/Library/Application Support/Cursor/AgentStores/cursor_agent_stores/bc-75707dba-5737-4d43-b5ab-a5deda5241a4/files/docs/label-placement/final/impl-ios/LATENCY.txt")

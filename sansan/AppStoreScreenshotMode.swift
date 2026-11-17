@@ -22,15 +22,15 @@ enum AppStoreScreenshotMode: String {
     case detailSamak = "detail-samak"
 
     static var current: AppStoreScreenshotMode? {
-        if let env = ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"],
-           let mode = AppStoreScreenshotMode(rawValue: env) {
-            return mode
-        }
-        // simctl launch args are more reliable than SIMCTL_CHILD_* on some runtimes.
+        // Prefer launch args — SIMCTL_CHILD_* env can stick to a stale value on some runtimes.
         let args = ProcessInfo.processInfo.arguments
         if let idx = args.firstIndex(of: "-SANSAN_SCREENSHOT"),
            args.index(after: idx) < args.endIndex,
            let mode = AppStoreScreenshotMode(rawValue: args[args.index(after: idx)]) {
+            return mode
+        }
+        if let env = ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"],
+           let mode = AppStoreScreenshotMode(rawValue: env) {
             return mode
         }
         return nil

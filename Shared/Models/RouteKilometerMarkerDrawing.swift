@@ -21,7 +21,8 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         imageSize: CGSize = .zero,
         sideInset: CGFloat = 0,
-        routePolyline: [CGPoint] = []
+        routePolyline: [CGPoint] = [],
+        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2
     ) -> [Int: RouteKilometerLabelShift] {
         guard !markers.isEmpty else { return [:] }
         let size = imageSize.width > 1 ? imageSize : CGSize(width: 2000, height: 2000)
@@ -31,7 +32,8 @@ enum RouteKilometerMarkerDrawing {
             routePolyline: routePolyline,
             contentScale: contentScale,
             imageSize: size,
-            sideInset: sideInset
+            sideInset: sideInset,
+            pathHalfWidth: pathHalfWidth
         )
         if !result.shifts.isEmpty { return result.shifts }
         // Extreme fallback: legacy L/R nudges so drawing never blanks all labels.
@@ -54,7 +56,8 @@ enum RouteKilometerMarkerDrawing {
         verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset,
         routePolyline: [CGPoint] = [],
         preferModeStep: Int = 1,
-        zoomDelta: Double = 1 // treat first layout like a zoom change → start at 1km
+        zoomDelta: Double = 1, // treat first layout like a zoom change → start at 1km
+        pathHalfWidth: CGFloat = 4
     ) -> RouteKilometerPlacementResult {
         _ = sideInset
         _ = verticalInset
@@ -65,7 +68,8 @@ enum RouteKilometerMarkerDrawing {
             contentScale: contentScale,
             imageSize: imageSize,
             preferModeStep: preferModeStep,
-            zoomDelta: zoomDelta
+            zoomDelta: zoomDelta,
+            pathHalfWidth: pathHalfWidth
         )
     }
 
@@ -656,7 +660,7 @@ enum RouteKilometerMarkerDrawing {
         return area
     }
 
-    private static func drawRouteDot(
+    static func drawRouteDot(
         at center: CGPoint,
         contentScale: CGFloat,
         in cgContext: CGContext
