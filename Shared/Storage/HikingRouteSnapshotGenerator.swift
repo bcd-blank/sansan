@@ -748,8 +748,8 @@ enum HikingRouteSnapshotGenerator {
 
         let drawPoints = RouteSelfCrossing.cleanedPoints(points)
         let minLoopLength = max(casingWidth * 14, 72 * contentScale)
-        // Span earlier ribbon + margin so butt caps sit outside the earlier green.
-        let pad = max(casingWidth * 1.5, 12 * contentScale)
+        // Start slightly before the X so twin rails fully cut earlier green (not a butt seam).
+        let backPad = max(casingWidth * 2.2, fillWidth * 3.0, 16 * contentScale)
         let hits = RouteSelfCrossing.hits(
             in: drawPoints,
             minLoopLength: minLoopLength,
@@ -757,10 +757,17 @@ enum HikingRouteSnapshotGenerator {
         )
         #if DEBUG
         NSLog(
-            "[km-label] route crosses unique=%d points=%d",
+            "[km-label] route crosses unique=%d points=%d backPad=%.1f",
             hits.count,
-            drawPoints.count
+            drawPoints.count,
+            backPad
         )
+        for hit in hits {
+            NSLog(
+                "[km-label] cross at (%.1f,%.1f) laterEdge=%d u=%.3f",
+                hit.point.x, hit.point.y, hit.laterEdge, hit.u
+            )
+        }
         #endif
 
         let full = UIBezierPath()
@@ -772,13 +779,13 @@ enum HikingRouteSnapshotGenerator {
         }
         strokeWhiteThenGreen(full, withShadow: shadow)
 
-        // Local white→green through each true cross only (not full suffix — that re-seams bends).
+        // Suffix overlay (cross−backPad → end): later white→green on top of earlier ribbon.
         for hit in hits {
             let overlayPts = RouteSelfCrossing.overlayPoints(
                 drawPoints: drawPoints,
                 hit: hit,
-                backPad: pad,
-                forwardPad: pad
+                backPad: backPad,
+                forwardPad: nil
             )
             guard overlayPts.count >= 2 else { continue }
             let overlay = UIBezierPath()
@@ -788,7 +795,21 @@ enum HikingRouteSnapshotGenerator {
             for index in 1..<overlayPts.count {
                 overlay.addLine(to: overlayPts[index])
             }
-            strokeWhiteThenGreen(overlay, withShadow: false)
+            // Opaque CG strokes — UIBezierPath.stroke can soft-blend and hide rails.
+            cgContext.saveGState()
+            cgContext.setBlendMode(.normal)
+            cgContext.setAllowsAntialiasing(true)
+            cgContext.addPath(overlay.cgPath)
+            cgContext.setStrokeColor(white.cgColor)
+            cgContext.setLineWidth(casingWidth)
+            cgContext.setLineCap(.butt)
+            cgContext.setLineJoin(.round)
+            cgContext.strokePath()
+            cgContext.addPath(overlay.cgPath)
+            cgContext.setStrokeColor(green.cgColor)
+            cgContext.setLineWidth(fillWidth)
+            cgContext.strokePath()
+            cgContext.restoreGState()
         }
     }
 

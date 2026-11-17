@@ -53,7 +53,8 @@ enum RouteSelfCrossing {
         return cleaned.count >= 2 ? cleaned : points
     }
 
-    /// Screen/canvas-space crossings. `minLoopLength` is in the same units as `points`.
+    /// Screen/canvas-space crossings. Pass already-cleaned points; indices match that array.
+    /// `minLoopLength` is in the same units as `points`.
     static func hits(
         in points: [CGPoint],
         minLoopLength: CGFloat,
@@ -61,18 +62,18 @@ enum RouteSelfCrossing {
         minCrossSin: CGFloat = 0.45,
         dedupeDistance: CGFloat
     ) -> [Hit] {
-        let drawPoints = cleanedPoints(points)
-        guard drawPoints.count >= 5 else { return [] }
-        let lastEdge = drawPoints.count - 2
+        // Do not re-clean — laterEdge must stay aligned with the caller's drawPoints.
+        guard points.count >= 5 else { return [] }
+        let lastEdge = points.count - 2
         var crosses: [Hit] = []
         for i in 0...lastEdge {
             let jMin = i + max(2, minSeparationEdges)
             guard jMin <= lastEdge else { continue }
             for j in jMin...lastEdge {
-                if pathLength(drawPoints, from: i, to: j) < minLoopLength { continue }
+                if pathLength(points, from: i, to: j) < minLoopLength { continue }
                 guard let hit = segmentIntersection(
-                    drawPoints[i], drawPoints[i + 1],
-                    drawPoints[j], drawPoints[j + 1],
+                    points[i], points[i + 1],
+                    points[j], points[j + 1],
                     minCrossSin: minCrossSin
                 ) else { continue }
                 crosses.append(Hit(laterEdge: j, u: hit.u, point: hit.point))
@@ -97,13 +98,17 @@ enum RouteSelfCrossing {
     static func coordinateHits(
         in coordinates: [CLLocationCoordinate2D],
         minLoopMeters: CLLocationDistance = 60,
-        backPadMeters: CLLocationDistance = 14
+        padMeters: CLLocationDistance = 22
     ) -> [CoordinateHit] {
         guard coordinates.count >= 5 else { return [] }
         let mapPoints = coordinates.map { MKMapPoint($0) }
-        let points = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
-        // ~1 map-point ≈ variable meters; convert min loop via mid-route scale.
-        let mid = coordinates[coordinates.count / 2]
+        let rawPoints = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
+        let points = cleanedPoints(rawPoints)
+        // Rebuild coordinates aligned to cleaned map points (drop hairpin/dup vertices).
+        let cleanedCoords: [CLLocationCoordinate2D] = points.map {
+            MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
+        }
+        let mid = cleanedCoords[cleanedCoords.count / 2]
         let meterPerMapPoint = MKMetersPerMapPointAtLatitude(mid.latitude)
         let minLoop = CGFloat(minLoopMeters / max(meterPerMapPoint, 1e-9))
         let dedupe = CGFloat(12 / max(meterPerMapPoint, 1e-9))
@@ -112,21 +117,21 @@ enum RouteSelfCrossing {
             minLoopLength: minLoop,
             dedupeDistance: dedupe
         )
-        let padMap = CGFloat(backPadMeters / max(meterPerMapPoint, 1e-9))
+        let padMap = CGFloat(padMeters / max(meterPerMapPoint, 1e-9))
         return raw.compactMap { hit -> CoordinateHit? in
             let j = hit.laterEdge
-            guard j + 1 < coordinates.count else { return nil }
+            guard j + 1 < cleanedCoords.count else { return nil }
             let local = overlayPoints(
                 drawPoints: points,
                 hit: hit,
                 backPad: padMap,
-                forwardPad: padMap
+                forwardPad: nil // suffix → end (same as share summary)
             )
             guard local.count >= 2 else { return nil }
             let overlay = local.map {
                 MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
             }
-            let coord = interpolate(coordinates[j], coordinates[j + 1], t: Double(hit.u))
+            let coord = interpolate(cleanedCoords[j], cleanedCoords[j + 1], t: Double(hit.u))
             return CoordinateHit(
                 laterEdge: j,
                 u: Double(hit.u),
@@ -136,13 +141,14 @@ enum RouteSelfCrossing {
         }
     }
 
-    /// Local later-ribbon points through a cross: `backPad` before + `forwardPad` after.
-    /// Keeps overlay at the X only (avoids re-stroking the whole suffix and inventing seams).
+    /// Later-ribbon overlay: `backPad` before the cross, then along the later path.
+    /// - `forwardPad == nil` → continue to the route end (suffix bridge; clearest 3D cut).
+    /// - otherwise → local bridge of `forwardPad` after the cross.
     static func overlayPoints(
         drawPoints: [CGPoint],
         hit: Hit,
         backPad: CGFloat,
-        forwardPad: CGFloat
+        forwardPad: CGFloat?
     ) -> [CGPoint] {
         let j = hit.laterEdge
         guard j + 1 < drawPoints.count else { return [] }
@@ -181,32 +187,42 @@ enum RouteSelfCrossing {
         }
 
         var after: [CGPoint] = []
-        remain = forwardPad
-        let ahead = edgeLen - along
-        if ahead > 1e-3 {
-            let take = min(remain, ahead)
-            let t = (along + take) / edgeLen
-            after.append(CGPoint(
-                x: b0.x + (b1.x - b0.x) * t,
-                y: b0.y + (b1.y - b0.y) * t
-            ))
-            remain -= take
-        }
-        idx = j + 1
-        while remain > 1e-3, idx < drawPoints.count - 1 {
-            let p0 = drawPoints[idx]
-            let p1 = drawPoints[idx + 1]
-            let seg = hypot(p1.x - p0.x, p1.y - p0.y)
-            if seg < 1e-3 { idx += 1; continue }
-            let take = min(remain, seg)
-            let t = take / seg
-            after.append(CGPoint(
-                x: p0.x + (p1.x - p0.x) * t,
-                y: p0.y + (p1.y - p0.y) * t
-            ))
-            remain -= take
-            idx += 1
-            if take < seg - 1e-6 { break }
+        if let forwardPad {
+            remain = forwardPad
+            let ahead = edgeLen - along
+            if ahead > 1e-3 {
+                let take = min(remain, ahead)
+                let t = (along + take) / edgeLen
+                after.append(CGPoint(
+                    x: b0.x + (b1.x - b0.x) * t,
+                    y: b0.y + (b1.y - b0.y) * t
+                ))
+                remain -= take
+            }
+            idx = j + 1
+            while remain > 1e-3, idx < drawPoints.count - 1 {
+                let p0 = drawPoints[idx]
+                let p1 = drawPoints[idx + 1]
+                let seg = hypot(p1.x - p0.x, p1.y - p0.y)
+                if seg < 1e-3 { idx += 1; continue }
+                let take = min(remain, seg)
+                let t = take / seg
+                after.append(CGPoint(
+                    x: p0.x + (p1.x - p0.x) * t,
+                    y: p0.y + (p1.y - p0.y) * t
+                ))
+                remain -= take
+                idx += 1
+                if take < seg - 1e-6 { break }
+            }
+        } else {
+            // Full later suffix → end.
+            if hit.u < 0.999 {
+                after.append(b1)
+            }
+            if j + 2 <= drawPoints.count - 1 {
+                after.append(contentsOf: drawPoints[(j + 2)...])
+            }
         }
 
         var result: [CGPoint] = before.reversed()
