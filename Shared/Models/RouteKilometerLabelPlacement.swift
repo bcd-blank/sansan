@@ -246,7 +246,9 @@ enum RouteKilometerLabelPlacement {
             if let solved = one.full {
                 return result(step: 1, shifts: solved.shifts, stage: solved.stage, nodes: nodes, t0: t0, partial: false)
             }
-            // F1: escalate whole screen to 5km when 5km points exist.
+            // F1: escalate whole screen to 5km when 5km points exist — but do not prefer a
+            // 5km solution that shows *fewer* labels than the best 1km partial (JW rule③ /
+            // design scenes: avoid “겹침0 via 5km만 1개” when several 1km labels fit).
             let multiples = visible.filter { $0.kilometer % 5 == 0 }
             if ctx.allowFiveKmFallback, !multiples.isEmpty {
                 let five = solveLadder(
@@ -257,6 +259,18 @@ enum RouteKilometerLabelPlacement {
                     deadline: deadline
                 )
                 if let solved = five.full {
+                    let partialCount = one.bestPartial?.shifts.count ?? 0
+                    if partialCount > solved.shifts.count {
+                        let partial = one.bestPartial!
+                        return result(
+                            step: 1,
+                            shifts: partial.shifts,
+                            stage: "\(partial.stage)/prefer1",
+                            nodes: nodes,
+                            t0: t0,
+                            partial: partial.shifts.count != visible.count
+                        )
+                    }
                     return result(
                         step: 5,
                         shifts: solved.shifts,

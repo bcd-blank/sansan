@@ -310,7 +310,9 @@ enum HikingRouteSnapshotGenerator {
             insetLeft: insetLeft,
             insetBottom: insetBottom,
             insetRight: insetRight,
-            routeFillFraction: routeFillFraction
+            routeFillFraction: routeFillFraction,
+            // Share summary: hug headerBottom+clearance when the route is width-limited (memo-none).
+            verticalAlign: appearance == .shareSummary ? .top : .center
         )
         options.size = snapshotCanvas
         options.scale = pixelScale
@@ -645,39 +647,46 @@ enum HikingRouteSnapshotGenerator {
                 edge.stroke()
             }
         case .shareSummary:
-            // Ambient casing shadow underlay (full path) — soft drop only.
-            let underlay = UIBezierPath()
-            underlay.lineCapStyle = .round
-            underlay.lineJoinStyle = .round
-            for (index, point) in points.enumerated() {
-                if index == 0 { underlay.move(to: point) } else { underlay.addLine(to: point) }
+            // MapLibre-like two passes over time-ordered edges:
+            // 1) all white casings (later overwrites earlier at crossings)
+            // 2) all green fills (later green sits on earlier; later casing halo cuts earlier green)
+            // Single full-path stroke cannot express crossing z-order; per-edge round caps stay
+            // continuous on dense GPS samples.
+            let casingW = ShareSummaryTokens.routeCasing * contentScale
+            let fillW = ShareSummaryTokens.routeWidth * contentScale
+
+            func strokeEdge(from a: CGPoint, to b: CGPoint, width: CGFloat, color: UIColor) {
+                let edge = UIBezierPath()
+                edge.lineCapStyle = .round
+                edge.lineJoinStyle = .round
+                edge.move(to: a)
+                edge.addLine(to: b)
+                edge.lineWidth = width
+                color.setStroke()
+                edge.stroke()
             }
+
             cgContext.saveGState()
             cgContext.setShadow(
                 offset: CGSize(width: 0, height: 1 * contentScale),
                 blur: 1.2 * contentScale,
                 color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
             )
-            underlay.lineWidth = ShareSummaryTokens.routeCasing * contentScale
-            UIColor.white.setStroke()
-            underlay.stroke()
+            for index in 1..<points.count {
+                strokeEdge(from: points[index - 1], to: points[index], width: casingW, color: .white)
+            }
             cgContext.restoreGState()
 
-            // Time-ordered edges: white casing → green fill so later overwrites earlier at crossings.
-            let casingW = ShareSummaryTokens.routeCasing * contentScale
-            let fillW = ShareSummaryTokens.routeWidth * contentScale
             for index in 1..<points.count {
-                let edge = UIBezierPath()
-                edge.lineCapStyle = .round
-                edge.lineJoinStyle = .round
-                edge.move(to: points[index - 1])
-                edge.addLine(to: points[index])
-                edge.lineWidth = casingW
-                UIColor.white.setStroke()
-                edge.stroke()
-                edge.lineWidth = fillW
-                ShareSummaryTokens.accentUIColor.setStroke()
-                edge.stroke()
+                strokeEdge(from: points[index - 1], to: points[index], width: casingW, color: .white)
+            }
+            for index in 1..<points.count {
+                strokeEdge(
+                    from: points[index - 1],
+                    to: points[index],
+                    width: fillW,
+                    color: ShareSummaryTokens.accentUIColor
+                )
             }
         }
     }
