@@ -105,44 +105,98 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(a, 1, accuracy: 0.01)
     }
 
-    func testDetailThinningEscalatesWhenStepOneCollides() {
-        // Two capsules forced to overlap on a tiny canvas → step 1 fails, step 5 keeps only 5km.
-        let canvas = CGSize(width: 120, height: 80)
+    func testDetailThinningHidesLowPriorityIndividually() {
+        // Tall-enough for one capsule only (h24 + y inset 8→8): vertical nudges clip.
+        // Right-edge x: trailing side clips. 10× places first; 1·2 hide individually.
+        let canvas = CGSize(width: 390, height: 40)
+        let edge = CGPoint(x: 360, y: 20)
         let requests = [
             RouteKilometerLabelRequest(
                 kilometer: 1,
                 distanceLabel: "1km",
                 timeLabel: "10:00",
-                routePoint: CGPoint(x: 60, y: 40),
+                routePoint: edge,
+                preferredLeadingSide: true
+            ),
+            RouteKilometerLabelRequest(
+                kilometer: 2,
+                distanceLabel: "2km",
+                timeLabel: "20:00",
+                routePoint: CGPoint(x: 361, y: 20),
+                preferredLeadingSide: true
+            ),
+            RouteKilometerLabelRequest(
+                kilometer: 10,
+                distanceLabel: "10km",
+                timeLabel: "1:40:00",
+                routePoint: edge,
+                preferredLeadingSide: true
+            )
+        ]
+        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+            for: requests,
+            endpointPoints: [CGPoint(x: 40, y: 20), CGPoint(x: 200, y: 20)],
+            contentScale: 1,
+            imageSize: canvas
+        )
+        XCTAssertEqual(thinned.step, 1, "must not wholesale-escalate hideSteps")
+        XCTAssertEqual(Set(thinned.shifts.keys), Set([10]), "only 10× kept; 1·2 hidden one-by-one")
+    }
+
+    func testDetailThinningIgnoresOffscreenPointsSoZoomInKeepsVisibleLabels() {
+        // Short record 1–4: one off-screen point must not wipe on-screen 1km labels (JW zoom-in bug).
+        let canvas = CGSize(width: 390, height: 400)
+        let requests = [
+            RouteKilometerLabelRequest(
+                kilometer: 1,
+                distanceLabel: "1km",
+                timeLabel: "10:00",
+                routePoint: CGPoint(x: 120, y: 180),
                 preferredLeadingSide: false
             ),
             RouteKilometerLabelRequest(
                 kilometer: 2,
                 distanceLabel: "2km",
                 timeLabel: "20:00",
-                routePoint: CGPoint(x: 62, y: 40),
+                routePoint: CGPoint(x: 200, y: 200),
                 preferredLeadingSide: false
             ),
             RouteKilometerLabelRequest(
-                kilometer: 5,
-                distanceLabel: "5km",
-                timeLabel: "50:00",
-                routePoint: CGPoint(x: 60, y: 40),
+                kilometer: 3,
+                distanceLabel: "3km",
+                timeLabel: "30:00",
+                routePoint: CGPoint(x: 280, y: 220),
                 preferredLeadingSide: true
+            ),
+            RouteKilometerLabelRequest(
+                kilometer: 4,
+                distanceLabel: "4km",
+                timeLabel: "40:00",
+                routePoint: CGPoint(x: -80, y: 200), // off-screen after zoom-in
+                preferredLeadingSide: false
             )
         ]
+        XCTAssertFalse(
+            RouteKilometerMarkerDrawing.isDetailMarkerOnScreen(requests[3].routePoint, imageSize: canvas)
+        )
         let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
             for: requests,
-            endpointPoints: [CGPoint(x: 10, y: 40), CGPoint(x: 110, y: 40)],
+            endpointPoints: [CGPoint(x: 40, y: 160), CGPoint(x: 340, y: 240)],
             contentScale: 1,
             imageSize: canvas
         )
-        XCTAssertGreaterThanOrEqual(thinned.step, 5)
-        XCTAssertFalse(thinned.shifts.keys.contains(1))
-        XCTAssertFalse(thinned.shifts.keys.contains(2))
-        if thinned.step == 5 {
-            XCTAssertTrue(thinned.shifts.keys.contains(5))
-        }
+        XCTAssertFalse(thinned.shifts.isEmpty, "visible 1–3 must still get labels")
+        XCTAssertTrue(thinned.shifts.keys.contains(1))
+        XCTAssertFalse(thinned.shifts.keys.contains(4), "off-screen km must not be labeled")
+    }
+
+    func testDetailLabelKeepPriorityOrder() {
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(10), 2)
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(20), 2)
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(5), 1)
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(15), 1)
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(1), 0)
+        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(7), 0)
     }
 
     func testKmLabelCanvasClampPrefersInBoundsSide() throws {

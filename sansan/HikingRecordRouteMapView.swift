@@ -234,10 +234,42 @@ struct HikingRecordRouteMapView: View {
                 LiveRouteMapSnapshotRegistry.shared.registerVisibleRectProvider(recordID: recordID) {
                     liveVisibleMapRect(proxy: proxy)
                 }
+#if DEBUG
+                UITestMapCaptureHooks.installIfNeeded()
+#endif
             }
+#if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .uiTestMapCaptureAction)) { note in
+                guard let key = note.userInfo?["action"] as? String else { return }
+                switch key {
+                case "fit":
+                    applyUITestMapCaptureAction(.fit)
+                case "zoomIn":
+                    applyUITestMapCaptureAction(.zoomIn)
+                default:
+                    break
+                }
+            }
+#endif
             .id(mapPhotoListRevision)
         }
     }
+
+#if DEBUG
+    private func applyUITestMapCaptureAction(_ action: UITestMapCaptureHooks.Action) {
+        guard routeCoordinates.count >= 2 else { return }
+        switch action {
+        case .fit:
+            fitRouteInView(animated: false)
+        case .zoomIn:
+            // Zoom into the first ~1–2km so some later km dots leave the viewport.
+            let centerIndex = min(routeCoordinates.count / 4, max(routeCoordinates.count - 1, 0))
+            let center = routeCoordinates[centerIndex]
+            let span = MKCoordinateSpan(latitudeDelta: 0.004, longitudeDelta: 0.004)
+            mapPosition = .region(MKCoordinateRegion(center: center, span: span))
+        }
+    }
+#endif
 
     /// 라이브 SwiftUI `Map`의 네 모서리를 좌표로 변환해 현재 보이는 MapRect를 만듭니다.
     private func liveVisibleMapRect(proxy: MapProxy) -> MKMapRect? {
@@ -259,7 +291,7 @@ struct HikingRecordRouteMapView: View {
     }
 
     /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
-    /// Detail map: #007AFF combined capsules + hideSteps [1,5,10,20,50] thinning.
+    /// Detail map: #007AFF capsules; visible-only + per-label hide (10×→5×→rest). Camera onEnd re-runs.
     private func updateKilometerLabelShifts(proxy: MapProxy) {
         guard mapWidth > 1, mapHeight > 1,
               let start = routeCoordinates.first,
@@ -286,6 +318,7 @@ struct HikingRecordRouteMapView: View {
                 )
             )
         }
+        // Off-screen km dots are filtered inside thinnedDetailLabelShifts; camera onEnd re-evaluates.
         let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
             for: requests,
             endpointPoints: endpoints,

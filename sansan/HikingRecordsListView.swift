@@ -737,6 +737,19 @@ struct HikingRecordsListView: View {
         if mode.showsKMSCBrowser {
             showsKMSCBrowser = true
         }
+        if mode.opensShortDetailRecord {
+            let shortID = UUID(uuidString: "00000000-0000-4000-8000-00000000a428")!
+            // Seed may land a moment after appear; retry briefly.
+            Task { @MainActor in
+                for _ in 0..<20 {
+                    if store.records.contains(where: { $0.id == shortID }) {
+                        detailRoute = RecordDetailRoute(recordID: shortID)
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+            }
+        }
     }
 #endif
 }

@@ -57,8 +57,9 @@ enum RouteKilometerMarkerDrawing {
         return shifts
     }
 
-    /// Detail-map thinning: try hideSteps [1,5,10,20,50] until every kept label places clear.
-    /// Returns the chosen step and shifts only for labeled kilometers (dots still drawn by caller).
+    /// Detail-map thinning (JW): only on-screen km dots; hide overlapping labels one-by-one.
+    /// Keep priority: multiples of 10 → multiples of 5 → rest. Dots always drawn by caller.
+    /// `step` stays 1 for API compat (no wholesale 1→5→10 promotion).
     static func thinnedDetailLabelShifts(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
@@ -67,54 +68,20 @@ enum RouteKilometerMarkerDrawing {
         sideInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelSideInset,
         verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset
     ) -> (step: Int, shifts: [Int: RouteKilometerLabelShift]) {
-        let steps = RouteKilometerMarkerMetrics.detailLabelHideSteps
-        var lastShifts: [Int: RouteKilometerLabelShift] = [:]
-        var lastStep = steps.last ?? 1
-        for step in steps {
-            let subset: [RouteKilometerLabelRequest]
-            if step <= 1 {
-                subset = markers
-            } else {
-                subset = markers.filter { $0.kilometer % step == 0 }
-            }
-            if subset.isEmpty {
-                return (step, [:])
-            }
-            if let shifts = labelShiftsClear(
-                for: subset,
-                endpointPoints: endpointPoints,
-                contentScale: contentScale,
-                imageSize: imageSize,
-                sideInset: sideInset,
-                verticalInset: verticalInset
-            ) {
-                return (step, shifts)
-            }
-            // Keep progressive fallback for the last step (spec: drop only failed labels).
-            lastStep = step
-            lastShifts = labelShifts(
-                for: subset,
-                endpointPoints: endpointPoints,
-                contentScale: contentScale,
-                imageSize: imageSize,
-                sideInset: sideInset
-            )
-        }
-        return (lastStep, lastShifts)
-    }
+        let visible = markers.filter { isDetailMarkerOnScreen($0.routePoint, imageSize: imageSize) }
+        guard !visible.isEmpty else { return (1, [:]) }
 
-    /// Places every marker only when each capsule is clear of labels, endpoints, and inset bounds.
-    private static func labelShiftsClear(
-        for markers: [RouteKilometerLabelRequest],
-        endpointPoints: [CGPoint],
-        contentScale: CGFloat,
-        imageSize: CGSize,
-        sideInset: CGFloat,
-        verticalInset: CGFloat
-    ) -> [Int: RouteKilometerLabelShift]? {
+        // Place higher keep-priority first so 10× / 5× claim space before others are hidden.
+        let ordered = visible.sorted { lhs, rhs in
+            let lp = detailLabelKeepPriority(lhs.kilometer)
+            let rp = detailLabelKeepPriority(rhs.kilometer)
+            if lp != rp { return lp > rp }
+            return lhs.kilometer < rhs.kilometer
+        }
+
         var occupied: [CGRect] = []
         var shifts: [Int: RouteKilometerLabelShift] = [:]
-        for marker in markers {
+        for marker in ordered {
             let placed = bestShift(
                 distanceLabel: marker.distanceLabel,
                 timeLabel: marker.timeLabel,
@@ -128,11 +95,27 @@ enum RouteKilometerMarkerDrawing {
                 requireClear: true,
                 verticalInset: verticalInset
             )
-            guard let clear = placed.clear else { return nil }
+            guard let clear = placed.clear else { continue } // hide this label only
             shifts[marker.kilometer] = clear.shift
             occupied.append(contentsOf: clear.rects)
         }
-        return shifts
+        return (1, shifts)
+    }
+
+    /// Km-dot center inside the map view — off-screen points are excluded from thinning.
+    static func isDetailMarkerOnScreen(_ point: CGPoint, imageSize: CGSize) -> Bool {
+        guard imageSize.width > 1, imageSize.height > 1 else { return false }
+        return point.x >= 0
+            && point.x <= imageSize.width
+            && point.y >= 0
+            && point.y <= imageSize.height
+    }
+
+    /// Higher = keep first when labels collide (10× → 5× → other).
+    static func detailLabelKeepPriority(_ kilometer: Int) -> Int {
+        if kilometer % 10 == 0 { return 2 }
+        if kilometer % 5 == 0 { return 1 }
+        return 0
     }
 
     private static func bestShift(
