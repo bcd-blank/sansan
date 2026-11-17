@@ -837,8 +837,9 @@ private struct SummaryInfoCard: View {
 
     private func timeLabel(_ parts: ScheduleDateParts?) -> String {
         guard let parts else { return "—" }
+        // JW: Korean order 「오후 7:37」 (period then h:mm), matching Android DateText.time.
         if let period = parts.periodText, !period.isEmpty {
-            return "\(parts.timeText) \(period)"
+            return "\(period) \(parts.timeText)"
         }
         return parts.timeText
     }

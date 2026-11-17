@@ -461,6 +461,15 @@ enum HikingRouteSnapshotGenerator {
             }
             baseImage.draw(in: CGRect(origin: .zero, size: canvasSize))
 
+            // JW 18:25 — MKMapSnapshotter may still bake /Legal at bottom-left; keep only the
+            // hand-drawn 「지도」 between map and card. Cover with map paper (not white).
+            if appearance == .shareSummary {
+                ShareSummaryTokens.mapPaperUIColor.setFill()
+                context.fill(
+                    RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
+                )
+            }
+
             // Layer order (finding 2): map → fade → route → markers → labels.
             if appearance == .shareSummary, let solidEnd = fadeSolidEndY, solidEnd > 0 {
                 drawShareSummaryPaperFade(
@@ -647,162 +656,64 @@ enum HikingRouteSnapshotGenerator {
                 edge.stroke()
             }
         case .shareSummary:
-            // Forced draw (no short-cap chops):
-            // 1) One continuous Path → white casing once → same Path green once.
-            // 2) Optional continuous suffix from first self-cross → white once → green once.
-            // 3) Path shadow only on the single full-path white stroke.
+            // Chronological short chunks: each paints white casing then green fill so later
+            // time passes over earlier crossings (JW: never all-white then all-green).
+            // Round cap/join + shared vertex between chunks cover seams (no white gap/dash).
             let casingW = ShareSummaryTokens.routeCasing * contentScale
             let fillW = ShareSummaryTokens.routeWidth * contentScale
             let white = UIColor.white
             let green = ShareSummaryTokens.accentUIColor
-            let minLoopLength = max(casingW * 12, 80 * contentScale)
+            // ~28 canvas-pt chunks (Android drawShareRoute), independent of contentScale.
+            let maxChunkPx: CGFloat = 28
+            let maxVerticesPerChunk = 12
 
-            // Drop near-duplicate / hairpin spike vertices that make white join wedges
-            // look like mid-fill seams, while keeping one continuous polyline.
-            let drawPoints: [CGPoint] = {
-                guard points.count >= 3 else { return points }
-                var cleaned: [CGPoint] = [points[0]]
-                for index in 1..<points.count {
-                    let candidate = points[index]
-                    let last = cleaned[cleaned.count - 1]
-                    if hypot(candidate.x - last.x, candidate.y - last.y) < 0.35 {
-                        continue
-                    }
-                    if cleaned.count >= 2 {
-                        let a = cleaned[cleaned.count - 2]
-                        let b = last
-                        let abx = b.x - a.x, aby = b.y - a.y
-                        let bcx = candidate.x - b.x, bcy = candidate.y - b.y
-                        let abLen = hypot(abx, aby)
-                        let bcLen = hypot(bcx, bcy)
-                        if abLen > 0.35, bcLen > 0.35 {
-                            let dot = (abx / abLen) * (bcx / bcLen) + (aby / abLen) * (bcy / bcLen)
-                            // ~165°+ reverse spike: skip the middle vertex.
-                            if dot < -0.95 {
-                                cleaned.removeLast()
-                                if let newLast = cleaned.last,
-                                   hypot(candidate.x - newLast.x, candidate.y - newLast.y) < 0.35 {
-                                    continue
-                                }
-                            }
-                        }
-                    }
-                    cleaned.append(candidate)
+            var startIdx = 0
+            var isFirst = true
+            while startIdx < points.count - 1 {
+                var endIdx = startIdx + 1
+                var traveled: CGFloat = 0
+                while endIdx < points.count - 1 && traveled < maxChunkPx {
+                    let dx = points[endIdx + 1].x - points[endIdx].x
+                    let dy = points[endIdx + 1].y - points[endIdx].y
+                    traveled += hypot(dx, dy)
+                    endIdx += 1
+                    if endIdx - startIdx >= maxVerticesPerChunk { break }
                 }
-                if cleaned.count < 2 { return points }
-                return cleaned
-            }()
+                if endIdx <= startIdx {
+                    endIdx = min(points.count - 1, startIdx + 1)
+                }
 
-            func strokeWhiteThenGreen(_ path: UIBezierPath) {
-                path.lineWidth = casingW
-                white.setStroke()
-                path.stroke()
+                let path = UIBezierPath()
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                path.move(to: points[startIdx])
+                for index in (startIdx + 1)...endIdx {
+                    path.addLine(to: points[index])
+                }
+
+                if isFirst {
+                    cgContext.saveGState()
+                    cgContext.setShadow(
+                        offset: CGSize(width: 0, height: 1 * contentScale),
+                        blur: 1.2 * contentScale,
+                        color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+                    )
+                    path.lineWidth = casingW
+                    white.setStroke()
+                    path.stroke()
+                    cgContext.restoreGState()
+                    isFirst = false
+                } else {
+                    path.lineWidth = casingW
+                    white.setStroke()
+                    path.stroke()
+                }
                 path.lineWidth = fillW
                 green.setStroke()
                 path.stroke()
-            }
 
-            let full = UIBezierPath()
-            full.lineCapStyle = .round
-            full.lineJoinStyle = .round
-            full.move(to: drawPoints[0])
-            for index in 1..<drawPoints.count {
-                full.addLine(to: drawPoints[index])
-            }
-
-            // Single-path shadow under the one full white casing stroke only.
-            cgContext.saveGState()
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: 1 * contentScale),
-                blur: 1.2 * contentScale,
-                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
-            )
-            full.lineWidth = casingW
-            white.setStroke()
-            full.stroke()
-            cgContext.restoreGState()
-
-            full.lineWidth = fillW
-            green.setStroke()
-            full.stroke()
-
-            func orient(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
-                (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
-            }
-            func segmentIntersection(
-                _ a0: CGPoint, _ a1: CGPoint,
-                _ b0: CGPoint, _ b1: CGPoint
-            ) -> (point: CGPoint, tOnLater: CGFloat)? {
-                let d1 = orient(a0, a1, b0)
-                let d2 = orient(a0, a1, b1)
-                let d3 = orient(b0, b1, a0)
-                let d4 = orient(b0, b1, a1)
-                guard d1 * d2 < 0, d3 * d4 < 0 else { return nil }
-                let denom = (a1.x - a0.x) * (b1.y - b0.y) - (a1.y - a0.y) * (b1.x - b0.x)
-                guard abs(denom) > 1e-6 else { return nil }
-                let t = ((b0.x - a0.x) * (b1.y - b0.y) - (b0.y - a0.y) * (b1.x - b0.x)) / denom
-                let u = ((b0.x - a0.x) * (a1.y - a0.y) - (b0.y - a0.y) * (a1.x - a0.x)) / denom
-                guard t > 0, t < 1, u > 0, u < 1 else { return nil }
-                return (
-                    point: CGPoint(
-                        x: b0.x + u * (b1.x - b0.x),
-                        y: b0.y + u * (b1.y - b0.y)
-                    ),
-                    tOnLater: u
-                )
-            }
-            func pathLength(from a: Int, to b: Int) -> CGFloat {
-                guard b > a else { return 0 }
-                var length: CGFloat = 0
-                for index in a..<b {
-                    length += hypot(
-                        drawPoints[index + 1].x - drawPoints[index].x,
-                        drawPoints[index + 1].y - drawPoints[index].y
-                    )
-                }
-                return length
-            }
-
-            var firstCross: (laterEdge: Int, at: CGPoint, u: CGFloat)?
-            if drawPoints.count >= 4 {
-                let lastEdge = drawPoints.count - 2
-                for i in 0...lastEdge {
-                    let jMin = i + 2
-                    guard jMin <= lastEdge else { continue }
-                    for j in jMin...lastEdge {
-                        if pathLength(from: i, to: j) < minLoopLength { continue }
-                        guard let hit = segmentIntersection(
-                            drawPoints[i], drawPoints[i + 1],
-                            drawPoints[j], drawPoints[j + 1]
-                        ) else { continue }
-                        if let existing = firstCross {
-                            if j < existing.laterEdge
-                                || (j == existing.laterEdge && hit.tOnLater < existing.u) {
-                                firstCross = (j, hit.point, hit.tOnLater)
-                            }
-                        } else {
-                            firstCross = (j, hit.point, hit.tOnLater)
-                        }
-                    }
-                }
-            }
-
-            if let cross = firstCross, cross.laterEdge < drawPoints.count - 1 {
-                // Continuous suffix from the intersection. Butt at the cross avoids a
-                // mid-path round white disc; round join keeps the rest continuous.
-                let suffix = UIBezierPath()
-                suffix.lineCapStyle = .butt
-                suffix.lineJoinStyle = .round
-                suffix.move(to: cross.at)
-                if cross.u < 0.999 {
-                    suffix.addLine(to: drawPoints[cross.laterEdge + 1])
-                }
-                if cross.laterEdge + 2 <= drawPoints.count - 1 {
-                    for index in (cross.laterEdge + 2)...(drawPoints.count - 1) {
-                        suffix.addLine(to: drawPoints[index])
-                    }
-                }
-                strokeWhiteThenGreen(suffix)
+                if endIdx >= points.count - 1 { break }
+                startIdx = endIdx // overlap one vertex — round caps hide the join
             }
         }
     }
