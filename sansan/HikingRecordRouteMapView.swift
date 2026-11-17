@@ -392,36 +392,15 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
-    /// Short chronological chunks so later white→green stacks over earlier at crossings
-    /// (Android GeoJSON feature order). Overlapping end vertex + round caps hide seams.
-    private var routeStrokeChunks: [[CLLocationCoordinate2D]] {
-        guard routeCoordinates.count >= 2 else { return [] }
-        let chunkSize = max(8, min(24, routeCoordinates.count / 48))
-        var chunks: [[CLLocationCoordinate2D]] = []
-        var start = 0
-        while start < routeCoordinates.count - 1 {
-            let end = min(routeCoordinates.count - 1, start + chunkSize)
-            chunks.append(Array(routeCoordinates[start...end]))
-            if end >= routeCoordinates.count - 1 { break }
-            start = end
-        }
-        return chunks
-    }
-
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        ForEach(Array(routeStrokeChunks.enumerated()), id: \.offset) { _, chunk in
-            MapPolyline(coordinates: chunk)
-                .stroke(
-                    Color.white.opacity(0.9),
-                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-                )
-            MapPolyline(coordinates: chunk)
-                .stroke(
-                    Color(red: 0.12, green: 0.72, blue: 0.45),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-                )
-        }
+        // Continuous polyline (no chunk seams). Share-summary crossing overlays are
+        // snapshot-only; MapKit MapPolyline cannot paint local white→green at crosses.
+        MapPolyline(coordinates: routeCoordinates)
+            .stroke(
+                Color(red: 0.12, green: 0.72, blue: 0.45),
+                style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+            )
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
