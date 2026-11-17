@@ -291,7 +291,7 @@ struct HikingRecordRouteMapView: View {
     }
 
     /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
-    /// Detail map: #007AFF capsules; visible-only + per-label hide (10×→5×→rest). Camera onEnd re-runs.
+    /// Detail map: #007AFF capsules; visible-only + wholesale hideSteps. Camera onEnd re-runs.
     private func updateKilometerLabelShifts(proxy: MapProxy) {
         guard mapWidth > 1, mapHeight > 1,
               let start = routeCoordinates.first,

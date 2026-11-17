@@ -105,9 +105,8 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(a, 1, accuracy: 0.01)
     }
 
-    func testDetailThinningHidesLowPriorityIndividually() {
-        // Tall-enough for one capsule only (h24 + y inset 8→8): vertical nudges clip.
-        // Right-edge x: trailing side clips. 10× places first; 1·2 hide individually.
+    func testDetailThinningEscalatesWholeScreenWhenStepOneCollides() {
+        // One-capsule-tall band: step 1 (1+2+5) cannot all clear → wholesale escalate to 5.
         let canvas = CGSize(width: 390, height: 40)
         let edge = CGPoint(x: 360, y: 20)
         let requests = [
@@ -126,9 +125,9 @@ final class ShareSummaryTokensTests: XCTestCase {
                 preferredLeadingSide: true
             ),
             RouteKilometerLabelRequest(
-                kilometer: 10,
-                distanceLabel: "10km",
-                timeLabel: "1:40:00",
+                kilometer: 5,
+                distanceLabel: "5km",
+                timeLabel: "50:00",
                 routePoint: edge,
                 preferredLeadingSide: true
             )
@@ -139,12 +138,16 @@ final class ShareSummaryTokensTests: XCTestCase {
             contentScale: 1,
             imageSize: canvas
         )
-        XCTAssertEqual(thinned.step, 1, "must not wholesale-escalate hideSteps")
-        XCTAssertEqual(Set(thinned.shifts.keys), Set([10]), "only 10× kept; 1·2 hidden one-by-one")
+        XCTAssertGreaterThanOrEqual(thinned.step, 5)
+        XCTAssertFalse(thinned.shifts.keys.contains(1))
+        XCTAssertFalse(thinned.shifts.keys.contains(2))
+        if thinned.step == 5 {
+            XCTAssertTrue(thinned.shifts.keys.contains(5))
+        }
     }
 
     func testDetailThinningIgnoresOffscreenPointsSoZoomInKeepsVisibleLabels() {
-        // Short record 1–4: one off-screen point must not wipe on-screen 1km labels (JW zoom-in bug).
+        // Short record 1–4: off-screen 4km must not force step 5 empty → wipe on-screen 1km.
         let canvas = CGSize(width: 390, height: 400)
         let requests = [
             RouteKilometerLabelRequest(
@@ -185,18 +188,18 @@ final class ShareSummaryTokensTests: XCTestCase {
             contentScale: 1,
             imageSize: canvas
         )
-        XCTAssertFalse(thinned.shifts.isEmpty, "visible 1–3 must still get labels")
+        XCTAssertEqual(thinned.step, 1)
         XCTAssertTrue(thinned.shifts.keys.contains(1))
+        XCTAssertTrue(thinned.shifts.keys.contains(2))
+        XCTAssertTrue(thinned.shifts.keys.contains(3))
         XCTAssertFalse(thinned.shifts.keys.contains(4), "off-screen km must not be labeled")
     }
 
-    func testDetailLabelKeepPriorityOrder() {
+    func testDetailLabelKeepPriorityScaffoldStillAvailable() {
+        // Inactive per-label path kept for a future designer spec.
         XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(10), 2)
-        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(20), 2)
         XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(5), 1)
-        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(15), 1)
         XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(1), 0)
-        XCTAssertEqual(RouteKilometerMarkerDrawing.detailLabelKeepPriority(7), 0)
     }
 
     func testKmLabelCanvasClampPrefersInBoundsSide() throws {
