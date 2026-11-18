@@ -160,7 +160,7 @@ private struct ImageSaveStylePagePreview: View {
         case .summary:
             ZStack(alignment: .bottom) {
                 Rectangle()
-                    .fill(Color(red: 228 / 255, green: 228 / 255, blue: 228 / 255))
+                    .fill(Color(red: 230 / 255, green: 226 / 255, blue: 224 / 255))
                 Capsule()
                     .stroke(Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), lineWidth: 3)
                     .frame(width: 140, height: 90)

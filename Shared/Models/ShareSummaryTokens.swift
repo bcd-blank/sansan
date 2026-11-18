@@ -44,7 +44,7 @@ enum ShareSummaryTokens {
         static let ink2 = "6E6E73"
         static let ink3 = "8A8A8E"
         static let mapText = "636366"
-        /// Basemap glyph gray; tuned for contrast on paper #E4E4E4.
+        /// Basemap glyph gray; tunable contrast on warm paper #E6E2E0.
         static let mapLabel = "8B8B8E"
         static let hairline = "E5E5EA"
         static let track = "D1D1D6"
@@ -53,10 +53,10 @@ enum ShareSummaryTokens {
         static let chartElev = "FF8D28"
         static let chartHR = "FF383C"
         static let surface = "FFFFFF"
-        /// Simple Grey basemap paper (#E4E4E4).
-        static let mapPaper = "E4E4E4"
-        /// Simple Grey roads (#EEEEEE) — slightly above paper so mesh still reads.
-        static let mapRoad = "EEEEEE"
+        /// Warm Simple Grey basemap paper (#E6E2E0).
+        static let mapPaper = "E6E2E0"
+        /// Warm Simple Grey roads (#EEEBE9) — slightly above paper so mesh still reads.
+        static let mapRoad = "EEEBE9"
     }
 
 #if canImport(UIKit)
@@ -69,8 +69,8 @@ enum ShareSummaryTokens {
     /// Matches `color.hr` / chart HR (#FF383C).
     static let hrUIColor = UIColor(red: 255 / 255, green: 56 / 255, blue: 60 / 255, alpha: 1)
     static let surfaceUIColor = UIColor.white
-    static let mapPaperUIColor = UIColor(red: 228 / 255, green: 228 / 255, blue: 228 / 255, alpha: 1)
-    static let mapRoadUIColor = UIColor(red: 238 / 255, green: 238 / 255, blue: 238 / 255, alpha: 1)
+    static let mapPaperUIColor = UIColor(red: 230 / 255, green: 226 / 255, blue: 224 / 255, alpha: 1)
+    static let mapRoadUIColor = UIColor(red: 238 / 255, green: 235 / 255, blue: 233 / 255, alpha: 1)
     /// Record-detail elev orange (glass3 §9 / elevation-color-v2 white card).
     static let chartElevUIColor = UIColor(red: 255 / 255, green: 141 / 255, blue: 40 / 255, alpha: 1) // #FF8D28
     /// Record-detail HR red.

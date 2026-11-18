@@ -21,8 +21,8 @@
     "track": "#D1D1D6",
     "hr": "#FF383C",
     "surface": "#FFFFFF",
-    "mapPaper": "#D8D8D8",
-    "mapRoad": "#E4E4E4"
+    "mapPaper": "#E6E2E0",
+    "mapRoad": "#EEEBE9"
   },
   "header": {
     "top": 24,

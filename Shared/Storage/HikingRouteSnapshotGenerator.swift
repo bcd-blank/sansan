@@ -433,8 +433,8 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Simple Grey: paper #E4E4E4; roads → #EEEEEE; labels → #8B8B8E (contrast on E4).
-    /// Apple MKMapSnapshotter cannot recolor style paints — luminance remap is the style-equivalent path (no overlay/multiply).
+    /// Warm Simple Grey: paper #E6E2E0; roads → #EEEBE9; labels → #8B8B8E (contrast on warm paper).
+    /// Apple MKMapSnapshotter cannot recolor style paints — luminance→warm RGB remap is the style-equivalent path (no overlay/multiply).
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width
@@ -454,9 +454,10 @@ enum HikingRouteSnapshotGenerator {
         ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        let mapLabel = 139.0 // #8B8B8E — tuned for #E4 paper
-        let paper = 228.0    // #E4E4E4
-        let road = 238.0     // #EEEEEE
+        // Warm chromatic targets (not achromatic R=G=B) — #E6E2E0 / #EEEBE9 / #8B8B8E.
+        let labelR = 139.0, labelG = 139.0, labelB = 142.0
+        let paperR = 230.0, paperG = 226.0, paperB = 224.0
+        let roadR = 238.0, roadG = 235.0, roadB = 233.0
         let count = width * height
         for i in 0..<count {
             let o = i * bytesPerPixel
@@ -464,20 +465,28 @@ enum HikingRouteSnapshotGenerator {
             let g = Double(pixels[o + 1])
             let b = Double(pixels[o + 2])
             let y = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-            let out: Double
+            let outR: Double
+            let outG: Double
+            let outB: Double
             if y < 0.40 {
                 // Labels / dark features → mapLabel band (keep some contrast).
-                out = mapLabel * (0.75 + 0.25 * (y / 0.40))
+                let t = 0.75 + 0.25 * (y / 0.40)
+                outR = labelR * t
+                outG = labelG * t
+                outB = labelB * t
             } else if y > 0.985 {
-                out = road
+                outR = roadR
+                outG = roadG
+                outB = roadB
             } else {
-                // Flat Simple Grey land #E4E4E4; near-white roads stay in y>0.985 → #EEEEEE.
-                out = paper
+                // Flat warm paper #E6E2E0; near-white roads stay in y>0.985 → #EEEBE9.
+                outR = paperR
+                outG = paperG
+                outB = paperB
             }
-            let v = UInt8(max(0, min(255, out.rounded())))
-            pixels[o] = v
-            pixels[o + 1] = v
-            pixels[o + 2] = v
+            pixels[o] = UInt8(max(0, min(255, outR.rounded())))
+            pixels[o + 1] = UInt8(max(0, min(255, outG.rounded())))
+            pixels[o + 2] = UInt8(max(0, min(255, outB.rounded())))
         }
         guard let outImage = ctx.makeImage() else { return nil }
         return UIImage(cgImage: outImage, scale: image.scale, orientation: image.imageOrientation)
