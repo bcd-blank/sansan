@@ -41,8 +41,8 @@ private enum ImageSaveStylePagerTokens {
     static let titleLeading: CGFloat = 12
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
-    /// Dots below card (v13) — not on-card.
-    static let dotsTopGap: CGFloat = 12
+    /// Dots below card (v13) — gap so cell bottoms (Data Card 「21 m」) stay clear.
+    static let dotsTopGap: CGFloat = 22
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)

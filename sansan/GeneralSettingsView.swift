@@ -220,7 +220,7 @@ struct GeneralSettingsView: View {
                     selection: $imageSaveStyle,
                     viewedPage: $viewedImageSaveStyle
                 )
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } header: {
@@ -228,6 +228,7 @@ struct GeneralSettingsView: View {
             } footer: {
                 Text(viewedImageSaveStyle.footer)
             }
+            // Scroll so section header stays under nav (not buried / not 신체 정보).
             .id("imageSaveStyleSection")
 
             Section {
@@ -308,9 +309,9 @@ struct GeneralSettingsView: View {
                                 proxy.scrollTo("shareMapExportSection", anchor: .top)
                             }
                         } else if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
-                            // Keep section header 「이미지 저장 방식」 + full card + footer in frame.
+                            // Keep 「이미지 저장 방식」 under nav; hide 신체 정보 above.
                             withAnimation(.easeInOut(duration: 0.35)) {
-                                proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.12))
+                                proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.02))
                             }
                         }
                     }
