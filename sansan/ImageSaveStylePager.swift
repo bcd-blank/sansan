@@ -4,8 +4,9 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v12 JW: image-as-card (radius+shadow, list-aligned width, aspect height);
-//  option title OVERLAPS preview; 「선택 완료」 only on saved style.
+//  v13 JW: image-as-card (radius+shadow, list-aligned width, 314∶220 height);
+//  option title OVERLAPS preview (dark pill, lifted clear of glass/4.20);
+//  「선택 완료」 top-trailing only on saved style; section footer follows VIEWED page.
 //
 //  Overlays are drawn ABOVE TabView (not inside pages) — UIPageViewController
 //  hosting drops in-page SwiftUI overlays on some OS builds.
@@ -25,11 +26,13 @@ private enum ImageSaveStylePagerTokens {
     /// Morph Select / green chip (`--green`, `--on-green`) — 「선택 완료」 SoT.
     static let selectGreen = Color(red: 52 / 255, green: 209 / 255, blue: 122 / 255) // #34d17a
     static let onGreen = Color(red: 4 / 255, green: 20 / 255, blue: 10 / 255) // #04140a
+    static let titlePill = Color.black.opacity(0.56)
 
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing (pad 28 → 314×220); height scales with list width.
+    /// Settings preview framing (pad 28 → 314×220). Width = list card; height = width × 220/314.
+    /// At list width ≈ 370pt → card height ≈ **259pt** (Android matches this SoT).
     static let cardAspectWidth: CGFloat = 314
     static let cardAspectHeight: CGFloat = 220
     static let pageCorner: CGFloat = 24
@@ -37,6 +40,9 @@ private enum ImageSaveStylePagerTokens {
     static let titleSize: CGFloat = 17
     static let titleLeading: CGFloat = 16
     static let titleBottom: CGFloat = 14
+    /// Lift title clear of Simple Color / Grey glass + 「4.20」.
+    /// SoT: 14 + 88 = 102pt from card bottom (Android matches this).
+    static let titleBottomLift: CGFloat = 88
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
     static let dotsTopGap: CGFloat = 12
@@ -49,8 +55,8 @@ private enum ImageSaveStylePagerTokens {
 struct ImageSaveStylePager: View {
     /// Saved preference — checkbox follows this, not the viewed page.
     @Binding var selection: HikingRecordImageSaveStyle
-    /// Page currently on screen (swipe / dots). Does not write preference.
-    @State private var viewedPage: HikingRecordImageSaveStyle = HikingRecordImageSavePreferences.style
+    /// Viewed page (swipe / dots). Drives section footer; does not write preference.
+    @Binding var viewedPage: HikingRecordImageSaveStyle
 
     private let styles = HikingRecordImageSaveStyle.pagerOrder
 
@@ -122,9 +128,6 @@ struct ImageSaveStylePager: View {
             )
             .padding(.top, ImageSaveStylePagerTokens.dotsTopGap)
         }
-        .onAppear {
-            viewedPage = selection
-        }
 #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStylePage)) { note in
             // Capture helper: change VIEWED page only (does not write preference).
@@ -138,6 +141,12 @@ struct ImageSaveStylePager: View {
             ) {
                 viewedPage = styles[raw]
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStyleSelect)) { note in
+            // Capture helper: write SAVED selection (drives 「선택 완료」 chip).
+            guard let raw = note.userInfo?["index"] as? Int,
+                  styles.indices.contains(raw) else { return }
+            selection = styles[raw]
         }
 #endif
     }
@@ -161,7 +170,7 @@ struct ImageSaveStylePager: View {
                 }
                 Spacer(minLength: 0)
                 HStack {
-                    // Dark capsule keeps title readable on light map / Data Card tiles.
+                    // Dark pill + white text; lifted so Simple Color/Grey glass + 4.20 stay clear.
                     Text(viewedPage.label)
                         .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
                         .foregroundStyle(.white)
@@ -169,13 +178,16 @@ struct ImageSaveStylePager: View {
                         .padding(.vertical, 5)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(Color.black.opacity(0.48))
+                                .fill(ImageSaveStylePagerTokens.titlePill)
                         )
                         .accessibilityIdentifier("imageSaveStyleTitle")
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, ImageSaveStylePagerTokens.titleLeading)
-                .padding(.bottom, ImageSaveStylePagerTokens.titleBottom)
+                .padding(
+                    .bottom,
+                    ImageSaveStylePagerTokens.titleBottom + ImageSaveStylePagerTokens.titleBottomLift
+                )
             }
         }
     }
@@ -194,6 +206,7 @@ struct ImageSaveStylePager: View {
             Capsule(style: .continuous)
                 .fill(ImageSaveStylePagerTokens.selectGreen)
         )
+        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
         .accessibilityIdentifier("imageSaveStyleSelectedBadge")
     }
 

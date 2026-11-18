@@ -377,7 +377,11 @@ private struct DashboardLiveSessionPane: View {
     private var shouldSkipLocationPromptForScreenshots: Bool {
 #if DEBUG
         let env = ProcessInfo.processInfo.environment
-        return env["SANSAN_LAYOUT_PREVIEW"] != nil || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+        let args = ProcessInfo.processInfo.arguments
+        return env["SANSAN_LAYOUT_PREVIEW"] != nil
+            || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+            || args.contains("-UITestSkipLocationAuth")
+            || AppStoreScreenshotMode.current != nil
 #else
         false
 #endif

@@ -26,6 +26,8 @@ struct GeneralSettingsView: View {
     @ObservedObject private var appUpdateStatus = AppUpdateStatusObserver.shared
     @State private var shareMapOptions = HikingShareExportPreferences.mapOptions
     @State private var imageSaveStyle = HikingRecordImageSavePreferences.style
+    /// Pager viewed page — section footer follows this (not only saved selection).
+    @State private var viewedImageSaveStyle = HikingRecordImageSavePreferences.style
     @State private var showsSummitMarkers = HikingMapDisplayPreferences.showsSummitMarkers
     @State private var isKmVoiceGuidanceEnabled = KmVoiceGuidancePreferences.isEnabled
     @State private var isHeartRateFeatureEnabled = HeartRatePreferences.isFeatureEnabled
@@ -212,16 +214,19 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // v12 JW: no white Form plate — image-as-card L/R matches white list cards
-                // (leading/trailing 0 = same section content width as 「저장 · 공유 지도」).
-                ImageSaveStylePager(selection: $imageSaveStyle)
+                // v13: no white Form plate — image-as-card L/R matches white list cards;
+                // footer follows VIEWED page (swipe), not only saved preference.
+                ImageSaveStylePager(
+                    selection: $imageSaveStyle,
+                    viewedPage: $viewedImageSaveStyle
+                )
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } header: {
                 Text("이미지 저장 방식")
             } footer: {
-                Text(imageSaveStyle.footer)
+                Text(viewedImageSaveStyle.footer)
             }
             .id("imageSaveStyleSection")
 
@@ -424,6 +429,7 @@ struct GeneralSettingsView: View {
         imageSaveStylePreferences.syncFromStorage()
         shareMapOptions = shareExportPreferences.mapOptions
         imageSaveStyle = imageSaveStylePreferences.style
+        viewedImageSaveStyle = imageSaveStylePreferences.style
         showsSummitMarkers = mapDisplayPreferences.showsSummitMarkers
         kmVoiceGuidancePreferences.syncFromStorage()
         isKmVoiceGuidanceEnabled = kmVoiceGuidancePreferences.isEnabled

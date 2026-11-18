@@ -123,11 +123,15 @@ enum UITestMapCaptureHooks {
     }
 }
 
-/// Darwin notify → image-save-style pager page (`saveStylePage0`…`2`).
+/// Darwin notify → image-save-style pager page (`saveStylePage0`…`2`)
+/// and saved selection (`saveStyleSelect0`…`2`) for selected/unselected captures.
 enum UITestSaveStyleCaptureHooks {
     static let page0Name = "com.jw.sansan.uitest.saveStylePage0" as CFString
     static let page1Name = "com.jw.sansan.uitest.saveStylePage1" as CFString
     static let page2Name = "com.jw.sansan.uitest.saveStylePage2" as CFString
+    static let select0Name = "com.jw.sansan.uitest.saveStyleSelect0" as CFString
+    static let select1Name = "com.jw.sansan.uitest.saveStyleSelect1" as CFString
+    static let select2Name = "com.jw.sansan.uitest.saveStyleSelect2" as CFString
 
     private static var installed = false
 
@@ -143,6 +147,15 @@ enum UITestSaveStyleCaptureHooks {
         )
         CFNotificationCenterAddObserver(
             center, nil, uiTestSaveStylePage2Notify, page2Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStyleSelect0Notify, select0Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStyleSelect1Notify, select1Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStyleSelect2Notify, select2Name, nil, .deliverImmediately
         )
     }
 }
@@ -175,6 +188,16 @@ private func uiTestSaveStylePostPage(_ index: Int) {
     }
 }
 
+private func uiTestSaveStylePostSelect(_ index: Int) {
+    DispatchQueue.main.async {
+        NotificationCenter.default.post(
+            name: .uiTestSaveStyleSelect,
+            object: nil,
+            userInfo: ["index": index]
+        )
+    }
+}
+
 private let uiTestSaveStylePage0Notify: CFNotificationCallback = { _, _, _, _, _ in
     uiTestSaveStylePostPage(0)
 }
@@ -187,9 +210,22 @@ private let uiTestSaveStylePage2Notify: CFNotificationCallback = { _, _, _, _, _
     uiTestSaveStylePostPage(2)
 }
 
+private let uiTestSaveStyleSelect0Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostSelect(0)
+}
+
+private let uiTestSaveStyleSelect1Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostSelect(1)
+}
+
+private let uiTestSaveStyleSelect2Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostSelect(2)
+}
+
 extension Notification.Name {
     static let uiTestMapCaptureAction = Notification.Name("sansan.uiTestMapCaptureAction")
     static let uiTestSaveStylePage = Notification.Name("sansan.uiTestSaveStylePage")
+    static let uiTestSaveStyleSelect = Notification.Name("sansan.uiTestSaveStyleSelect")
 }
 
 #endif
