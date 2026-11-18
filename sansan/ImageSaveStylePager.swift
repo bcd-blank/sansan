@@ -4,8 +4,10 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v17b JW: shared crop SoT 314∶370 (raise H + SC/SG bias so name pill has
-//  clear air above 1km 13:53; DC bias keeps start dot + primary rows).
+//  v18 JW: shared crop SoT 314∶370. SC/SG bias +302 + logo omit_fill in
+//  preview thumbs (logo neither edge-clipped nor under name pill; title
+//  clear under pill). DC bias +258 clears endpoint halo; primary rows full.
+//  Page-dot gap SoT: dotsTopGap 22pt. Morph one-line chrome unchanged.
 //  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
 //  pre-framed per crop table (Android copies same numbers). 「선택 완료」
 //  saved-only; footer follows VIEWED. Preview thumbs only — save untouched.
@@ -30,7 +32,7 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v17b).
+    /// Settings preview framing — shared crop SoT with Android (v18).
     /// Aspect **314∶370**; at list width ≈ 370pt → card height ≈ **436pt**.
     static let cardAspectWidth: CGFloat = 314
     static let cardAspectHeight: CGFloat = 370
@@ -42,7 +44,7 @@ private enum ImageSaveStylePagerTokens {
     static let titleLeading: CGFloat = 12
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
-    /// Dots below card (v13) — gap so cell bottoms (Data Card 「21 m」) stay clear.
+    /// Dots below card — iPhone page-dot gap SoT (v18). Android must match 22pt.
     static let dotsTopGap: CGFloat = 22
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
@@ -233,7 +235,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶370 per shared crop SoT (see v17 CROP_SOT).
+            // Resources are pre-framed 314∶370 per shared crop SoT (see v18 CROP_SOT).
             // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
