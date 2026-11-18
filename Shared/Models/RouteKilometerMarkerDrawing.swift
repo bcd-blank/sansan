@@ -444,6 +444,51 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
+        drawCombinedMarkerVariant(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: centerOffset,
+            contentScale: contentScale,
+            style: .shareSummaryWhite,
+            in: cgContext
+        )
+    }
+
+    /// Data Card / detail-map export — blue #007AFF capsules (Android `DetailKmLabelDrawable`).
+    static func drawDetailCombinedMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
+        drawCombinedMarkerVariant(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: centerOffset,
+            contentScale: contentScale,
+            style: .detailBlue,
+            in: cgContext
+        )
+    }
+
+    private enum CombinedMarkerStyle {
+        case shareSummaryWhite
+        case detailBlue
+    }
+
+    private static func drawCombinedMarkerVariant(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        style: CombinedMarkerStyle,
+        in cgContext: CGContext
+    ) {
         guard RouteKilometerMarkerMetrics.combinedLabel(distance: distanceLabel, time: timeLabel) != nil else {
             return
         }
@@ -453,22 +498,37 @@ enum RouteKilometerMarkerDrawing {
         let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
         let timeFont = UIFont.systemFont(
             ofSize: fontSize,
-            weight: RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
+            weight: style == .detailBlue
+                ? .regular
+                : RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
         )
         let height = RouteKilometerMarkerMetrics.labelHeight * contentScale
         let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
         let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
 
+        let textColor: UIColor = {
+            switch style {
+            case .shareSummaryWhite: return RouteKilometerMarkerMetrics.inkUIColor
+            case .detailBlue: return RouteKilometerMarkerMetrics.detailLabelTextUIColor
+            }
+        }()
+        let timeColor: UIColor = {
+            switch style {
+            case .shareSummaryWhite: return RouteKilometerMarkerMetrics.ink2UIColor
+            case .detailBlue: return RouteKilometerMarkerMetrics.detailLabelTextUIColor
+            }
+        }()
+
         let parts: [(String, UIFont, UIColor)]
         if let distanceLabel, let timeLabel {
             parts = [
-                (distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor),
-                (timeLabel, timeFont, RouteKilometerMarkerMetrics.ink2UIColor)
+                (distanceLabel, kmFont, textColor),
+                (timeLabel, timeFont, timeColor)
             ]
         } else if let distanceLabel {
-            parts = [(distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor)]
+            parts = [(distanceLabel, kmFont, textColor)]
         } else if let timeLabel {
-            parts = [(timeLabel, timeFont, RouteKilometerMarkerMetrics.inkUIColor)]
+            parts = [(timeLabel, timeFont, textColor)]
         } else {
             return
         }
@@ -492,15 +552,39 @@ enum RouteKilometerMarkerDrawing {
         let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: height / 2)
 
         cgContext.saveGState()
-        // No capsule drop-shadow — share-summary AFTER must show white+green only.
-        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-        cgContext.setFillColor(UIColor.white.cgColor)
-        cgContext.addPath(path.cgPath)
-        cgContext.fillPath()
-        cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
-        cgContext.setLineWidth(max(0.5 * contentScale, 0.5))
-        cgContext.addPath(path.cgPath)
-        cgContext.strokePath()
+        switch style {
+        case .shareSummaryWhite:
+            // No capsule drop-shadow — share-summary AFTER must show white+green only.
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            cgContext.setFillColor(UIColor.white.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.fillPath()
+            cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
+            cgContext.setLineWidth(max(0.5 * contentScale, 0.5))
+            cgContext.addPath(path.cgPath)
+            cgContext.strokePath()
+        case .detailBlue:
+            let secondary = RouteKilometerMarkerMetrics.detailLabelShadowSecondary
+            cgContext.setShadow(
+                offset: CGSize(width: 0, height: secondary.y * contentScale),
+                blur: secondary.radius * contentScale,
+                color: secondary.color.cgColor
+            )
+            let primary = RouteKilometerMarkerMetrics.detailLabelShadowPrimary
+            cgContext.setShadow(
+                offset: CGSize(width: 0, height: primary.y * contentScale),
+                blur: primary.radius * contentScale,
+                color: primary.color.cgColor
+            )
+            cgContext.setFillColor(RouteKilometerMarkerMetrics.detailLabelFillUIColor.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.fillPath()
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            cgContext.setStrokeColor(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor.cgColor)
+            cgContext.setLineWidth(RouteKilometerMarkerMetrics.detailLabelStrokeWidth * contentScale)
+            cgContext.addPath(path.cgPath)
+            cgContext.strokePath()
+        }
         cgContext.restoreGState()
 
         var cursorX = capsuleRect.minX + padH

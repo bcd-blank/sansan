@@ -560,37 +560,14 @@ enum HikingRouteSnapshotGenerator {
             }
 
             // 목록 썸네일은 지도와 경로 선만 남깁니다.
-            if listThumbnailOnly || includesLiveDetailContent {
-                if !listThumbnailOnly, mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
-                    drawPinnedThumbnails(
-                        record: record,
-                        photos: record.mapPinnedPhotos,
-                        contentScale: contentScale,
-                        in: context.cgContext,
-                        canvasSize: canvasSize
-                    )
-                }
+            if listThumbnailOnly {
                 return
             }
 
-            if mapOptions.showsPhotoMarkers {
-                    drawPhotoMarkers(
-                        using: projector,
-                        photos: record.session.photos,
-                        contentScale: contentScale,
-                        in: context.cgContext
-                    )
-                }
-
-                if needsSummitOverlays(record: record) {
-                    drawSummitMarkers(
-                        using: projector,
-                        record: record,
-                        contentScale: contentScale,
-                        in: context.cgContext
-                    )
-                }
-
+            // Live detail tiles already include the route stroke/endpoints, but not
+            // export km capsules. Still bake distance/time labels when options ask
+            // (Data Card must match Android detail blue labels).
+            if includesLiveDetailContent {
                 if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
                     drawKilometerMarkers(
                         using: projector,
@@ -604,6 +581,49 @@ enum HikingRouteSnapshotGenerator {
                         in: context.cgContext
                     )
                 }
+                if mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
+                    drawPinnedThumbnails(
+                        record: record,
+                        photos: record.mapPinnedPhotos,
+                        contentScale: contentScale,
+                        in: context.cgContext,
+                        canvasSize: canvasSize
+                    )
+                }
+                return
+            }
+
+            if mapOptions.showsPhotoMarkers {
+                drawPhotoMarkers(
+                    using: projector,
+                    photos: record.session.photos,
+                    contentScale: contentScale,
+                    in: context.cgContext
+                )
+            }
+
+            if needsSummitOverlays(record: record) {
+                drawSummitMarkers(
+                    using: projector,
+                    record: record,
+                    contentScale: contentScale,
+                    in: context.cgContext
+                )
+            }
+
+            if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
+                drawKilometerMarkers(
+                    using: projector,
+                    record: record,
+                    coordinates: coordinates,
+                    showsDistance: mapOptions.showsDistanceMarkers,
+                    showsTime: mapOptions.showsTimeMarkers,
+                    contentScale: contentScale,
+                    appearance: appearance,
+                    canvasSize: canvasSize,
+                    in: context.cgContext
+                )
+            }
 
             drawEndpoints(
                 using: projector,
@@ -1142,10 +1162,13 @@ enum HikingRouteSnapshotGenerator {
                 preferredLeadingSide: marker.placesLabelOnLeadingSide
             )
         }
-        // Share-summary: final-spec v3 placement; clamp to canvas × side inset 24.
+        // Share-summary: white capsules + inset 24. Data Card / standard: detail blue
+        // capsules (Android DetailKmLabelDrawable parity).
         let clampBounds = appearance.usesShareSummaryChrome
-        let imageSize = clampBounds ? canvasSize : canvasSize
-        let sideInset = clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
+        let imageSize = canvasSize
+        let sideInset = clampBounds
+            ? ShareSummaryTokens.kmLabelBoundsInset * contentScale
+            : RouteKilometerMarkerMetrics.detailLabelSideInset * contentScale
         let routePolyline = coordinates.map { projector.point(for: $0) }
         // Title(+memo) bottom → forbidden band for km labels (titleLabelMinGap).
         let titleBlockBottom: CGFloat? = {
@@ -1157,31 +1180,57 @@ enum HikingRouteSnapshotGenerator {
         let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
         RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
         defer { RouteKilometerLabelPlacement.softTimeBudgetSeconds = previousBudget }
-        let placement = RouteKilometerLabelPlacement.placeSummary(
-            markers: requests,
-            endpointPoints: endpoints,
-            routePolyline: routePolyline,
-            contentScale: contentScale,
-            imageSize: imageSize,
-            sideInset: sideInset,
-            pathHalfWidth: ShareSummaryTokens.routeCasing / 2,
-            titleBlockBottom: titleBlockBottom
-        )
-        var shifts = placement.shifts
-        if shifts.isEmpty {
-            // Extreme fallback only when the solver returned nothing.
-            shifts = RouteKilometerMarkerDrawing.labelShifts(
+        var shifts: [Int: RouteKilometerLabelShift]
+        if appearance.usesShareSummaryChrome {
+            let placement = RouteKilometerLabelPlacement.placeSummary(
+                markers: requests,
+                endpointPoints: endpoints,
+                routePolyline: routePolyline,
+                contentScale: contentScale,
+                imageSize: imageSize,
+                sideInset: sideInset,
+                pathHalfWidth: ShareSummaryTokens.routeCasing / 2,
+                titleBlockBottom: titleBlockBottom
+            )
+            shifts = placement.shifts
+            if shifts.isEmpty {
+                shifts = RouteKilometerMarkerDrawing.labelShifts(
+                    for: requests,
+                    endpointPoints: endpoints,
+                    contentScale: contentScale,
+                    imageSize: imageSize,
+                    sideInset: sideInset,
+                    routePolyline: routePolyline,
+                    titleBlockBottom: titleBlockBottom
+                )
+            }
+        } else {
+            let placement = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
                 for: requests,
                 endpointPoints: endpoints,
                 contentScale: contentScale,
                 imageSize: imageSize,
-                sideInset: sideInset,
                 routePolyline: routePolyline,
-                titleBlockBottom: titleBlockBottom
+                preferModeStep: 1,
+                zoomDelta: 1
             )
+            shifts = placement.shifts
+            if shifts.isEmpty {
+                shifts = RouteKilometerMarkerDrawing.labelShifts(
+                    for: requests,
+                    endpointPoints: endpoints,
+                    contentScale: contentScale,
+                    imageSize: imageSize,
+                    sideInset: sideInset,
+                    routePolyline: routePolyline,
+                    pathHalfWidth: 4,
+                    titleBlockBottom: nil
+                )
+            }
         }
         // Spec §6/§7: dots for every km; labels only where the solver placed a shift
         // (5km mode → non-multiples stay dot-only). Never invent fallback label offsets.
+        let useDetailBlue = !appearance.usesShareSummaryChrome
         for request in requests {
             RouteKilometerMarkerDrawing.drawRouteDot(
                 at: request.routePoint,
@@ -1194,11 +1243,11 @@ enum HikingRouteSnapshotGenerator {
                 timeLabel: request.timeLabel,
                 contentScale: contentScale
             )
-            if clampBounds, imageSize.width > 1, size.width > 0 {
+            if imageSize.width > 1, size.width > 0 {
                 let centerX = request.routePoint.x + offset.x
                 let left = centerX - size.width / 2
                 let right = centerX + size.width / 2
-                let inset = ShareSummaryTokens.kmLabelBoundsInset * contentScale
+                let inset = sideInset
                 var flipped = offset
                 if right > imageSize.width - inset + 0.5 {
                     flipped.x = -abs(offset.x)
@@ -1213,19 +1262,32 @@ enum HikingRouteSnapshotGenerator {
                         endpointPoints: endpoints,
                         routePolyline: routePolyline,
                         contentScale: contentScale,
-                        pathHalfWidth: ShareSummaryTokens.routeCasing / 2
+                        pathHalfWidth: appearance.usesShareSummaryChrome
+                            ? ShareSummaryTokens.routeCasing / 2
+                            : 4
                     )
                     if hits.isZero { offset = flipped }
                 }
             }
-            RouteKilometerMarkerDrawing.drawCombinedMarker(
-                distanceLabel: request.distanceLabel,
-                timeLabel: request.timeLabel,
-                routePoint: request.routePoint,
-                centerOffset: offset,
-                contentScale: contentScale,
-                in: cgContext
-            )
+            if useDetailBlue {
+                RouteKilometerMarkerDrawing.drawDetailCombinedMarker(
+                    distanceLabel: request.distanceLabel,
+                    timeLabel: request.timeLabel,
+                    routePoint: request.routePoint,
+                    centerOffset: offset,
+                    contentScale: contentScale,
+                    in: cgContext
+                )
+            } else {
+                RouteKilometerMarkerDrawing.drawCombinedMarker(
+                    distanceLabel: request.distanceLabel,
+                    timeLabel: request.timeLabel,
+                    routePoint: request.routePoint,
+                    centerOffset: offset,
+                    contentScale: contentScale,
+                    in: cgContext
+                )
+            }
         }
     }
 

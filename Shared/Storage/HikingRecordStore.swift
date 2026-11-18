@@ -572,6 +572,9 @@ final class HikingRecordStore: ObservableObject {
         } else {
             let detailCanvas = fullScreen ? Self.detailShareMapCanvasProvider?() : nil
             let useLiveMap = HikingRouteSnapshotGenerator.allowsLiveDetailCapture?(record.id) ?? false
+            // Data Card full-screen save: prefer MKMapSnapshotter so km labels are
+            // always composited (SwiftUI live tiles previously skipped label bake).
+            let preferSwiftUI = !fullScreen
             image = await HikingRouteSnapshotGenerator.generate(
                 record: record,
                 style: .routeOnly,
@@ -579,8 +582,8 @@ final class HikingRecordStore: ObservableObject {
                 canvasSize: detailCanvas?.size,
                 pixelScale: detailCanvas?.pixelScale,
                 reservesLegalAttributionStrip: false,
-                allowLiveDetailCapture: useLiveMap,
-                preferSwiftUIMapTiles: true
+                allowLiveDetailCapture: useLiveMap && preferSwiftUI,
+                preferSwiftUIMapTiles: preferSwiftUI
             )
             includesOnScreenLogo = fullScreen && HikingRouteSnapshotGenerator.consumeCaptureIncludesOnScreenLogo()
         }

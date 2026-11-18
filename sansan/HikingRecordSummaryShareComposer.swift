@@ -75,6 +75,21 @@ enum HikingRecordSummaryShareComposer {
     }
 }
 
+// MARK: - Elev legend swatch (baked #FF8D28 — ImageRenderer/glass must not grey it)
+
+private enum ShareSummaryElevLegendSwatch {
+    static func image(width: CGFloat, height: CGFloat) -> UIImage {
+        let size = CGSize(width: max(width, 1), height: max(height, 1))
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            ShareSummaryTokens.chartElevUIColor.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
 // MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
 
 private enum ShareSummaryGlassBackdrop {
@@ -780,13 +795,15 @@ private struct SummaryInfoCard: View {
 
     private var legendRow: some View {
         HStack(spacing: 0) {
-            // App elev stroke #FF8D28 (match Android ChartElev) — explicit sRGB, not ink/hairline gray.
-            RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
-                .fill(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255))
-                .frame(
-                    width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
-                    height: ShareSummaryTokens.graphLegendElevHeight * scale
-                )
+            // Bake #FF8D28 via UIColor so ImageRenderer/glass cannot grey the swatch.
+            Image(uiImage: ShareSummaryElevLegendSwatch.image(
+                width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                height: max(ShareSummaryTokens.graphLegendElevHeight * scale, 2 * scale)
+            ))
+            .frame(
+                width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                height: max(ShareSummaryTokens.graphLegendElevHeight * scale, 2 * scale)
+            )
             ShareSummaryTypeBox.text(
                 "고도",
                 size: ShareSummaryTokens.legendSize * scale,
@@ -1093,7 +1110,7 @@ private struct SummaryChartCanvas: View {
                 // #FF8D28 @ 15% flat fill (JW / elevation-color-v2 white card).
                 context.fill(
                     area,
-                    with: .color(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255).opacity(ShareSummaryTokens.chartElevFillAlpha))
+                    with: .color(Color(ShareSummaryTokens.chartElevUIColor).opacity(ShareSummaryTokens.chartElevFillAlpha))
                 )
             }
 
@@ -1119,7 +1136,7 @@ private struct SummaryChartCanvas: View {
                 }
                 context.stroke(
                     line,
-                    with: .color(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255)),
+                    with: .color(Color(ShareSummaryTokens.chartElevUIColor)),
                     lineWidth: ShareSummaryTokens.graphElevWidth * scale
                 )
             }
