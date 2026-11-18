@@ -71,6 +71,11 @@ private struct SummaryMapSharePage: View {
 
     var body: some View {
         ZStack {
+            // MapPaper underlay: card inset sides/bottom must match dimmed map paper
+            // (never white / system gray behind the floating card).
+            Color(ShareSummaryTokens.mapPaperUIColor)
+                .frame(width: mapImage.size.width, height: mapImage.size.height)
+
             Image(uiImage: mapImage)
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
