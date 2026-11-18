@@ -71,7 +71,7 @@ private struct SummaryMapSharePage: View {
 
     var body: some View {
         ZStack {
-            // Concept A: ×0.9 toned snapshot stays full-bleed under/beside the floating
+            // Concept A: toned Simple Grey snapshot stays full-bleed under/beside the floating
             // card — never a solid MapPaper plate behind the card footprint.
             Image(uiImage: mapImage)
                 .resizable()

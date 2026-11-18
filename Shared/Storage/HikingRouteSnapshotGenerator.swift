@@ -386,7 +386,7 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Paper #D8D8D8 mode (×0.9 of prior #F0F0F0); roads → #E4E4E4; labels → #8B8B8E.
+    /// Simple Grey: paper #E4E4E4; roads → #EEEEEE; labels → #8B8B8E (contrast on E4).
     /// Apple MKMapSnapshotter cannot recolor style paints — luminance remap is the style-equivalent path (no overlay/multiply).
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
@@ -407,9 +407,9 @@ enum HikingRouteSnapshotGenerator {
         ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        let mapLabel = 139.0 // #8B8B8E (×0.9 of #9A9A9E)
-        let paper = 216.0    // #D8D8D8 (×0.9 of #F0F0F0)
-        let road = 228.0     // #E4E4E4 (×0.9 of #FDFDFD)
+        let mapLabel = 139.0 // #8B8B8E — tuned for #E4 paper
+        let paper = 228.0    // #E4E4E4
+        let road = 238.0     // #EEEEEE
         let count = width * height
         for i in 0..<count {
             let o = i * bytesPerPixel
@@ -424,9 +424,8 @@ enum HikingRouteSnapshotGenerator {
             } else if y > 0.985 {
                 out = road
             } else {
-                // Land collapses to paper with tiny variation so roads above paper still read.
-                let t = (y - 0.40) / (0.985 - 0.40)
-                out = paper - 2.0 + t * 4.0 // ≈214…218 around paper
+                // Flat Simple Grey land #E4E4E4; near-white roads stay in y>0.985 → #EEEEEE.
+                out = paper
             }
             let v = UInt8(max(0, min(255, out.rounded())))
             pixels[o] = v
