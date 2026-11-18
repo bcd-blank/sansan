@@ -93,14 +93,17 @@ private enum ShareSummaryElevLegendSwatch {
 // MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
 
 private enum ShareSummaryGlassBackdrop {
-    /// Shared with Android `ShareSummaryGlass` — same opacity/blur/highlight on both phones.
+    /// Locked to Android `ShareSummaryGlass` (v6 JW): same fill / wash / blur recipe.
     static let blurRadiusPt: CGFloat = 36
     static let glassFillAlpha: CGFloat = 0.38
     static let washAlpha: CGFloat = 0.12
     static let rimAlpha: CGFloat = 0.72
     static let catchLightAlpha: CGFloat = 0.55
+    /// Android `blurBitmap` downscale factor before stack-blur.
+    private static let blurDownscaleFactor: CGFloat = 4
 
-    /// Strong map blur + translucent fill + edge highlight, clipped to the card.
+    /// Map blur + translucent fill + edge highlight, clipped to the card.
+    /// Blur path mirrors Android: downscale → soft blur → upscale (not full-res CI blur).
     static func bake(
         mapImage: UIImage,
         cardRect: CGRect,
@@ -116,18 +119,13 @@ private enum ShareSummaryGlassBackdrop {
             width: cardRect.width * scale,
             height: cardRect.height * scale
         )
-        let pad = blurRadius * 3 * scale
+        let blurPx = blurRadius * scale
+        let pad = blurPx * 3
         let expanded = pixelRect.insetBy(dx: -pad, dy: -pad)
         let imageBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
         let crop = expanded.intersection(imageBounds)
         guard crop.width > 1, crop.height > 1,
               let cropped = cgImage.cropping(to: crop.integral) else { return nil }
-
-        let ciInput = CIImage(cgImage: cropped)
-        let filter = CIFilter.gaussianBlur()
-        filter.inputImage = ciInput.clampedToExtent()
-        filter.radius = Float(blurRadius * scale)
-        guard let blurred = filter.outputImage else { return nil }
 
         let localCard = CGRect(
             x: pixelRect.minX - crop.minX,
@@ -135,10 +133,8 @@ private enum ShareSummaryGlassBackdrop {
             width: pixelRect.width,
             height: pixelRect.height
         )
-        let focused = blurred.cropped(to: localCard)
-
-        let context = CIContext(options: [.useSoftwareRenderer: false])
-        guard let blurredCG = context.createCGImage(focused, from: localCard) else { return nil }
+        guard let blurredCG = androidMatchedBlur(cropped: cropped, blurPx: blurPx) else { return nil }
+        let blurredImage = UIImage(cgImage: blurredCG, scale: 1, orientation: .up)
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
@@ -151,8 +147,31 @@ private enum ShareSummaryGlassBackdrop {
             let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
             cg.saveGState()
             path.addClip()
-            UIImage(cgImage: blurredCG, scale: scale, orientation: .up)
-                .draw(in: bounds)
+            // Draw only the card slice of the padded blur buffer (pixel→point via /scale).
+            let srcPts = CGRect(
+                x: localCard.minX / scale,
+                y: localCard.minY / scale,
+                width: localCard.width / scale,
+                height: localCard.height / scale
+            )
+            if let slice = blurredImage.cgImage?.cropping(
+                to: CGRect(
+                    x: localCard.minX,
+                    y: localCard.minY,
+                    width: localCard.width,
+                    height: localCard.height
+                ).integral
+            ) {
+                UIImage(cgImage: slice, scale: scale, orientation: .up).draw(in: bounds)
+            } else {
+                blurredImage.draw(in: CGRect(
+                    x: -srcPts.minX,
+                    y: -srcPts.minY,
+                    width: CGFloat(blurredCG.width) / scale,
+                    height: CGFloat(blurredCG.height) / scale
+                ))
+            }
+            // Same two source-over white passes as Android `drawColor(GLASS_FILL)` + `drawColor(WASH)`.
             UIColor.white.withAlphaComponent(fillAlpha).setFill()
             path.fill()
             UIColor.white.withAlphaComponent(washAlpha).setFill()
@@ -171,6 +190,24 @@ private enum ShareSummaryGlassBackdrop {
             cg.strokePath()
             cg.restoreGState()
         }
+    }
+
+    /// Android `ShareSummaryGlass.blurBitmap`: 1/4 scale → soft blur → upscale.
+    private static func androidMatchedBlur(cropped: CGImage, blurPx: CGFloat) -> CGImage? {
+        let factor = blurDownscaleFactor
+        let full = CIImage(cgImage: cropped)
+        let small = full.transformed(by: CGAffineTransform(scaleX: 1 / factor, y: 1 / factor))
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = small.clampedToExtent()
+        // Android: sigma = (blurPx / factor).coerceIn(0.5…25) as stack-blur radius.
+        let sigma = max(0.5, min(25, blurPx / factor))
+        filter.radius = Float(sigma)
+        guard let blurredSmall = filter.outputImage else { return nil }
+        let up = blurredSmall.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
+        let extent = CGRect(x: 0, y: 0, width: cropped.width, height: cropped.height)
+        let focused = up.cropped(to: extent)
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        return context.createCGImage(focused, from: extent)
     }
 }
 
