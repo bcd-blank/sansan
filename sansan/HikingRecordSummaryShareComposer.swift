@@ -113,13 +113,13 @@ private struct SummaryMapSharePage: View {
             Color.clear.frame(height: ShareSummaryTokens.headerTitleGap * s)
 
             // Layout frame stays headerTitleLineHeight (headerBottom / title-gap).
-            // Paint lh +16pt + allowInkOverflow so Hangul 받침 / descenders aren't
-            // under-cropped by the fixed line box.
+            // Paint lh +8pt + allowInkOverflow (topLeading) so 받침 clear without
+            // shifting the left-under-logo slot.
             ShareSummaryTypeBox.text(
                 record.exportCardTitle,
                 size: ShareSummaryTokens.headerTitleSize * s,
                 weight: .bold,
-                lineHeight: (ShareSummaryTokens.headerTitleLineHeight + 16) * s,
+                lineHeight: (ShareSummaryTokens.headerTitleLineHeight + 8) * s,
                 color: ShareSummaryTokens.inkUIColor,
                 tracking: -0.2 * s,
                 frameHeight: ShareSummaryTokens.headerTitleLineHeight * s,
@@ -350,10 +350,14 @@ private enum ShareSummaryTypeBox {
         )
         let boxHeight = frameHeight ?? lineHeight
         if allowInkOverflow {
+            // topLeading: layout slot stays left under logo; taller paint may
+            // extend below only. `.leading` alone still vertically centers.
             Color.clear
-                .frame(height: boxHeight)
-                .overlay(alignment: .center) {
-                    label.fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: boxHeight, maxHeight: boxHeight, alignment: .topLeading)
+                .overlay(alignment: .topLeading) {
+                    label
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
         } else {
             label.frame(height: boxHeight, alignment: .center)
