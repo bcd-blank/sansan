@@ -4,11 +4,11 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v17 JW: shared crop SoT 314∶350 (raise H; SC/SG bias so name pill clears
-//  1km 13:53; DC bias keeps start dot + primary rows). NO card shadow/bg.
-//  Dots BELOW preview. Title TL + Morph TR; thumbs pre-framed per crop table
-//  (Android copies same numbers). 「선택 완료」 saved-only; footer follows VIEWED.
-//  Preview thumbs only — save/export path untouched.
+//  v17b JW: shared crop SoT 314∶370 (raise H + SC/SG bias so name pill has
+//  clear air above 1km 13:53; DC bias keeps start dot + primary rows).
+//  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
+//  pre-framed per crop table (Android copies same numbers). 「선택 완료」
+//  saved-only; footer follows VIEWED. Preview thumbs only — save untouched.
 //
 
 #if os(iOS)
@@ -30,10 +30,10 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v17).
-    /// Aspect **314∶350**; at list width ≈ 370pt → card height ≈ **412pt**.
+    /// Settings preview framing — shared crop SoT with Android (v17b).
+    /// Aspect **314∶370**; at list width ≈ 370pt → card height ≈ **436pt**.
     static let cardAspectWidth: CGFloat = 314
-    static let cardAspectHeight: CGFloat = 350
+    static let cardAspectHeight: CGFloat = 370
     static let pageCorner: CGFloat = 24
     /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
     static let titleSize: CGFloat = 17
@@ -233,7 +233,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶350 per shared crop SoT (see v17 CROP_SOT).
+            // Resources are pre-framed 314∶370 per shared crop SoT (see v17 CROP_SOT).
             // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
