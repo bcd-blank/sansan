@@ -509,10 +509,10 @@ enum HikingRouteSnapshotGenerator {
         let format = UIGraphicsImageRendererFormat()
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
-        // Simple Color: heal Apple legal strip by cloning map pixels (no grey/white plate —
-        // that read as a hole under the floating card). Grey style still uses map paper.
+        // Simple Color: heal bottom-leading gutter under the floating card (legal/dim plate
+        // read as a dark grey rectangle beside the rounded corner). No solid fill.
         let mapLayer: UIImage = appearance == .shareSummaryColor
-            ? RouteMapOverlayMetrics.coveringNativeAppleMapsAttribution(on: baseImage)
+            ? RouteMapOverlayMetrics.coveringShareSummaryColorCardGutter(on: baseImage)
             : baseImage
 
         return renderer.image { context in

@@ -117,19 +117,56 @@ enum RouteMapOverlayMetrics {
 
     /// 사진 저장 카드 — 좌하단 Apple Maps 표기를 지도 색으로 덮습니다(흰색 패치 회피).
     static func coveringNativeAppleMapsAttribution(on image: UIImage) -> UIImage {
+        coveringMapRegion(
+            on: image,
+            dest: nativeAttributionMaskRect(forCanvasSize: image.size),
+            sampleLift: 0
+        )
+    }
+
+    /// Simple Color: floating card inset + rounded corner leave a bottom-leading gutter
+    /// where a baked legal/dim plate reads as a dark grey rectangle under the card.
+    /// Heal a generous gutter by cloning map pixels from above the card — never a solid fill.
+    static func coveringShareSummaryColorCardGutter(on image: UIImage) -> UIImage {
         let size = image.size
-        let maskRect = nativeAttributionMaskRect(forCanvasSize: size)
-        guard maskRect.width > 1, maskRect.height > 1,
-              maskRect.minY > 2,
+        let w = size.width
+        // Match ShareSummaryTokens card inset/height/radius gutters (1080pt reference).
+        let cardInset = scaled(16, forCanvasWidth: w)
+        let cardHeight = scaled(324.5, forCanvasWidth: w)
+        let cardRadius = scaled(24, forCanvasWidth: w)
+        let strip = mkMapCaptureAttributionStripHeight(forMapViewWidth: w)
+        let gutterH = max(strip + cardInset + cardRadius, cardInset * 2 + cardRadius + 8)
+        let gutterW = min(w * 0.42, scaled(280, forCanvasWidth: w))
+        let dest = CGRect(
+            x: 0,
+            y: size.height - gutterH,
+            width: gutterW,
+            height: gutterH
+        )
+        // Lift sample above the floating card so we never clone the legal plate itself.
+        let sampleLift = cardInset + cardHeight + scaled(24, forCanvasWidth: w)
+        return coveringMapRegion(on: image, dest: dest, sampleLift: sampleLift)
+    }
+
+    /// Clone map pixels into `dest`. `sampleLift` shifts the sample band upward from dest.
+    private static func coveringMapRegion(
+        on image: UIImage,
+        dest: CGRect,
+        sampleLift: CGFloat
+    ) -> UIImage {
+        let size = image.size
+        guard dest.width > 1, dest.height > 1,
+              dest.minY > 2,
               let source = image.cgImage else {
             return image
         }
 
-        let sampleHeight = min(maskRect.height, maskRect.minY)
+        let sampleHeight = min(dest.height, max(dest.minY - 2, 1))
+        let sampleTop = max(0, dest.minY - sampleLift - sampleHeight)
         let sampleRect = CGRect(
-            x: maskRect.minX,
-            y: maskRect.minY - sampleHeight,
-            width: maskRect.width,
+            x: dest.minX,
+            y: sampleTop,
+            width: dest.width,
             height: sampleHeight
         )
         let pixelSample = CGRect(
@@ -139,7 +176,8 @@ enum RouteMapOverlayMetrics {
             height: sampleRect.height * image.scale
         ).integral
 
-        guard let sampleCrop = source.cropping(to: pixelSample) else {
+        guard pixelSample.width > 1, pixelSample.height > 1,
+              let sampleCrop = source.cropping(to: pixelSample) else {
             return maskingNativeAppleMapsAttribution(on: image)
         }
 
@@ -153,12 +191,6 @@ enum RouteMapOverlayMetrics {
         format.scale = image.scale
         format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let dest = CGRect(
-            x: maskRect.minX,
-            y: maskRect.maxY - sampleHeight,
-            width: maskRect.width,
-            height: sampleHeight
-        )
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
             sampleImage.draw(in: dest)
