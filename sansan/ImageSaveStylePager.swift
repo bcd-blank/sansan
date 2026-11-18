@@ -7,10 +7,7 @@
 //  v14 JW: image-as-card (radius+shadow, list-aligned width, 314∶220 height);
 //  option title OVERLAPS preview — dark pill top-LEADING (same Y/margin as chip);
 //  「선택 완료」 top-trailing only on saved style; section footer follows VIEWED page.
-//  Collapse UIPageControl gutter (~40pt) so clipped preview has no pale strip.
-//
-//  Overlays are drawn ABOVE TabView (not inside pages) — UIPageViewController
-//  hosting drops in-page SwiftUI overlays on some OS builds.
+//  Horizontal ScrollView paging; dots ON the card — no Form pale band under preview.
 //
 
 #if os(iOS)
@@ -44,10 +41,12 @@ private enum ImageSaveStylePagerTokens {
     static let titleLeading: CGFloat = 12
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
-    /// UIPageViewController reserves page-control height even with `.never` (~40pt pale strip).
-    static let pageControlGutter: CGFloat = 40
-    static let dotsTopGap: CGFloat = 12
-    static let cardShadow = Color.black.opacity(0.14)
+    /// Dots sit ON the card (bottom inset) — no Form gutter under the preview.
+    static let dotsBottomInset: CGFloat = 10
+    /// Hairline shadow only — large blur read as a pale band under the card.
+    static let cardShadow = Color.black.opacity(0.08)
+    static let cardShadowRadius: CGFloat = 1
+    static let cardShadowY: CGFloat = 0.5
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)
@@ -70,67 +69,79 @@ struct ImageSaveStylePager: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                TabView(selection: viewedBinding) {
-                    ForEach(styles) { style in
-                        pageImage(for: style)
-                            .tag(style)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(style.label)
-                            .accessibilityAddTraits(style == selection ? [.isSelected, .isButton] : .isButton)
-                            .accessibilityValue(style == selection ? "선택 완료" : "")
-                            .accessibilityHint("탭하면 이 저장 방식으로 선택합니다. 스와이프는 미리보기만 바꿉니다.")
+        ZStack {
+            // Opaque plate — preview PNGs are translucent; without this, Form list
+            // ghosts through the glass and reads as a pale strip under the card.
+            RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous)
+                .fill(Color.white)
+
+            // ScrollView paging — no UIPageControl gutter under the image.
+            GeometryReader { geo in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(styles) { style in
+                            pageImage(for: style)
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .id(style)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(style.label)
+                                .accessibilityAddTraits(style == selection ? [.isSelected, .isButton] : .isButton)
+                                .accessibilityValue(style == selection ? "선택 완료" : "")
+                                .accessibilityHint("탭하면 이 저장 방식으로 선택합니다. 스와이프는 미리보기만 바꿉니다.")
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                // Fill the reserved page-control gutter so the clipped card has no pale strip.
-                .padding(.bottom, -ImageSaveStylePagerTokens.pageControlGutter)
-
-                // Drawn above TabView so chip/title always paint (UIPageViewController-safe).
-                cardOverlays
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: viewedPageScrollID)
             }
-            .aspectRatio(
-                ImageSaveStylePagerTokens.cardAspectWidth / ImageSaveStylePagerTokens.cardAspectHeight,
-                contentMode: .fit
-            )
-            .frame(maxWidth: .infinity)
-            // Flatten overlays into the card before clip so title/chip are not dropped.
-            .compositingGroup()
-            .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
-            .shadow(
-                color: ImageSaveStylePagerTokens.cardShadow,
-                radius: 12,
-                x: 0,
-                y: 6
-            )
-            .contentShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
-            .onTapGesture {
-                selection = viewedPage
-            }
-            .accessibilityLabel("이미지 저장 방식")
-            .accessibilityIdentifier("imageSaveStylePager")
 
-            PillSpringDots(
-                count: styles.count,
-                selectedIndex: viewedIndex,
-                onSelect: { index in
-                    guard styles.indices.contains(index) else { return }
-                    withAnimation(
-                        .interpolatingSpring(
-                            stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
-                            damping: ImageSaveStylePagerTokens.springPage.damping
-                        )
-                    ) {
-                        viewedPage = styles[index]
-                    }
-                },
-                labels: styles.map(\.label)
-            )
-            .padding(.top, ImageSaveStylePagerTokens.dotsTopGap)
+            cardOverlays
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+
+            // Dots ON the card — eliminates Form pale band under the preview.
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                PillSpringDots(
+                    count: styles.count,
+                    selectedIndex: viewedIndex,
+                    onSelect: { index in
+                        guard styles.indices.contains(index) else { return }
+                        withAnimation(
+                            .interpolatingSpring(
+                                stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
+                                damping: ImageSaveStylePagerTokens.springPage.damping
+                            )
+                        ) {
+                            viewedPage = styles[index]
+                        }
+                    },
+                    labels: styles.map(\.label)
+                )
+                .padding(.bottom, ImageSaveStylePagerTokens.dotsBottomInset)
+            }
         }
+        .aspectRatio(
+            ImageSaveStylePagerTokens.cardAspectWidth / ImageSaveStylePagerTokens.cardAspectHeight,
+            contentMode: .fit
+        )
+        .frame(maxWidth: .infinity)
+        .compositingGroup()
+        .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
+        .shadow(
+            color: ImageSaveStylePagerTokens.cardShadow,
+            radius: ImageSaveStylePagerTokens.cardShadowRadius,
+            x: 0,
+            y: ImageSaveStylePagerTokens.cardShadowY
+        )
+        .contentShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
+        .onTapGesture {
+            selection = viewedPage
+        }
+        .accessibilityLabel("이미지 저장 방식")
+        .accessibilityIdentifier("imageSaveStylePager")
 #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStylePage)) { note in
             // Capture helper: change VIEWED page only (does not write preference).
@@ -154,15 +165,31 @@ struct ImageSaveStylePager: View {
 #endif
     }
 
+    /// ScrollPosition id binding — optional so programmatic page jumps stay in sync.
+    private var viewedPageScrollID: Binding<HikingRecordImageSaveStyle?> {
+        Binding(
+            get: { viewedPage },
+            set: { newValue in
+                guard let newValue else { return }
+                withAnimation(
+                    .interpolatingSpring(
+                        stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
+                        damping: ImageSaveStylePagerTokens.springPage.damping
+                    )
+                ) {
+                    viewedPage = newValue
+                }
+            }
+        )
+    }
+
     private var cardOverlays: some View {
         ZStack {
-            // Bottom glass scrim + light top scrim for top-leading title legibility.
+            // Light top scrim only — title is top-leading; avoid heavy bottom wash.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.28), location: 0),
-                    .init(color: .clear, location: 0.22),
-                    .init(color: .clear, location: 0.42),
-                    .init(color: .black.opacity(0.50), location: 1),
+                    .init(color: .black.opacity(0.30), location: 0),
+                    .init(color: .clear, location: 0.28),
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -170,7 +197,7 @@ struct ImageSaveStylePager: View {
 
             VStack {
                 HStack(alignment: .top) {
-                    // v14: top-leading dark pill — clear of OpenFreeMap attribution + glass/4.20.
+                    // v14: top-leading dark pill — same Y/inset as Morph chip; clear of glass/4.20.
                     Text(viewedPage.label)
                         .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
                         .foregroundStyle(.white)
@@ -226,21 +253,6 @@ struct ImageSaveStylePager: View {
         }
     }
 
-    private var viewedBinding: Binding<HikingRecordImageSaveStyle> {
-        Binding(
-            get: { viewedPage },
-            set: { newValue in
-                withAnimation(
-                    .interpolatingSpring(
-                        stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
-                        damping: ImageSaveStylePagerTokens.springPage.damping
-                    )
-                ) {
-                    viewedPage = newValue
-                }
-            }
-        )
-    }
 }
 
 /// Offscreen export / snapshot helper (real sample thumb).
@@ -332,7 +344,9 @@ private struct PillSpringDots: View {
                 }
             }
         }
-        .frame(width: trackWidth, height: 20, alignment: .leading)
+        // Height = dotSize only — a taller frame padded Form grey above the dots
+        // and reintroduced the pale strip under the card.
+        .frame(width: trackWidth, height: ImageSaveStylePagerTokens.dotSize, alignment: .leading)
         .frame(maxWidth: .infinity)
         .onAppear { snapPill(to: selectedIndex, animated: false) }
         .onChange(of: selectedIndex) { old, new in
