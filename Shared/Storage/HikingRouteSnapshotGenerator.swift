@@ -1080,6 +1080,12 @@ enum HikingRouteSnapshotGenerator {
         let imageSize = clampBounds ? canvasSize : canvasSize
         let sideInset = clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
         let routePolyline = coordinates.map { projector.point(for: $0) }
+        // Title(+memo) bottom → forbidden band for km labels (titleLabelMinGap).
+        let titleBlockBottom: CGFloat? = {
+            guard appearance == .shareSummary else { return nil }
+            let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvasSize.width)
+            return ShareSummaryTokens.headerBottom(memoLineCount: memoLines) * contentScale
+        }()
         // Snapshot is offline — allow full search under the 300ms interactive budget.
         let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
         RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
@@ -1091,7 +1097,8 @@ enum HikingRouteSnapshotGenerator {
             contentScale: contentScale,
             imageSize: imageSize,
             sideInset: sideInset,
-            pathHalfWidth: ShareSummaryTokens.routeCasing / 2
+            pathHalfWidth: ShareSummaryTokens.routeCasing / 2,
+            titleBlockBottom: titleBlockBottom
         )
         var shifts = placement.shifts
         if shifts.isEmpty {
@@ -1102,7 +1109,8 @@ enum HikingRouteSnapshotGenerator {
                 contentScale: contentScale,
                 imageSize: imageSize,
                 sideInset: sideInset,
-                routePolyline: routePolyline
+                routePolyline: routePolyline,
+                titleBlockBottom: titleBlockBottom
             )
         }
         // Spec §6/§7: dots for every km; labels only where the solver placed a shift

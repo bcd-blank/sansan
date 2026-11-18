@@ -85,6 +85,9 @@ enum ShareSummaryTokens {
     static let headerTitleLineHeight: CGFloat = 24
     /// Memo-absent header bottom (top + row1 + titleGap + title).
     static let headerBottomNoMemo: CGFloat = 104
+    /// Minimum vertical gap (design pt) between title(+memo) bottom and any km-label box top.
+    /// Locked for Android 1:1 (pt=dp). See docs/label-placement/crossing-fix/title-gap/GAP.md.
+    static let titleLabelMinGap: CGFloat = 10
 
     // MARK: Memo
 

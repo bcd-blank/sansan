@@ -127,6 +127,8 @@ enum RouteKilometerLabelPlacement {
         var allowFiveKmFallback: Bool
         /// Half-width of drawn route (casing/halo outer edge) in **screen pt** before × contentScale.
         var pathHalfWidth: CGFloat
+        /// Canvas Y: km-label box tops must stay ≥ this (title/memo bottom + `titleLabelMinGap`).
+        var titleForbiddenMaxY: CGFloat?
     }
 
     /// Per-capture collision counts in screen coordinates (pt). Complete only when all are 0.
@@ -151,8 +153,14 @@ enum RouteKilometerLabelPlacement {
         contentScale: CGFloat,
         imageSize: CGSize,
         sideInset: CGFloat,
-        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2
+        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2,
+        /// Title(+memo) block bottom in canvas coordinates (already × contentScale).
+        titleBlockBottom: CGFloat? = nil,
+        titleLabelMinGap: CGFloat = ShareSummaryTokens.titleLabelMinGap
     ) -> RouteKilometerPlacementResult {
+        let titleForbiddenMaxY: CGFloat? = titleBlockBottom.map {
+            $0 + titleLabelMinGap * contentScale
+        }
         let ctx = Context(
             markers: markers,
             endpointPoints: endpointPoints,
@@ -164,7 +172,8 @@ enum RouteKilometerLabelPlacement {
             edgeInset: sideInset,
             bottomInset: sideInset,
             allowFiveKmFallback: true,
-            pathHalfWidth: pathHalfWidth
+            pathHalfWidth: pathHalfWidth,
+            titleForbiddenMaxY: titleForbiddenMaxY
         )
         return place(context: ctx, preferModeStep: 1, stopAfterStage: nil)
     }
@@ -196,7 +205,8 @@ enum RouteKilometerLabelPlacement {
             edgeInset: 8,
             bottomInset: 8,
             allowFiveKmFallback: true,
-            pathHalfWidth: pathHalfWidth
+            pathHalfWidth: pathHalfWidth,
+            titleForbiddenMaxY: nil
         )
         // F3: zoom change → always rejudge from 1km.
         if abs(zoomDelta) > zoomHysteresis {
@@ -610,6 +620,11 @@ enum RouteKilometerLabelPlacement {
         )
         if rect.minX < bounds.minX - 0.5 || rect.maxX > bounds.maxX + 0.5
             || rect.minY < bounds.minY - 0.5 || rect.maxY > bounds.maxY + 0.5 {
+            return false
+        }
+
+        // Forbidden band under title(+memo): reject any capsule whose top enters the gap.
+        if let maxY = context.titleForbiddenMaxY, rect.minY < maxY - 0.5 {
             return false
         }
 

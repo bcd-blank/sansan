@@ -22,7 +22,8 @@ enum RouteKilometerMarkerDrawing {
         imageSize: CGSize = .zero,
         sideInset: CGFloat = 0,
         routePolyline: [CGPoint] = [],
-        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2
+        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2,
+        titleBlockBottom: CGFloat? = nil
     ) -> [Int: RouteKilometerLabelShift] {
         guard !markers.isEmpty else { return [:] }
         let size = imageSize.width > 1 ? imageSize : CGSize(width: 2000, height: 2000)
@@ -33,7 +34,8 @@ enum RouteKilometerMarkerDrawing {
             contentScale: contentScale,
             imageSize: size,
             sideInset: sideInset,
-            pathHalfWidth: pathHalfWidth
+            pathHalfWidth: pathHalfWidth,
+            titleBlockBottom: titleBlockBottom
         )
         if !result.shifts.isEmpty { return result.shifts }
         // Extreme fallback: legacy L/R nudges so drawing never blanks all labels.

@@ -58,6 +58,50 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.headerBottom(memoLineCount: 3), 163, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.memoLineCount(nil, canvasWidth: 430), 0)
         XCTAssertEqual(ShareSummaryTokens.memoLineCount("  ", canvasWidth: 430), 0)
+        XCTAssertEqual(ShareSummaryTokens.titleLabelMinGap, 10, accuracy: 0.01)
+    }
+
+    func testTitleLabelMinGapRejectsCandidatesInForbiddenBand() {
+        // Dot just below title bottom; upward/near-title candidates must clear +10pt gap.
+        let titleBottom: CGFloat = ShareSummaryTokens.headerBottom(memoLineCount: 0)
+        let request = RouteKilometerLabelRequest(
+            kilometer: 1,
+            distanceLabel: "1km",
+            timeLabel: "13:55",
+            routePoint: CGPoint(x: 120, y: titleBottom + 28),
+            preferredLeadingSide: false
+        )
+        let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
+        RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
+        defer { RouteKilometerLabelPlacement.softTimeBudgetSeconds = previousBudget }
+        let result = RouteKilometerLabelPlacement.placeSummary(
+            markers: [request],
+            endpointPoints: [CGPoint(x: 80, y: titleBottom + 40), CGPoint(x: 300, y: 400)],
+            routePolyline: [
+                CGPoint(x: 80, y: titleBottom + 40),
+                CGPoint(x: 120, y: titleBottom + 28),
+                CGPoint(x: 200, y: titleBottom + 80)
+            ],
+            contentScale: 1,
+            imageSize: CGSize(width: 430, height: 764),
+            sideInset: 24,
+            titleBlockBottom: titleBottom
+        )
+        XCTAssertFalse(result.shifts.isEmpty)
+        let shift = try! XCTUnwrap(result.shifts[1])
+        let size = RouteKilometerMarkerDrawing.capsuleSize(
+            distanceLabel: "1km",
+            timeLabel: "13:55",
+            contentScale: 1
+        )
+        let centerY = request.routePoint.y + shift.centerOffset.y
+        let boxTop = centerY - size.height / 2
+        let minTop = titleBottom + ShareSummaryTokens.titleLabelMinGap
+        XCTAssertGreaterThanOrEqual(
+            boxTop,
+            minTop - 0.5,
+            "1km box top \(boxTop) must clear titleBottom+gap \(minTop)"
+        )
     }
 
     func testMapInsetsIncludeMarkerRadius() {
