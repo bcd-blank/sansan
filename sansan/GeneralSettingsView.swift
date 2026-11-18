@@ -212,7 +212,12 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                // v12 JW: no white Form plate — image-as-card L/R matches white list cards
+                // (leading/trailing 0 = same section content width as 「저장 · 공유 지도」).
                 ImageSaveStylePager(selection: $imageSaveStyle)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } header: {
                 Text("이미지 저장 방식")
             } footer: {
