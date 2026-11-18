@@ -71,11 +71,8 @@ private struct SummaryMapSharePage: View {
 
     var body: some View {
         ZStack {
-            // MapPaper underlay: card inset sides/bottom must match dimmed map paper
-            // (never white / system gray behind the floating card).
-            Color(ShareSummaryTokens.mapPaperUIColor)
-                .frame(width: mapImage.size.width, height: mapImage.size.height)
-
+            // Concept A: ×0.9 toned snapshot stays full-bleed under/beside the floating
+            // card — never a solid MapPaper plate behind the card footprint.
             Image(uiImage: mapImage)
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
@@ -88,8 +85,6 @@ private struct SummaryMapSharePage: View {
             mapsAttribution
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Concept A: muted gray map stays full-bleed to canvas bottom; only the
-            // floating card itself is white (no white hinter under/beside the card).
             SummaryInfoCard(record: record, scale: s)
                 .padding(.horizontal, ShareSummaryTokens.cardInset * s)
                 .padding(.bottom, ShareSummaryTokens.cardInset * s)
@@ -637,8 +632,9 @@ private struct SummaryInfoCard: View {
 
     private var legendRow: some View {
         HStack(spacing: 0) {
+            // App elev stroke #FF8D28 (match Android ChartElev) — explicit sRGB, not ink/hairline gray.
             RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
-                .fill(Color(ShareSummaryTokens.chartElevUIColor))
+                .fill(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255))
                 .frame(
                     width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
                     height: ShareSummaryTokens.graphLegendElevHeight * scale
@@ -949,7 +945,7 @@ private struct SummaryChartCanvas: View {
                 // #FF8D28 @ 15% flat fill (JW / elevation-color-v2 white card).
                 context.fill(
                     area,
-                    with: .color(Color(ShareSummaryTokens.chartElevUIColor).opacity(ShareSummaryTokens.chartElevFillAlpha))
+                    with: .color(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255).opacity(ShareSummaryTokens.chartElevFillAlpha))
                 )
             }
 
@@ -975,7 +971,7 @@ private struct SummaryChartCanvas: View {
                 }
                 context.stroke(
                     line,
-                    with: .color(Color(ShareSummaryTokens.chartElevUIColor)),
+                    with: .color(Color(red: 255 / 255, green: 141 / 255, blue: 40 / 255)),
                     lineWidth: ShareSummaryTokens.graphElevWidth * scale
                 )
             }
