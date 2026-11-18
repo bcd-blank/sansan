@@ -4,10 +4,9 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v18g JW: shared crop SoT 314∶510. SC/SG bias +32 + logo omit_fill;
-//  DC bias +308 (y0 kept 250 — tip/1km tops unchanged). Bottom fade 96px
-//  shared both phones so DC row2 corners + SG/SC glass foot clear.
-//  Page-dot gap SoT: dotsTopGap 22pt. Morph unchanged.
+//  v18h JW: shared crop SoT 314∶510. SC/SG bias +32 + logo omit_fill;
+//  DC bias +308 (y0=250 tops unchanged). DC thumb hard-cut in gutter
+//  above 걸음수 (no tertiary fade). Page-dot 22pt. Morph unchanged.
 //  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
 //  pre-framed per crop table (Android copies same numbers). 「선택 완료」
 //  saved-only; footer follows VIEWED. Preview thumbs only — save untouched.
@@ -32,7 +31,7 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v18g).
+    /// Settings preview framing — shared crop SoT with Android (v18h).
     /// Aspect **314∶510**; at list width ≈ 370pt → card height ≈ **601pt**.
     static let cardAspectWidth: CGFloat = 314
     static let cardAspectHeight: CGFloat = 510
