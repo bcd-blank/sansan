@@ -31,8 +31,8 @@ enum HikingRecordCardLayout {
     static let cardGridSpacing: CGFloat = 8
     /// 기록 상세 스크롤 화면 지도 높이 상한 (뷰포트 대비).
     static let detailMapMaxViewportFraction: CGFloat = 0.48
-    /// ImageRenderer 높이 산정 여유 (차트 x축·푸터 잘림 방지).
-    static let exportContentHeightBuffer: CGFloat = 36
+    /// ImageRenderer 높이 산정 여유. v7: 0 — Android wrap-content에 맞춤 (하단 empty buffer 제거).
+    static let exportContentHeightBuffer: CGFloat = 0
     /// 공유·저장 카드 상단 제목 — 본문 한 줄 높이.
     static let exportTitlePrimarySize: CGFloat = 20
     static let exportTitleSecondarySize: CGFloat = 12

@@ -93,34 +93,36 @@ private enum ShareSummaryElevLegendSwatch {
 // MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
 
 private enum ShareSummaryGlassBackdrop {
-    /// Locked to Android `ShareSummaryGlass` (v6 JW): same fill / wash / blur recipe.
+    /// Android `ShareSummaryGlass` code + v7 measured plate tune.
+    /// Bake in **pixel space** with `designScale = widthPx/430` + stack-blur.
+    /// Fill/wash lowered from 0.38/0.12 — mid-card plate was ~+4.5 L vs Android (too milky).
     static let blurRadiusPt: CGFloat = 36
-    static let glassFillAlpha: CGFloat = 0.38
-    static let washAlpha: CGFloat = 0.12
+    static let glassFillAlpha: CGFloat = 0.30
+    static let washAlpha: CGFloat = 0.09
     static let rimAlpha: CGFloat = 0.72
     static let catchLightAlpha: CGFloat = 0.55
-    /// Android `blurBitmap` downscale factor before stack-blur.
-    private static let blurDownscaleFactor: CGFloat = 4
+    private static let blurDownscaleFactor = 4
 
     /// Map blur + translucent fill + edge highlight, clipped to the card.
-    /// Blur path mirrors Android: downscale → soft blur → upscale (not full-res CI blur).
+    /// Pixel recipe mirrors Android `ShareSummaryGlass.bake` (not point×nativeScale).
     static func bake(
         mapImage: UIImage,
         cardRect: CGRect,
         cornerRadius: CGFloat
     ) -> UIImage? {
-        let blurRadius = blurRadiusPt
-        let fillAlpha = glassFillAlpha
         guard let cgImage = mapImage.cgImage else { return nil }
-        let scale = mapImage.scale
+        let imageScale = max(mapImage.scale, 1)
+        let widthPx = mapImage.size.width * imageScale
+        // Android: `scale = ShareSummaryTokens.scale(widthPx)` = widthPx / 430.
+        let designScale = widthPx / ShareSummaryTokens.canvasWidth
         let pixelRect = CGRect(
-            x: cardRect.minX * scale,
-            y: cardRect.minY * scale,
-            width: cardRect.width * scale,
-            height: cardRect.height * scale
+            x: cardRect.minX * imageScale,
+            y: cardRect.minY * imageScale,
+            width: cardRect.width * imageScale,
+            height: cardRect.height * imageScale
         )
-        let blurPx = blurRadius * scale
-        let pad = blurPx * 3
+        let blurPx = blurRadiusPt * designScale
+        let pad = ceil(blurPx * 3)
         let expanded = pixelRect.insetBy(dx: -pad, dy: -pad)
         let imageBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
         let crop = expanded.intersection(imageBounds)
@@ -132,47 +134,27 @@ private enum ShareSummaryGlassBackdrop {
             y: pixelRect.minY - crop.minY,
             width: pixelRect.width,
             height: pixelRect.height
-        )
-        guard let blurredCG = androidMatchedBlur(cropped: cropped, blurPx: blurPx) else { return nil }
-        let blurredImage = UIImage(cgImage: blurredCG, scale: 1, orientation: .up)
+        ).integral
+        guard localCard.width > 1, localCard.height > 1,
+              let blurredCG = androidMatchedBlur(cropped: cropped, blurPx: blurPx),
+              let slice = blurredCG.cropping(to: localCard) else { return nil }
 
+        let cardW = Int(localCard.width)
+        let cardH = Int(localCard.height)
+        let cornerPx = cornerRadius * imageScale
         let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
+        format.scale = 1
         format.opaque = false
-        let size = cardRect.size
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { ctx in
+        let pixelSize = CGSize(width: cardW, height: cardH)
+        let plate = UIGraphicsImageRenderer(size: pixelSize, format: format).image { ctx in
             let cg = ctx.cgContext
-            let bounds = CGRect(origin: .zero, size: size)
-            let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+            let bounds = CGRect(origin: .zero, size: pixelSize)
+            let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerPx)
             cg.saveGState()
             path.addClip()
-            // Draw only the card slice of the padded blur buffer (pixel→point via /scale).
-            let srcPts = CGRect(
-                x: localCard.minX / scale,
-                y: localCard.minY / scale,
-                width: localCard.width / scale,
-                height: localCard.height / scale
-            )
-            if let slice = blurredImage.cgImage?.cropping(
-                to: CGRect(
-                    x: localCard.minX,
-                    y: localCard.minY,
-                    width: localCard.width,
-                    height: localCard.height
-                ).integral
-            ) {
-                UIImage(cgImage: slice, scale: scale, orientation: .up).draw(in: bounds)
-            } else {
-                blurredImage.draw(in: CGRect(
-                    x: -srcPts.minX,
-                    y: -srcPts.minY,
-                    width: CGFloat(blurredCG.width) / scale,
-                    height: CGFloat(blurredCG.height) / scale
-                ))
-            }
+            UIImage(cgImage: slice, scale: 1, orientation: .up).draw(in: bounds)
             // Same two source-over white passes as Android `drawColor(GLASS_FILL)` + `drawColor(WASH)`.
-            UIColor.white.withAlphaComponent(fillAlpha).setFill()
+            UIColor.white.withAlphaComponent(glassFillAlpha).setFill()
             path.fill()
             UIColor.white.withAlphaComponent(washAlpha).setFill()
             path.fill()
@@ -180,34 +162,222 @@ private enum ShareSummaryGlassBackdrop {
 
             cg.saveGState()
             path.addClip()
-            // 1pt rim (matches Android ShareSummaryGlass stroke), independent of @3x scale.
-            cg.setLineWidth(1)
+            // Android: strokeWidth = max(1f, scale) in **pixels**.
+            let stroke = max(1, designScale)
+            cg.setLineWidth(stroke)
             cg.setStrokeColor(UIColor.white.withAlphaComponent(rimAlpha).cgColor)
             cg.stroke(bounds.insetBy(dx: 0.5, dy: 0.5))
             cg.setStrokeColor(UIColor.white.withAlphaComponent(catchLightAlpha).cgColor)
-            cg.move(to: CGPoint(x: cornerRadius * 0.35, y: 0.75))
-            cg.addLine(to: CGPoint(x: size.width - cornerRadius * 0.35, y: 0.75))
+            cg.move(to: CGPoint(x: cornerPx * 0.35, y: 0.75))
+            cg.addLine(to: CGPoint(x: CGFloat(cardW) - cornerPx * 0.35, y: 0.75))
             cg.strokePath()
             cg.restoreGState()
         }
+        // Present at map point size (ImageRenderer scale = imageScale).
+        guard let plateCG = plate.cgImage else { return plate }
+        return UIImage(cgImage: plateCG, scale: imageScale, orientation: .up)
     }
 
-    /// Android `ShareSummaryGlass.blurBitmap`: 1/4 scale → soft blur → upscale.
+    /// Android `ShareSummaryGlass.blurBitmap`: 1/4 scale → stack-blur → upscale.
     private static func androidMatchedBlur(cropped: CGImage, blurPx: CGFloat) -> CGImage? {
         let factor = blurDownscaleFactor
-        let full = CIImage(cgImage: cropped)
-        let small = full.transformed(by: CGAffineTransform(scaleX: 1 / factor, y: 1 / factor))
-        let filter = CIFilter.gaussianBlur()
-        filter.inputImage = small.clampedToExtent()
-        // Android: sigma = (blurPx / factor).coerceIn(0.5…25) as stack-blur radius.
-        let sigma = max(0.5, min(25, blurPx / factor))
-        filter.radius = Float(sigma)
-        guard let blurredSmall = filter.outputImage else { return nil }
-        let up = blurredSmall.transformed(by: CGAffineTransform(scaleX: factor, y: factor))
-        let extent = CGRect(x: 0, y: 0, width: cropped.width, height: cropped.height)
-        let focused = up.cropped(to: extent)
-        let context = CIContext(options: [.useSoftwareRenderer: false])
-        return context.createCGImage(focused, from: extent)
+        let fullW = cropped.width
+        let fullH = cropped.height
+        let smallW = max(1, fullW / factor)
+        let smallH = max(1, fullH / factor)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let smallImage = UIGraphicsImageRenderer(
+            size: CGSize(width: smallW, height: smallH),
+            format: format
+        ).image { _ in
+            UIImage(cgImage: cropped, scale: 1, orientation: .up)
+                .draw(in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
+        }
+        guard let smallCG = smallImage.cgImage else { return nil }
+        let radius = max(1, min(25, Int((blurPx / CGFloat(factor)).rounded())))
+        guard let blurredSmall = stackBlur(smallCG, radius: radius) else { return nil }
+        let up = UIGraphicsImageRenderer(
+            size: CGSize(width: fullW, height: fullH),
+            format: format
+        ).image { _ in
+            UIImage(cgImage: blurredSmall, scale: 1, orientation: .up)
+                .draw(in: CGRect(x: 0, y: 0, width: fullW, height: fullH))
+        }
+        return up.cgImage
+    }
+
+    /// Mario Klingemann stack blur — same algorithm as Android `ShareSummaryGlass.stackBlur`.
+    private static func stackBlur(_ image: CGImage, radius: Int) -> CGImage? {
+        guard radius >= 1 else { return image }
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return nil }
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let wm = width - 1
+        let hm = height - 1
+        let wh = width * height
+        let div = radius + radius + 1
+        var r = [Int](repeating: 0, count: wh)
+        var g = [Int](repeating: 0, count: wh)
+        var b = [Int](repeating: 0, count: wh)
+        var vmin = [Int](repeating: 0, count: max(width, height))
+        var divsum = (div + 1) >> 1
+        divsum *= divsum
+        var dv = [Int](repeating: 0, count: 256 * divsum)
+        for i in 0..<(256 * divsum) { dv[i] = i / divsum }
+        var stack = [[Int]](repeating: [0, 0, 0], count: div)
+        let r1 = radius + 1
+
+        var yi = 0
+        var yw = 0
+        for y in 0..<height {
+            var rinsum = 0, ginsum = 0, binsum = 0
+            var routsum = 0, goutsum = 0, boutsum = 0
+            var rsum = 0, gsum = 0, bsum = 0
+            for i in -radius...radius {
+                let p = (yi + min(wm, max(i, 0))) * 4
+                var sir = stack[i + radius]
+                sir[0] = Int(pixels[p])
+                sir[1] = Int(pixels[p + 1])
+                sir[2] = Int(pixels[p + 2])
+                stack[i + radius] = sir
+                let rbs = r1 - abs(i)
+                rsum += sir[0] * rbs
+                gsum += sir[1] * rbs
+                bsum += sir[2] * rbs
+                if i > 0 {
+                    rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+                } else {
+                    routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+                }
+            }
+            var stackpointer = radius
+            for x in 0..<width {
+                r[yi] = dv[rsum]
+                g[yi] = dv[gsum]
+                b[yi] = dv[bsum]
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+                let stackstart = stackpointer - radius + div
+                var sir = stack[stackstart % div]
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+                if y == 0 { vmin[x] = min(x + radius + 1, wm) }
+                let p = (yw + vmin[x]) * 4
+                sir[0] = Int(pixels[p])
+                sir[1] = Int(pixels[p + 1])
+                sir[2] = Int(pixels[p + 2])
+                stack[stackstart % div] = sir
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer % div]
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+                stack[stackpointer % div] = sir
+                yi += 1
+            }
+            yw += width
+        }
+
+        for x in 0..<width {
+            var rinsum = 0, ginsum = 0, binsum = 0
+            var routsum = 0, goutsum = 0, boutsum = 0
+            var rsum = 0, gsum = 0, bsum = 0
+            var yp = -radius * width
+            for i in -radius...radius {
+                let yi2 = max(0, yp) + x
+                var sir = stack[i + radius]
+                sir[0] = r[yi2]
+                sir[1] = g[yi2]
+                sir[2] = b[yi2]
+                stack[i + radius] = sir
+                let rbs = r1 - abs(i)
+                rsum += r[yi2] * rbs
+                gsum += g[yi2] * rbs
+                bsum += b[yi2] * rbs
+                if i > 0 {
+                    rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+                } else {
+                    routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+                }
+                if i < hm { yp += width }
+            }
+            var yi2 = x
+            var stackpointer = radius
+            for y in 0..<height {
+                let idx = yi2 * 4
+                pixels[idx] = UInt8(dv[rsum])
+                pixels[idx + 1] = UInt8(dv[gsum])
+                pixels[idx + 2] = UInt8(dv[bsum])
+                // keep alpha
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+                let stackstart = stackpointer - radius + div
+                var sir = stack[stackstart % div]
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+                if x == 0 { vmin[y] = min(y + r1, hm) * width }
+                let p = x + vmin[y]
+                sir[0] = r[p]
+                sir[1] = g[p]
+                sir[2] = b[p]
+                stack[stackstart % div] = sir
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer % div]
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+                stack[stackpointer % div] = sir
+                yi2 += width
+            }
+        }
+
+        guard let out = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )?.makeImage() else { return nil }
+        return out
     }
 }
 
@@ -632,6 +802,44 @@ private struct ShareSummaryWeatherCard: View {
 
 // MARK: - Info card
 
+/// Android `SummaryInfoCard` shadow: glass → SHADOW2 only; grey → SHADOW1+SHADOW2.
+/// Tokens mirror `ShareSummaryTokens.CARD_SHADOW*` (Compose blur ≈ SwiftUI radius×2).
+private struct SummaryInfoCardShadowModifier: ViewModifier {
+    let scale: CGFloat
+    let glass: Bool
+
+    private let shadow1Alpha: CGFloat = 0.10
+    private let shadow1Blur: CGFloat = 32
+    private let shadow1Dy: CGFloat = 12
+    private let shadow2Alpha: CGFloat = 0.06
+    private let shadow2Blur: CGFloat = 3
+    private let shadow2Dy: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        if glass {
+            // JW Android: skip large 32pt ambient — gray band over map attribution.
+            content
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow2Alpha),
+                    radius: shadow2Blur * scale / 2,
+                    y: shadow2Dy * scale
+                )
+        } else {
+            content
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow1Alpha),
+                    radius: shadow1Blur * scale / 2,
+                    y: shadow1Dy * scale
+                )
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow2Alpha),
+                    radius: shadow2Blur * scale / 2,
+                    y: shadow2Dy * scale
+                )
+        }
+    }
+}
+
 private struct SummaryInfoCard: View {
     let record: SavedHikingSession
     let scale: CGFloat
@@ -703,8 +911,9 @@ private struct SummaryInfoCard: View {
                 Color.white.clipShape(shape)
             }
         }
-        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.10), radius: 16 * scale, y: 12 * scale)
-        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.06), radius: 1.5 * scale, y: 1 * scale)
+        // Android SummaryInfoCard (JW): skip large CARD_SHADOW1 on glass — gray band over map.
+        // Simple Grey keeps both shadows; Simple Color keeps only tight SHADOW2.
+        .modifier(SummaryInfoCardShadowModifier(scale: scale, glass: glassBackdrop != nil))
     }
 
     private var heroRow: some View {
