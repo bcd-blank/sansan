@@ -4,10 +4,11 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v16 JW: shared crop SoT 314∶320 (raised H so SC/SG glass + DC rows unclipped).
-//  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs pre-framed
-//  per crop table (Android copies same numbers). 「선택 완료」 saved-only; footer
-//  follows VIEWED. Preview thumbs only — save/export path untouched.
+//  v17 JW: shared crop SoT 314∶350 (raise H; SC/SG bias so name pill clears
+//  1km 13:53; DC bias keeps start dot + primary rows). NO card shadow/bg.
+//  Dots BELOW preview. Title TL + Morph TR; thumbs pre-framed per crop table
+//  (Android copies same numbers). 「선택 완료」 saved-only; footer follows VIEWED.
+//  Preview thumbs only — save/export path untouched.
 //
 
 #if os(iOS)
@@ -29,10 +30,10 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v16).
-    /// Aspect **314∶320**; at list width ≈ 370pt → card height ≈ **377pt**.
+    /// Settings preview framing — shared crop SoT with Android (v17).
+    /// Aspect **314∶350**; at list width ≈ 370pt → card height ≈ **412pt**.
     static let cardAspectWidth: CGFloat = 314
-    static let cardAspectHeight: CGFloat = 320
+    static let cardAspectHeight: CGFloat = 350
     static let pageCorner: CGFloat = 24
     /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
     static let titleSize: CGFloat = 17
@@ -232,7 +233,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶320 per shared crop SoT (see v16 CROP_SOT).
+            // Resources are pre-framed 314∶350 per shared crop SoT (see v17 CROP_SOT).
             // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
