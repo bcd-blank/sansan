@@ -108,7 +108,9 @@ enum UITestSupport {
         if store.records.contains(where: { $0.id == fixture.id }) { return }
         guard UserDataPaths.isUserSelected else { return }
 
-        let started = Date().addingTimeInterval(-fixture.elapsedTime - 600)
+        // Fixed Asia/Seoul wall clock (match Android label-placement/*.json) so share
+        // timeline stays 「오후 9:02/9:54」 across reinstall — never Date()-relative.
+        let started = fixedSeedStartedAt(for: fixture)
         let points: [HikingPoint] = fixture.points.map { p in
             HikingPoint(
                 latitude: p.lat,
@@ -138,6 +140,25 @@ enum UITestSupport {
         )
         store.save(session)
         store.renameRecord(id: fixture.id, title: fixture.title)
+    }
+
+    /// Epoch millis aligned with Android `app/src/debug/assets/label-placement/*.json`.
+    private static func fixedSeedStartedAt(for fixture: UITestMountainPathFixtures.Fixture) -> Date {
+        let millis: Double = {
+            switch fixture.id {
+            case UITestMountainPathFixtures.gamajicheon.id:
+                return 1_794_830_565_217 // 2026-11-16 21:02:45.217 KST → 오후 9:02
+            case UITestMountainPathFixtures.saryangdo.id:
+                return 1_794_697_200_000 // 2026-11-15 08:00:00 KST
+            case UITestMountainPathFixtures.gahyeonsan.id:
+                return 1_791_457_128_000 // 2026-10-08 19:58:48 KST
+            case UITestMountainPathFixtures.samaksan.id:
+                return 1_790_904_736_000 // 2026-10-02 10:32:16 KST
+            default:
+                return 1_794_830_565_217
+            }
+        }()
+        return Date(timeIntervalSince1970: millis / 1000.0)
     }
 
     /// `SANSAN_EXPORT_SUMMARIES=1` → Documents/label-placement/ios-summary-*.png
