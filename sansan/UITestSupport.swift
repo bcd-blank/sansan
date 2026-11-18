@@ -129,14 +129,30 @@ enum UITestSupport {
             let b = CLLocation(latitude: points[i].latitude, longitude: points[i].longitude)
             measured += b.distance(from: a)
         }
+        var seededPoints = points
+        var totalDistance = max(measured, fixture.totalDistance * 0.98)
+        var elapsedTime = fixture.elapsedTime
+        // v3 sample lock (match Android ImageSaveStyleCapture): 4.20 km · 4km 48:26.
+        if fixture.id == UITestMountainPathFixtures.gamajicheon.id {
+            totalDistance = 4_200
+            // splitElapsedLabel truncates — aim slightly above 2906 so label reads 48:26.
+            seededPoints = scalePointsForKm4Arrival(
+                points: points,
+                startedAt: started,
+                targetElapsedSec: 48 * 60 + 26 + 0.75
+            )
+            if let last = seededPoints.last {
+                elapsedTime = last.timestamp.timeIntervalSince(started)
+            }
+        }
         let session = HikingSessionData(
             sessionID: fixture.id,
             state: .idle,
             startedAt: started,
-            totalDistance: max(measured, fixture.totalDistance * 0.98),
-            elapsedTime: fixture.elapsedTime,
-            currentAltitude: points.last?.altitude ?? 0,
-            points: points,
+            totalDistance: totalDistance,
+            elapsedTime: elapsedTime,
+            currentAltitude: seededPoints.last?.altitude ?? 0,
+            points: seededPoints,
             photos: [],
             stepCount: fixture.stepCount > 0 ? fixture.stepCount : Int(measured / 0.7),
             activeEnergyKilocalories: fixture.activeEnergyKilocalories,
@@ -144,6 +160,56 @@ enum UITestSupport {
         )
         store.save(session)
         store.renameRecord(id: fixture.id, title: fixture.title)
+    }
+
+    /// Uniformly scale point timestamps from session origin so the 4 km crossing
+    /// lands at `targetElapsedSec` (pause-aware via `HikingSessionMetrics.elapsedSeconds`).
+    private static func scalePointsForKm4Arrival(
+        points: [HikingPoint],
+        startedAt: Date,
+        targetElapsedSec: TimeInterval
+    ) -> [HikingPoint] {
+        guard points.count >= 2, targetElapsedSec > 0 else { return points }
+        let sorted = points.sorted { $0.timestamp < $1.timestamp }
+        var distances: [Double] = [0]
+        for i in 1..<sorted.count {
+            let a = CLLocation(latitude: sorted[i - 1].latitude, longitude: sorted[i - 1].longitude)
+            let b = CLLocation(latitude: sorted[i].latitude, longitude: sorted[i].longitude)
+            distances.append(distances[i - 1] + b.distance(from: a))
+        }
+        var arrival: Date?
+        for index in 1..<sorted.count {
+            let segmentStart = distances[index - 1]
+            let segmentEnd = distances[index]
+            let segment = segmentEnd - segmentStart
+            guard segment > 0 else { continue }
+            if segmentStart < 4_000, segmentEnd >= 4_000 {
+                let ratio = (4_000 - segmentStart) / segment
+                let start = sorted[index - 1].timestamp
+                let end = sorted[index].timestamp
+                arrival = start.addingTimeInterval(end.timeIntervalSince(start) * ratio)
+                break
+            }
+        }
+        guard let arrival else { return points }
+        let currentElapsed = HikingSessionMetrics.elapsedSeconds(
+            at: arrival,
+            startedAt: startedAt,
+            segmentBreaks: nil
+        )
+        guard currentElapsed > 0.5 else { return points }
+        let scale = targetElapsedSec / currentElapsed
+        return points.map { point in
+            let delta = point.timestamp.timeIntervalSince(startedAt)
+            return HikingPoint(
+                id: point.id,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                altitude: point.altitude,
+                timestamp: startedAt.addingTimeInterval(delta * scale),
+                horizontalAccuracy: point.horizontalAccuracy
+            )
+        }
     }
 
     /// Epoch millis aligned with Android `app/src/debug/assets/label-placement/*.json`.
@@ -268,11 +334,20 @@ enum UITestSupport {
             )
 
             let gamaID = gamajicheonSeedID
-            guard store.records.contains(where: { $0.id == gamaID }) else {
+            guard let gama = store.records.first(where: { $0.id == gamaID }) else {
                 print("[save-style] missing gamajicheon seed")
                 return
             }
             store.updateMemo(id: gamaID, memo: "")
+            let kmLabels = HikingSessionMetrics.kilometerArrivalElapsedLabels(
+                from: gama.session.points,
+                startedAt: gama.session.startedAt,
+                segmentBreaks: gama.session.segmentBreaks
+            )
+            print(
+                "[save-style] gamajicheon dist=\(String(format: "%.2f", gama.session.totalDistance / 1000))km "
+                    + "4km=\(kmLabels[4] ?? "?")"
+            )
 
             let styles: [(HikingRecordImageSaveStyle, String)] = [
                 (.card, "data-card"),
