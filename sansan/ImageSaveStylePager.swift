@@ -4,10 +4,10 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v14 JW: image-as-card (radius+shadow, list-aligned width, 314∶220 height);
-//  option title OVERLAPS preview — dark pill top-LEADING (same Y/margin as chip);
-//  「선택 완료」 top-trailing only on saved style; section footer follows VIEWED page.
-//  Horizontal ScrollView paging; dots ON the card — no Form pale band under preview.
+//  v15 JW: image-as-card (radius, list-aligned width, 314∶220 height); NO card
+//  shadow/bg layer (pale strip was the shadow). Dots BELOW preview (v13), not
+//  on-card. Title TL + Morph TR; frame preview so km clears chrome (esp Simple
+//  Color 「4km 48:26」). 「선택 완료」 only on saved; footer follows VIEWED page.
 //
 
 #if os(iOS)
@@ -41,12 +41,8 @@ private enum ImageSaveStylePagerTokens {
     static let titleLeading: CGFloat = 12
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
-    /// Dots sit ON the card (bottom inset) — no Form gutter under the preview.
-    static let dotsBottomInset: CGFloat = 10
-    /// Hairline shadow only — large blur read as a pale band under the card.
-    static let cardShadow = Color.black.opacity(0.08)
-    static let cardShadowRadius: CGFloat = 1
-    static let cardShadowY: CGFloat = 0.5
+    /// Dots below card (v13) — not on-card.
+    static let dotsTopGap: CGFloat = 12
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)
@@ -69,79 +65,72 @@ struct ImageSaveStylePager: View {
     }
 
     var body: some View {
-        ZStack {
-            // Opaque plate — preview PNGs are translucent; without this, Form list
-            // ghosts through the glass and reads as a pale strip under the card.
-            RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous)
-                .fill(Color.white)
+        VStack(spacing: 0) {
+            ZStack {
+                // Opaque plate inside the card only — preview PNGs are translucent;
+                // without this, Form list ghosts through the glass. Not an outer wrap.
+                RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous)
+                    .fill(Color.white)
 
-            // ScrollView paging — no UIPageControl gutter under the image.
-            GeometryReader { geo in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 0) {
-                        ForEach(styles) { style in
-                            pageImage(for: style)
-                                .frame(width: geo.size.width, height: geo.size.height)
-                                .clipped()
-                                .id(style)
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(style.label)
-                                .accessibilityAddTraits(style == selection ? [.isSelected, .isButton] : .isButton)
-                                .accessibilityValue(style == selection ? "선택 완료" : "")
-                                .accessibilityHint("탭하면 이 저장 방식으로 선택합니다. 스와이프는 미리보기만 바꿉니다.")
+                GeometryReader { geo in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 0) {
+                            ForEach(styles) { style in
+                                pageImage(for: style)
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                    .id(style)
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(style.label)
+                                    .accessibilityAddTraits(style == selection ? [.isSelected, .isButton] : .isButton)
+                                    .accessibilityValue(style == selection ? "선택 완료" : "")
+                                    .accessibilityHint("탭하면 이 저장 방식으로 선택합니다. 스와이프는 미리보기만 바꿉니다.")
+                            }
                         }
+                        .scrollTargetLayout()
                     }
-                    .scrollTargetLayout()
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: viewedPageScrollID)
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: viewedPageScrollID)
-            }
 
-            cardOverlays
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-
-            // Dots ON the card — eliminates Form pale band under the preview.
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                PillSpringDots(
-                    count: styles.count,
-                    selectedIndex: viewedIndex,
-                    onSelect: { index in
-                        guard styles.indices.contains(index) else { return }
-                        withAnimation(
-                            .interpolatingSpring(
-                                stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
-                                damping: ImageSaveStylePagerTokens.springPage.damping
-                            )
-                        ) {
-                            viewedPage = styles[index]
-                        }
-                    },
-                    labels: styles.map(\.label)
-                )
-                .padding(.bottom, ImageSaveStylePagerTokens.dotsBottomInset)
+                cardOverlays
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
             }
+            .aspectRatio(
+                ImageSaveStylePagerTokens.cardAspectWidth / ImageSaveStylePagerTokens.cardAspectHeight,
+                contentMode: .fit
+            )
+            .frame(maxWidth: .infinity)
+            .compositingGroup()
+            .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
+            // v15: no card shadow — pale strip was the shadow/bg layer.
+            .contentShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
+            .onTapGesture {
+                selection = viewedPage
+            }
+            .accessibilityLabel("이미지 저장 방식")
+            .accessibilityIdentifier("imageSaveStylePager")
+
+            // Dots BELOW preview (v13) — not on-card.
+            PillSpringDots(
+                count: styles.count,
+                selectedIndex: viewedIndex,
+                onSelect: { index in
+                    guard styles.indices.contains(index) else { return }
+                    withAnimation(
+                        .interpolatingSpring(
+                            stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
+                            damping: ImageSaveStylePagerTokens.springPage.damping
+                        )
+                    ) {
+                        viewedPage = styles[index]
+                    }
+                },
+                labels: styles.map(\.label)
+            )
+            .padding(.top, ImageSaveStylePagerTokens.dotsTopGap)
         }
-        .aspectRatio(
-            ImageSaveStylePagerTokens.cardAspectWidth / ImageSaveStylePagerTokens.cardAspectHeight,
-            contentMode: .fit
-        )
-        .frame(maxWidth: .infinity)
-        .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
-        .shadow(
-            color: ImageSaveStylePagerTokens.cardShadow,
-            radius: ImageSaveStylePagerTokens.cardShadowRadius,
-            x: 0,
-            y: ImageSaveStylePagerTokens.cardShadowY
-        )
-        .contentShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
-        .onTapGesture {
-            selection = viewedPage
-        }
-        .accessibilityLabel("이미지 저장 방식")
-        .accessibilityIdentifier("imageSaveStylePager")
 #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStylePage)) { note in
             // Capture helper: change VIEWED page only (does not write preference).
@@ -197,7 +186,7 @@ struct ImageSaveStylePager: View {
 
             VStack {
                 HStack(alignment: .top) {
-                    // v14: top-leading dark pill — same Y/inset as Morph chip; clear of glass/4.20.
+                    // Top-leading dark pill — same Y/inset as Morph chip.
                     Text(viewedPage.label)
                         .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
                         .foregroundStyle(.white)
@@ -243,6 +232,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
+            // Resources are pre-framed 314∶220 so TL title + TR Morph stay clear of km.
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -322,7 +312,6 @@ private struct PillSpringDots: View {
                     height: ImageSaveStylePagerTokens.dotSize
                 )
                 .offset(x: pillLeading)
-                .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
             HStack(spacing: ImageSaveStylePagerTokens.gap) {
@@ -336,35 +325,36 @@ private struct PillSpringDots: View {
                                 width: ImageSaveStylePagerTokens.dotSize,
                                 height: ImageSaveStylePagerTokens.dotSize
                             )
+                            .opacity(index == selectedIndex ? 0 : 1)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(labels.indices.contains(index) ? labels[index] : "Slide \(index + 1)")
+                    .accessibilityLabel(labels.indices.contains(index) ? labels[index] : "page \(index + 1)")
+                    .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
                     .accessibilityIdentifier("imageSaveStyleDot\(index)")
-                    .accessibilityAddTraits(index == selectedIndex ? [.isSelected, .isButton] : .isButton)
                 }
             }
         }
-        // Height = dotSize only — a taller frame padded Form grey above the dots
-        // and reintroduced the pale strip under the card.
         .frame(width: trackWidth, height: ImageSaveStylePagerTokens.dotSize, alignment: .leading)
         .frame(maxWidth: .infinity)
-        .onAppear { snapPill(to: selectedIndex, animated: false) }
-        .onChange(of: selectedIndex) { old, new in
-            movePill(from: old, to: new)
+        .onAppear {
+            snap(to: selectedIndex, animated: false)
+            ready = true
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("저장 방식 미리보기 페이지")
+        .onChange(of: selectedIndex) { _, newValue in
+            guard ready else { return }
+            snap(to: newValue, animated: true)
+        }
     }
 
-    private func leading(for index: Int) -> CGFloat {
+    private func targetLeading(for index: Int) -> CGFloat {
         CGFloat(index) * (ImageSaveStylePagerTokens.dotSize + ImageSaveStylePagerTokens.gap)
             - (ImageSaveStylePagerTokens.pillWidth - ImageSaveStylePagerTokens.dotSize) / 2
     }
 
-    private func snapPill(to index: Int, animated: Bool) {
-        let targetLeading = leading(for: index)
+    private func snap(to index: Int, animated: Bool) {
+        let targetLeading = targetLeading(for: index)
         let targetTrailing = targetLeading + ImageSaveStylePagerTokens.pillWidth
-        if animated {
+        if !animated {
             withAnimation(
                 .interpolatingSpring(
                     stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
@@ -374,37 +364,16 @@ private struct PillSpringDots: View {
                 pillLeading = targetLeading
                 pillTrailing = targetTrailing
             }
-        } else {
-            pillLeading = targetLeading
-            pillTrailing = targetTrailing
-        }
-        ready = true
-    }
-
-    private func movePill(from old: Int, to new: Int) {
-        guard ready else {
-            snapPill(to: new, animated: false)
             return
         }
-        let targetLeading = leading(for: new)
-        let targetTrailing = targetLeading + ImageSaveStylePagerTokens.pillWidth
-        let movingRight = new > old
+        // Lead / trail springs (reference HTML).
         let lead = ImageSaveStylePagerTokens.springLead
         let trail = ImageSaveStylePagerTokens.springTrail
-        if movingRight {
-            withAnimation(.interpolatingSpring(stiffness: lead.stiffness, damping: lead.damping)) {
-                pillTrailing = targetTrailing
-            }
-            withAnimation(.interpolatingSpring(stiffness: trail.stiffness, damping: trail.damping)) {
-                pillLeading = targetLeading
-            }
-        } else {
-            withAnimation(.interpolatingSpring(stiffness: lead.stiffness, damping: lead.damping)) {
-                pillLeading = targetLeading
-            }
-            withAnimation(.interpolatingSpring(stiffness: trail.stiffness, damping: trail.damping)) {
-                pillTrailing = targetTrailing
-            }
+        withAnimation(.interpolatingSpring(stiffness: lead.stiffness, damping: lead.damping)) {
+            pillLeading = targetLeading
+        }
+        withAnimation(.interpolatingSpring(stiffness: trail.stiffness, damping: trail.damping)) {
+            pillTrailing = targetTrailing
         }
     }
 }
