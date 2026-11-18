@@ -777,7 +777,13 @@ final class WorkoutManager: NSObject, ObservableObject {
 #if DEBUG
         // 레이아웃/스크린샷 촬영에서 시스템 위치 팝업이 크롬을 가리지 않도록 요청을 건너뜁니다.
         let env = ProcessInfo.processInfo.environment
-        if env["SANSAN_LAYOUT_PREVIEW"] != nil || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1" { return }
+        let args = ProcessInfo.processInfo.arguments
+        if env["SANSAN_LAYOUT_PREVIEW"] != nil
+            || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+            || args.contains("-UITestSkipLocationAuth")
+            || args.contains("-UITestSkipHealthAuth") {
+            return
+        }
 #endif
         locationManager.requestWhenInUseAuthorization()
     }

@@ -381,7 +381,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         controller.announceRecordingStart(shouldSpeak: true)
         XCTAssertEqual(
             controller.spokenPhrasesLog,
-            ["기록을 시작합니다"]
+            ["산산 기록을 시작합니다."]
         )
         XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceStart, true)
 
@@ -438,7 +438,7 @@ final class KmVoiceGuidanceControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.spokenPhrasesLog,
-            ["기록을 종료합니다. 총 거리 2.35킬로미터, 시간 12분 34초입니다."]
+            ["산산 기록을 종료합니다. 총 거리 2.35킬로미터, 시간 12분 34초입니다."]
         )
         XCTAssertEqual(controller.currentAnnouncedState()?.didAnnounceEnd, true)
 

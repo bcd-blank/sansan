@@ -109,7 +109,8 @@ final class HikingRecordStore: ObservableObject {
 
     /// 공유·저장 이미지 — 상세 화면과 동일한 SwiftUI 레이아웃으로 렌더링(sansan 앱에서 등록).
     /// `fullScreen`이 true이면 기기 화면 전체 크기로 렌더링(사진 저장용).
-    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool) -> UIImage?)?
+    /// (record, routeImage, fullScreen, preservesCapturedLogo, mapOptions)
+    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool, HikingShareMapExportOptions) -> UIImage?)?
     static var summaryImageRenderer: (@MainActor (SavedHikingSession, HikingShareMapExportOptions) async -> UIImage?)?
 
     /// 사진 저장용 — 기록 상세 지도와 동일한 pt·배율(sansan 앱에서 등록).
@@ -515,7 +516,9 @@ final class HikingRecordStore: ObservableObject {
         fullScreen: Bool = false
     ) async -> UIImage? {
         guard let record = records.first(where: { $0.id == recordID }) else { return nil }
-        if HikingRecordImageSavePreferences.style == .summary, let summary = Self.summaryImageRenderer {
+        let mapOptions = HikingShareExportPreferences.applyingSharePhotoFeatureFlags(mapOptions)
+        if HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer,
+           let summary = Self.summaryImageRenderer {
             return await summary(record, mapOptions)
         }
         guard let routeImage = await routeImageForShare(
@@ -524,7 +527,13 @@ final class HikingRecordStore: ObservableObject {
             fullScreen: fullScreen
         ) else { return nil }
         if let renderer = Self.shareImageRenderer {
-            return renderer(record, routeImage.image, fullScreen, routeImage.includesOnScreenLogo)
+            return renderer(
+                record,
+                routeImage.image,
+                fullScreen,
+                routeImage.includesOnScreenLogo,
+                mapOptions
+            )
         }
         return nil
     }
@@ -570,6 +579,9 @@ final class HikingRecordStore: ObservableObject {
         } else {
             let detailCanvas = fullScreen ? Self.detailShareMapCanvasProvider?() : nil
             let useLiveMap = HikingRouteSnapshotGenerator.allowsLiveDetailCapture?(record.id) ?? false
+            // Data Card full-screen save: prefer MKMapSnapshotter so km labels are
+            // always composited (SwiftUI live tiles previously skipped label bake).
+            let preferSwiftUI = !fullScreen
             image = await HikingRouteSnapshotGenerator.generate(
                 record: record,
                 style: .routeOnly,
@@ -577,8 +589,8 @@ final class HikingRecordStore: ObservableObject {
                 canvasSize: detailCanvas?.size,
                 pixelScale: detailCanvas?.pixelScale,
                 reservesLegalAttributionStrip: false,
-                allowLiveDetailCapture: useLiveMap,
-                preferSwiftUIMapTiles: true
+                allowLiveDetailCapture: useLiveMap && preferSwiftUI,
+                preferSwiftUIMapTiles: preferSwiftUI
             )
             includesOnScreenLogo = fullScreen && HikingRouteSnapshotGenerator.consumeCaptureIncludesOnScreenLogo()
         }

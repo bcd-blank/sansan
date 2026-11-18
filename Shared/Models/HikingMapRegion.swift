@@ -82,7 +82,15 @@ enum HikingMapRegion {
         )
     }
 
-    /// 상·하단 정보 영역을 비운 뒤, 남은 가운데 구간에 경로가 들어가게 맞춥니다.
+    /// Vertical placement of the route bbox inside the padded content rect.
+    enum RouteVerticalAlign {
+        /// Center in the remaining content (detail / legacy).
+        case center
+        /// Hug `insetTop` when width-limited (share-summary memo-none: title bottom + clearance).
+        case top
+    }
+
+    /// 상·하단 정보 영역을 비운 뒤, 남은 구간에 경로가 들어가게 맞춥니다.
     static func fitting(
         coordinates: [CLLocationCoordinate2D],
         viewSize: CGSize,
@@ -90,7 +98,8 @@ enum HikingMapRegion {
         insetLeft: CGFloat,
         insetBottom: CGFloat,
         insetRight: CGFloat,
-        routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction
+        routeFillFraction: CGFloat = HikingRouteImageLayout.routeCardFillFraction,
+        verticalAlign: RouteVerticalAlign = .center
     ) -> MKCoordinateRegion {
         guard viewSize.width > 0, viewSize.height > 0 else {
             return fitting(coordinates: coordinates)
@@ -102,14 +111,24 @@ enum HikingMapRegion {
         let contentWidth = max(viewSize.width - insetLeft - insetRight, 1)
         let contentHeight = max(viewSize.height - insetTop - insetBottom, 1)
         let contentCenterX = insetLeft + contentWidth / 2
-        let contentCenterY = insetTop + contentHeight / 2
 
-        let scale = max(
-            route.size.width / (Double(contentWidth) * Double(fill)),
-            route.size.height / (Double(contentHeight) * Double(fill))
-        )
+        let scaleW = route.size.width / (Double(contentWidth) * Double(fill))
+        let scaleH = route.size.height / (Double(contentHeight) * Double(fill))
+        let scale = max(scaleW, scaleH)
         let visibleWidth = scale * Double(viewSize.width)
         let visibleHeight = scale * Double(viewSize.height)
+
+        // Screen-pt height of the route bbox after fit.
+        let routeScreenHeight = route.size.height / scale
+        let contentCenterY: CGFloat
+        if verticalAlign == .top {
+            // Always pin route bbox top to insetTop (memo-none: title bottom + clearance).
+            // Height-limited routes already fill the content height → same as center.
+            contentCenterY = insetTop + CGFloat(routeScreenHeight) / 2
+        } else {
+            contentCenterY = insetTop + contentHeight / 2
+        }
+
         let rect = MKMapRect(
             x: route.midX - Double(contentCenterX / viewSize.width) * visibleWidth,
             y: route.midY - Double(contentCenterY / viewSize.height) * visibleHeight,

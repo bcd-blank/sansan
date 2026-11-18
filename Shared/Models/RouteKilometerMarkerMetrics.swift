@@ -27,7 +27,7 @@ enum RouteKilometerMarkerMetrics {
     static let labelFontSize: CGFloat = 12
     /// Legacy scale hook — combined labels use absolute pt tokens above.
     static let markerLabelScale: CGFloat = 1
-    /// Detail-map collision thinning ladder (Android hideSteps; iOS matches).
+    /// Detail-map wholesale hideSteps ladder (visible-only subset). 1 → 5 → 10 → 20 → 50.
     static let detailLabelHideSteps: [Int] = [1, 5, 10, 20, 50]
     /// Detail-map side inset for capsule bounds (x [24, W−24]).
     static let detailLabelSideInset: CGFloat = 24

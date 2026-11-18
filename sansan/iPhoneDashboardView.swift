@@ -63,8 +63,13 @@ struct iPhoneDashboardView: View {
                     let env = ProcessInfo.processInfo.environment
                     let skipLocationPrompt = env["SANSAN_LAYOUT_PREVIEW"] != nil
                         || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+                        || AppStoreScreenshotMode.current?.opensGeneralSettings == true
                     if !skipLocationPrompt {
                         WorkoutManager.shared.prepareDashboardMapLocation()
+                    }
+                    if AppStoreScreenshotMode.current?.opensGeneralSettings == true {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        showGeneralSettings = true
                     }
 #else
                     WorkoutManager.shared.prepareDashboardMapLocation()

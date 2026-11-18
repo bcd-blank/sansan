@@ -15,6 +15,21 @@ enum HikingRouteSnapshotAppearance {
     case standard
     /// 공유 요약 A안 — 회색 지도, 흰 외곽선 초록 경로, 합친 km 라벨, 끝점 잉크.
     case shareSummary
+    /// Simple Color — 컬러 지도(프리-그레이), 동일 레이아웃·경로·km 규칙.
+    case shareSummaryColor
+
+    /// Share-summary layout family (grey or color): top-aligned fit, km clamps, route chrome.
+    var usesShareSummaryChrome: Bool {
+        switch self {
+        case .shareSummary, .shareSummaryColor: true
+        case .standard: false
+        }
+    }
+
+    /// Greyscale paper-tone remapping + solid map-paper fade.
+    var usesGreyMapTone: Bool {
+        self == .shareSummary
+    }
 }
 
 enum HikingRouteSnapshotGenerator {
@@ -54,7 +69,7 @@ enum HikingRouteSnapshotGenerator {
         switch appearance {
         case .standard:
             return canvasWidth / mapLayoutReferenceWidth
-        case .shareSummary:
+        case .shareSummary, .shareSummaryColor:
             return ShareSummaryTokens.ptScale(for: canvasWidth)
         }
     }
@@ -310,14 +325,16 @@ enum HikingRouteSnapshotGenerator {
             insetLeft: insetLeft,
             insetBottom: insetBottom,
             insetRight: insetRight,
-            routeFillFraction: routeFillFraction
+            routeFillFraction: routeFillFraction,
+            // Share summary: hug headerBottom+clearance when the route is width-limited (memo-none).
+            verticalAlign: appearance.usesShareSummaryChrome ? .top : .center
         )
         options.size = snapshotCanvas
         options.scale = pixelScale
-        options.preferredConfiguration = appearance == .shareSummary
+        options.preferredConfiguration = appearance.usesGreyMapTone
             ? HikingMapCaptureConfiguration.shareSummaryMuted
             : HikingMapCaptureConfiguration.standard
-        let interfaceStyle: UIUserInterfaceStyle = appearance == .shareSummary
+        let interfaceStyle: UIUserInterfaceStyle = appearance.usesShareSummaryChrome
             ? .light
             : AppExportAppearance.resolvedUserInterfaceStyle()
         options.traitCollection = UITraitCollection(userInterfaceStyle: interfaceStyle)
@@ -331,7 +348,7 @@ enum HikingRouteSnapshotGenerator {
 
                 let projector = SnapshotCoordinateProjector(snapshot: snapshot)
                 let baseImage: UIImage
-                if appearance == .shareSummary {
+                if appearance.usesGreyMapTone {
                     baseImage = shareSummaryTonedMapImage(snapshot.image) ?? snapshot.image
                 } else {
                     baseImage = snapshot.image
@@ -384,8 +401,40 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Paper #F0F0F0 mode; roads only at near-white → #FDFDFD; labels → #9A9A9E (S5 / impl3 #3).
-    /// CIToneCurve alone left muted land at #FDFDFD — remap pixels explicitly.
+    /// Soft white → clear so logo/title stay readable while color map shows through.
+    private static func drawShareSummaryColorTitleBlend(
+        solidEndY: CGFloat,
+        canvasSize: CGSize,
+        in cgContext: CGContext
+    ) {
+        let fadeEnd = min(solidEndY + ShareSummaryTokens.fadeTail, canvasSize.height)
+        let colors = [
+            UIColor.white.withAlphaComponent(0.72).cgColor,
+            UIColor.white.withAlphaComponent(0.42).cgColor,
+            UIColor.white.withAlphaComponent(0).cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [
+            0,
+            max(solidEndY / canvasSize.height, 0),
+            min(fadeEnd / canvasSize.height, 1)
+        ]
+        guard let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: colors,
+            locations: locations
+        ) else { return }
+        cgContext.saveGState()
+        cgContext.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 0, y: canvasSize.height),
+            options: []
+        )
+        cgContext.restoreGState()
+    }
+
+    /// Warm Simple Grey: paper #E6E2E0; roads → #EEEBE9; labels → #8B8B8E (contrast on warm paper).
+    /// Apple MKMapSnapshotter cannot recolor style paints — luminance→warm RGB remap is the style-equivalent path (no overlay/multiply).
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width
@@ -405,9 +454,10 @@ enum HikingRouteSnapshotGenerator {
         ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        let mapLabel = 154.0 // #9A9A9E
-        let paper = 240.0    // #F0F0F0
-        let road = 253.0     // #FDFDFD
+        // Warm chromatic targets (not achromatic R=G=B) — #E6E2E0 / #EEEBE9 / #8B8B8E.
+        let labelR = 139.0, labelG = 139.0, labelB = 142.0
+        let paperR = 230.0, paperG = 226.0, paperB = 224.0
+        let roadR = 238.0, roadG = 235.0, roadB = 233.0
         let count = width * height
         for i in 0..<count {
             let o = i * bytesPerPixel
@@ -415,21 +465,28 @@ enum HikingRouteSnapshotGenerator {
             let g = Double(pixels[o + 1])
             let b = Double(pixels[o + 2])
             let y = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
-            let out: Double
+            let outR: Double
+            let outG: Double
+            let outB: Double
             if y < 0.40 {
                 // Labels / dark features → mapLabel band (keep some contrast).
-                out = mapLabel * (0.75 + 0.25 * (y / 0.40))
+                let t = 0.75 + 0.25 * (y / 0.40)
+                outR = labelR * t
+                outG = labelG * t
+                outB = labelB * t
             } else if y > 0.985 {
-                out = road
+                outR = roadR
+                outG = roadG
+                outB = roadB
             } else {
-                // Land collapses to paper with tiny variation so roads above paper still read.
-                let t = (y - 0.40) / (0.985 - 0.40)
-                out = paper - 2.0 + t * 4.0 // ≈238…242 around paper
+                // Flat warm paper #E6E2E0; near-white roads stay in y>0.985 → #EEEBE9.
+                outR = paperR
+                outG = paperG
+                outB = paperB
             }
-            let v = UInt8(max(0, min(255, out.rounded())))
-            pixels[o] = v
-            pixels[o + 1] = v
-            pixels[o + 2] = v
+            pixels[o] = UInt8(max(0, min(255, outR.rounded())))
+            pixels[o + 1] = UInt8(max(0, min(255, outG.rounded())))
+            pixels[o + 2] = UInt8(max(0, min(255, outB.rounded())))
         }
         guard let outImage = ctx.makeImage() else { return nil }
         return UIImage(cgImage: outImage, scale: image.scale, orientation: image.imageOrientation)
@@ -452,16 +509,37 @@ enum HikingRouteSnapshotGenerator {
         let format = UIGraphicsImageRendererFormat()
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+        // Simple Color: heal bottom-leading gutter under the floating card (legal/dim plate
+        // read as a dark grey rectangle beside the rounded corner). No solid fill.
+        let mapLayer: UIImage = appearance == .shareSummaryColor
+            ? RouteMapOverlayMetrics.coveringShareSummaryColorCardGutter(on: baseImage)
+            : baseImage
+
         return renderer.image { context in
-            if appearance == .shareSummary {
+            if appearance.usesGreyMapTone {
                 ShareSummaryTokens.mapPaperUIColor.setFill()
                 context.fill(CGRect(origin: .zero, size: canvasSize))
             }
-            baseImage.draw(in: CGRect(origin: .zero, size: canvasSize))
+            mapLayer.draw(in: CGRect(origin: .zero, size: canvasSize))
+
+            // JW 18:25 — MKMapSnapshotter may still bake /Legal at bottom-left; keep only the
+            // hand-drawn 「지도」 between map and card. Cover with map paper (not white).
+            if appearance.usesGreyMapTone {
+                ShareSummaryTokens.mapPaperUIColor.setFill()
+                context.fill(
+                    RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
+                )
+            }
 
             // Layer order (finding 2): map → fade → route → markers → labels.
-            if appearance == .shareSummary, let solidEnd = fadeSolidEndY, solidEnd > 0 {
+            if appearance.usesGreyMapTone, let solidEnd = fadeSolidEndY, solidEnd > 0 {
                 drawShareSummaryPaperFade(
+                    solidEndY: solidEnd,
+                    canvasSize: canvasSize,
+                    in: context.cgContext
+                )
+            } else if appearance == .shareSummaryColor, let solidEnd = fadeSolidEndY, solidEnd > 0 {
+                drawShareSummaryColorTitleBlend(
                     solidEndY: solidEnd,
                     canvasSize: canvasSize,
                     in: context.cgContext
@@ -469,6 +547,9 @@ enum HikingRouteSnapshotGenerator {
             }
 
             if !includesLiveDetailContent {
+                // Route + short cross bridges first; km markers / labels always on top
+                // (Android decorateSummaryMap: drawShareRoute → endpoints → label blits).
+                // No punch holes (they break rails). Marker centers only trim bridge ends.
                 drawRoute(
                     using: projector,
                     coordinates: coordinates,
@@ -479,37 +560,14 @@ enum HikingRouteSnapshotGenerator {
             }
 
             // 목록 썸네일은 지도와 경로 선만 남깁니다.
-            if listThumbnailOnly || includesLiveDetailContent {
-                if !listThumbnailOnly, mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
-                    drawPinnedThumbnails(
-                        record: record,
-                        photos: record.mapPinnedPhotos,
-                        contentScale: contentScale,
-                        in: context.cgContext,
-                        canvasSize: canvasSize
-                    )
-                }
+            if listThumbnailOnly {
                 return
             }
 
-            if mapOptions.showsPhotoMarkers {
-                    drawPhotoMarkers(
-                        using: projector,
-                        photos: record.session.photos,
-                        contentScale: contentScale,
-                        in: context.cgContext
-                    )
-                }
-
-                if needsSummitOverlays(record: record) {
-                    drawSummitMarkers(
-                        using: projector,
-                        record: record,
-                        contentScale: contentScale,
-                        in: context.cgContext
-                    )
-                }
-
+            // Live detail tiles already include the route stroke/endpoints, but not
+            // export km capsules. Still bake distance/time labels when options ask
+            // (Data Card must match Android detail blue labels).
+            if includesLiveDetailContent {
                 if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
                     drawKilometerMarkers(
                         using: projector,
@@ -523,6 +581,49 @@ enum HikingRouteSnapshotGenerator {
                         in: context.cgContext
                     )
                 }
+                if mapOptions.showsPinnedThumbnails, !record.mapPinnedPhotos.isEmpty {
+                    drawPinnedThumbnails(
+                        record: record,
+                        photos: record.mapPinnedPhotos,
+                        contentScale: contentScale,
+                        in: context.cgContext,
+                        canvasSize: canvasSize
+                    )
+                }
+                return
+            }
+
+            if mapOptions.showsPhotoMarkers {
+                drawPhotoMarkers(
+                    using: projector,
+                    photos: record.session.photos,
+                    contentScale: contentScale,
+                    in: context.cgContext
+                )
+            }
+
+            if needsSummitOverlays(record: record) {
+                drawSummitMarkers(
+                    using: projector,
+                    record: record,
+                    contentScale: contentScale,
+                    in: context.cgContext
+                )
+            }
+
+            if mapOptions.showsDistanceMarkers || mapOptions.showsTimeMarkers {
+                drawKilometerMarkers(
+                    using: projector,
+                    record: record,
+                    coordinates: coordinates,
+                    showsDistance: mapOptions.showsDistanceMarkers,
+                    showsTime: mapOptions.showsTimeMarkers,
+                    contentScale: contentScale,
+                    appearance: appearance,
+                    canvasSize: canvasSize,
+                    in: context.cgContext
+                )
+            }
 
             drawEndpoints(
                 using: projector,
@@ -532,7 +633,7 @@ enum HikingRouteSnapshotGenerator {
                 in: context.cgContext
             )
 
-            if appearance != .shareSummary,
+            if !appearance.usesShareSummaryChrome,
                mapOptions.showsPinnedThumbnails,
                !record.mapPinnedPhotos.isEmpty {
                 drawPinnedThumbnails(
@@ -626,40 +727,307 @@ enum HikingRouteSnapshotGenerator {
         appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
-        let path = UIBezierPath()
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-
-        for (index, coordinate) in coordinates.enumerated() {
-            let point = projector.point(for: coordinate)
-            if index == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
+        let points = coordinates.map { projector.point(for: $0) }
+        guard points.count >= 2 else { return }
 
         switch appearance {
         case .standard:
-            path.lineWidth = detailRouteLineWidth * contentScale
-            UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1).setStroke()
-            path.stroke()
-        case .shareSummary:
-            cgContext.saveGState()
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: 1 * contentScale),
-                blur: 1.2 * contentScale,
-                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+            // Detail snapshot: continuous green + white→green overlay only at true crosses
+            // (same rule as live detail map / share summary).
+            drawContinuousRouteWithCrossOverlays(
+                points: points,
+                contentScale: contentScale,
+                casingWidth: detailRouteLineWidth * 1.6 * contentScale,
+                fillWidth: detailRouteLineWidth * contentScale,
+                white: UIColor.white.withAlphaComponent(0.9),
+                green: UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1),
+                shadow: false,
+                forceChunks: false,
+                in: cgContext
             )
-            path.lineWidth = ShareSummaryTokens.routeCasing * contentScale
-            UIColor.white.setStroke()
-            path.stroke()
-            cgContext.restoreGState()
-
-            path.lineWidth = ShareSummaryTokens.routeWidth * contentScale
-            ShareSummaryTokens.accentUIColor.setStroke()
-            path.stroke()
+        case .shareSummary, .shareSummaryColor:
+            // JW/팀장: continuous Path (white→green, no join seams) + local white→green
+            // overlay only at true self-crossings. No gray shadow on AFTER.
+            // `-SANSAN_ROUTE_CHUNKS` exports the old chunk before for compare captures.
+            let forceChunks = ProcessInfo.processInfo.arguments.contains("-SANSAN_ROUTE_CHUNKS")
+                || ProcessInfo.processInfo.environment["SANSAN_ROUTE_CHUNKS"] == "1"
+            drawContinuousRouteWithCrossOverlays(
+                points: points,
+                contentScale: contentScale,
+                casingWidth: ShareSummaryTokens.routeCasing * contentScale,
+                fillWidth: ShareSummaryTokens.routeWidth * contentScale,
+                white: .white,
+                green: ShareSummaryTokens.accentUIColor,
+                shadow: false,
+                forceChunks: forceChunks,
+                in: cgContext
+            )
         }
+    }
+
+    /// Continuous white→green ribbon + later-suffix overlay at true crosses.
+    /// `forceChunks` restores chronological short chunks (join seams) for before captures.
+    private static func drawContinuousRouteWithCrossOverlays(
+        points: [CGPoint],
+        contentScale: CGFloat,
+        casingWidth: CGFloat,
+        fillWidth: CGFloat,
+        white: UIColor,
+        green: UIColor,
+        shadow: Bool,
+        forceChunks: Bool,
+        in cgContext: CGContext
+    ) {
+        guard points.count >= 2 else { return }
+
+        // Never leave a stale CG shadow on the context (share-summary AFTER must be shadow-free).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+
+        func strokeWhiteThenGreen(_ path: UIBezierPath, withShadow: Bool) {
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            if withShadow {
+                // Legacy chunk-before only — AFTER passes withShadow: false.
+                cgContext.saveGState()
+                cgContext.setShadow(
+                    offset: CGSize(width: 0, height: 1 * contentScale),
+                    blur: 1.2 * contentScale,
+                    color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
+                )
+                path.lineWidth = casingWidth
+                white.setStroke()
+                path.stroke()
+                cgContext.restoreGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+            } else {
+                // Android 6a62d1e: one continuous Path stroke. White AA-off (AA vs map =
+                // gray halo); green AA-on. SRC_OVER — never .copy.
+                cgContext.saveGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                cgContext.setBlendMode(.normal)
+                // Continuous dual rails: AA-on white + green over one path (single stroke each).
+                cgContext.setShouldAntialias(true)
+                cgContext.setAllowsAntialiasing(true)
+                path.lineWidth = casingWidth
+                white.setStroke()
+                path.stroke()
+                path.lineWidth = fillWidth
+                green.setStroke()
+                path.stroke()
+                cgContext.restoreGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                return
+            }
+            path.lineWidth = fillWidth
+            green.setStroke()
+            path.stroke()
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+        }
+
+        if forceChunks {
+            // Legacy chronological chunks — later white→green stacks at joins/crosses.
+            let maxChunkPx: CGFloat = 28 * contentScale
+            let maxVerticesPerChunk = 12
+            var startIdx = 0
+            var isFirst = true
+            while startIdx < points.count - 1 {
+                var endIdx = startIdx + 1
+                var traveled: CGFloat = 0
+                while endIdx < points.count - 1 && traveled < maxChunkPx {
+                    let dx = points[endIdx + 1].x - points[endIdx].x
+                    let dy = points[endIdx + 1].y - points[endIdx].y
+                    traveled += hypot(dx, dy)
+                    endIdx += 1
+                    if endIdx - startIdx >= maxVerticesPerChunk { break }
+                }
+                if endIdx <= startIdx {
+                    endIdx = min(points.count - 1, startIdx + 1)
+                }
+                let path = UIBezierPath()
+                path.lineCapStyle = .round
+                path.lineJoinStyle = .round
+                path.move(to: points[startIdx])
+                for index in (startIdx + 1)...endIdx {
+                    path.addLine(to: points[index])
+                }
+                strokeWhiteThenGreen(path, withShadow: shadow && isFirst)
+                isFirst = false
+                if endIdx >= points.count - 1 { break }
+                startIdx = endIdx
+            }
+            return
+        }
+
+        // Android 6a62d1e drawShareRoute — same algorithm:
+        // detect crosses on RAW; stroke continuous BASE on cleaned (one Path);
+        // bridge = short later piece around the hit, ONE path stroke (not stitched
+        // micro-polylines). Length casing×1.75 / ×2.35; white butt AA-off; green round AA-on.
+        let rawPoints = points
+        let drawPoints = RouteSelfCrossing.cleanedPoints(rawPoints)
+        guard drawPoints.count >= 2 else { return }
+
+        let minLoopLength = max(casingWidth * 8, 48 * contentScale)
+        let whiteHalf = casingWidth * 1.75
+        let greenHalf = casingWidth * 2.35
+        let bridgeCasing = casingWidth
+        let bridgeFill = fillWidth
+
+        var bridgeSource = rawPoints
+        var hits = RouteSelfCrossing.hits(
+            in: rawPoints,
+            minLoopLength: minLoopLength,
+            minSeparationEdges: 2,
+            minCrossSin: 0.20,
+            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+            proximityDistance: casingWidth * 0.65
+        )
+        if hits.isEmpty {
+            bridgeSource = drawPoints
+            hits = RouteSelfCrossing.hits(
+                in: drawPoints,
+                minLoopLength: minLoopLength,
+                minSeparationEdges: 2,
+                minCrossSin: 0.20,
+                dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+                proximityDistance: casingWidth * 0.65
+            )
+        }
+        #if DEBUG
+        NSLog(
+            "[km-label] route crosses unique=%d raw=%d clean=%d whiteHalf=%.1f casing/fill=%.2f/%.2f",
+            hits.count, rawPoints.count, drawPoints.count, whiteHalf, bridgeCasing, bridgeFill
+        )
+        for hit in hits {
+            NSLog(
+                "[km-label] cross at (%.1f,%.1f) laterEdge=%d u=%.3f",
+                hit.point.x, hit.point.y, hit.laterEdge, hit.u
+            )
+        }
+        #endif
+
+        // Base: one continuous path stroke (Android pathOf + drawPath×2).
+        // Catmull-Rom→cubic so CG joins aren't 톱니·조각; still a single Path.stroke.
+        let strokePoints = Self.simplifiedBridgePoints(
+            drawPoints,
+            epsilon: max(0.55 * contentScale, 0.4)
+        )
+        let full = Self.continuousStrokePath(strokePoints)
+        full.lineCapStyle = .round
+        full.lineJoinStyle = .round
+        strokeWhiteThenGreen(full, withShadow: shadow)
+
+        // Bridge: Android shareRoutePointsAround → pathFromPoints → single drawPath.
+        // One UIBezierPath.stroke per layer — never stroke segment-by-segment (조각 레일).
+        for hit in hits {
+            let whitePts = Self.simplifiedBridgePoints(
+                RouteSelfCrossing.overlayPoints(
+                    drawPoints: bridgeSource,
+                    hit: hit,
+                    backPad: whiteHalf,
+                    forwardPad: whiteHalf
+                ),
+                epsilon: max(0.7 * contentScale, 0.5)
+            )
+            let greenPts = Self.simplifiedBridgePoints(
+                RouteSelfCrossing.overlayPoints(
+                    drawPoints: bridgeSource,
+                    hit: hit,
+                    backPad: greenHalf,
+                    forwardPad: greenHalf
+                ),
+                epsilon: max(0.7 * contentScale, 0.5)
+            )
+            guard whitePts.count >= 2, greenPts.count >= 2 else { continue }
+
+            func strokeBridge(_ pts: [CGPoint], width: CGFloat, color: UIColor, cap: CGLineCap, antialias: Bool) {
+                let path = Self.continuousStrokePath(pts)
+                path.lineWidth = width
+                path.lineCapStyle = cap
+                path.lineJoinStyle = .round
+                cgContext.saveGState()
+                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+                cgContext.setBlendMode(.normal)
+                cgContext.setShouldAntialias(antialias)
+                cgContext.setAllowsAntialiasing(antialias)
+                color.setStroke()
+                path.stroke() // single continuous stroke
+                cgContext.restoreGState()
+            }
+
+            // One continuous path each: white butt then longer green round (Android order).
+            // AA-on so bridge rails stay continuous with the base (no 톱니 at joins).
+            strokeBridge(whitePts, width: bridgeCasing, color: white, cap: .butt, antialias: true)
+            strokeBridge(greenPts, width: bridgeFill, color: green, cap: .round, antialias: true)
+
+            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+
+            #if DEBUG
+            var polyLen: CGFloat = 0
+            for i in 0..<(whitePts.count - 1) {
+                polyLen += hypot(whitePts[i + 1].x - whitePts[i].x, whitePts[i + 1].y - whitePts[i].y)
+            }
+            NSLog(
+                "[km-label] bridge at (%.1f,%.1f) pts=%d len=%.1f half=%.1f/%.1f w=%.2f/%.2f",
+                hit.point.x, hit.point.y, whitePts.count, polyLen,
+                whiteHalf, greenHalf, bridgeCasing, bridgeFill
+            )
+            #endif
+        }
+    }
+
+    /// Single continuous stroke path: Catmull-Rom → cubics (no polyline join teeth).
+    private static func continuousStrokePath(_ points: [CGPoint]) -> UIBezierPath {
+        let path = UIBezierPath()
+        guard points.count >= 2 else { return path }
+        path.move(to: points[0])
+        if points.count == 2 {
+            path.addLine(to: points[1])
+            return path
+        }
+        for i in 0..<(points.count - 1) {
+            let p0 = points[max(0, i - 1)]
+            let p1 = points[i]
+            let p2 = points[i + 1]
+            let p3 = points[min(points.count - 1, i + 2)]
+            let cp1 = CGPoint(
+                x: p1.x + (p2.x - p0.x) / 6,
+                y: p1.y + (p2.y - p0.y) / 6
+            )
+            let cp2 = CGPoint(
+                x: p2.x - (p3.x - p1.x) / 6,
+                y: p2.y - (p3.y - p1.y) / 6
+            )
+            path.addCurve(to: p2, controlPoint1: cp1, controlPoint2: cp2)
+        }
+        return path
+    }
+
+    /// Drop GPS micro-wiggles on a short bridge while keeping endpoints + shape (one path).
+    private static func simplifiedBridgePoints(_ points: [CGPoint], epsilon: CGFloat) -> [CGPoint] {
+        guard points.count > 2, epsilon > 0 else { return points }
+        func perpDist(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let len2 = dx * dx + dy * dy
+            if len2 < 1e-8 { return hypot(p.x - a.x, p.y - a.y) }
+            return abs((p.x - a.x) * dy - (p.y - a.y) * dx) / sqrt(len2)
+        }
+        func douglas(_ pts: [CGPoint]) -> [CGPoint] {
+            guard pts.count > 2 else { return pts }
+            var maxD: CGFloat = 0
+            var idx = 0
+            let a = pts[0], b = pts[pts.count - 1]
+            for i in 1..<(pts.count - 1) {
+                let d = perpDist(pts[i], a, b)
+                if d > maxD { maxD = d; idx = i }
+            }
+            if maxD <= epsilon {
+                return [a, b]
+            }
+            let left = douglas(Array(pts[0...idx]))
+            let right = douglas(Array(pts[idx...]))
+            return left.dropLast() + right
+        }
+        let simplified = douglas(points)
+        return simplified.count >= 2 ? simplified : points
     }
 
     private static func drawEndpoints(
@@ -678,7 +1046,7 @@ enum HikingRouteSnapshotGenerator {
             outer = detailEndpointOuterDiameter
             inner = detailEndpointInnerDiameter
             endFill = endPointColor
-        case .shareSummary:
+        case .shareSummary, .shareSummaryColor:
             outer = ShareSummaryTokens.markerOuter
             inner = ShareSummaryTokens.markerInner
             endFill = ShareSummaryTokens.inkUIColor
@@ -723,13 +1091,8 @@ enum HikingRouteSnapshotGenerator {
             height: scaledOuter
         )
         cgContext.saveGState()
-        if appearance == .shareSummary {
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: 1 * contentScale),
-                blur: 1.2 * contentScale,
-                color: ShareSummaryTokens.inkUIColor.withAlphaComponent(0.18).cgColor
-            )
-        }
+        // Share-summary AFTER: no endpoint shadow (팀장 — 그림자 0).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: outer)
         cgContext.restoreGState()
@@ -799,50 +1162,132 @@ enum HikingRouteSnapshotGenerator {
                 preferredLeadingSide: marker.placesLabelOnLeadingSide
             )
         }
-        // Share-summary: clamp capsules to canvas × side inset 24 (impl4 #2). Detail map keeps legacy.
-        let clampBounds = appearance == .shareSummary
-        let imageSize = clampBounds ? canvasSize : .zero
-        let shifts = RouteKilometerMarkerDrawing.labelShifts(
-            for: requests,
-            endpointPoints: endpoints,
-            contentScale: contentScale,
-            imageSize: imageSize,
-            sideInset: clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
-        )
-        for request in requests {
-            var placesLeading = shifts[request.kilometer]?.placesLabelOnLeadingSide
-                ?? request.preferredLeadingSide
-            var vertical = shifts[request.kilometer]?.verticalOffset ?? 0
-            // Draw-time safety: if chosen side still overflows, flip (Android impl4).
-            if clampBounds, imageSize.width > 1 {
-                let trial = RouteKilometerMarkerDrawing.capsuleSize(
-                    distanceLabel: request.distanceLabel,
-                    timeLabel: request.timeLabel,
-                    contentScale: contentScale
+        // Share-summary: white capsules + inset 24. Data Card / standard: detail blue
+        // capsules (Android DetailKmLabelDrawable parity).
+        let clampBounds = appearance.usesShareSummaryChrome
+        let imageSize = canvasSize
+        let sideInset = clampBounds
+            ? ShareSummaryTokens.kmLabelBoundsInset * contentScale
+            : RouteKilometerMarkerMetrics.detailLabelSideInset * contentScale
+        let routePolyline = coordinates.map { projector.point(for: $0) }
+        // Title(+memo) bottom → forbidden band for km labels (titleLabelMinGap).
+        let titleBlockBottom: CGFloat? = {
+            guard appearance.usesShareSummaryChrome else { return nil }
+            let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvasSize.width)
+            return ShareSummaryTokens.headerBottom(memoLineCount: memoLines) * contentScale
+        }()
+        // Snapshot is offline — allow full search under the 300ms interactive budget.
+        let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
+        RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
+        defer { RouteKilometerLabelPlacement.softTimeBudgetSeconds = previousBudget }
+        var shifts: [Int: RouteKilometerLabelShift]
+        if appearance.usesShareSummaryChrome {
+            let placement = RouteKilometerLabelPlacement.placeSummary(
+                markers: requests,
+                endpointPoints: endpoints,
+                routePolyline: routePolyline,
+                contentScale: contentScale,
+                imageSize: imageSize,
+                sideInset: sideInset,
+                pathHalfWidth: ShareSummaryTokens.routeCasing / 2,
+                titleBlockBottom: titleBlockBottom
+            )
+            shifts = placement.shifts
+            if shifts.isEmpty {
+                shifts = RouteKilometerMarkerDrawing.labelShifts(
+                    for: requests,
+                    endpointPoints: endpoints,
+                    contentScale: contentScale,
+                    imageSize: imageSize,
+                    sideInset: sideInset,
+                    routePolyline: routePolyline,
+                    titleBlockBottom: titleBlockBottom
                 )
-                let gap = RouteKilometerMarkerMetrics.labelGap * contentScale
-                let offsetX = gap + trial.width / 2
-                let centerX = request.routePoint.x + (placesLeading ? -offsetX : offsetX)
-                let left = centerX - trial.width / 2
-                let right = centerX + trial.width / 2
-                let inset = ShareSummaryTokens.kmLabelBoundsInset * contentScale
-                if right > imageSize.width - inset + 0.5, !placesLeading {
-                    placesLeading = true
-                    vertical = 0
-                } else if left < inset - 0.5, placesLeading {
-                    placesLeading = false
-                    vertical = 0
-                }
             }
-            RouteKilometerMarkerDrawing.drawCombinedMarker(
-                distanceLabel: request.distanceLabel,
-                timeLabel: request.timeLabel,
-                routePoint: request.routePoint,
-                placesLabelOnLeadingSide: placesLeading,
-                verticalOffset: vertical,
+        } else {
+            let placement = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+                for: requests,
+                endpointPoints: endpoints,
+                contentScale: contentScale,
+                imageSize: imageSize,
+                routePolyline: routePolyline,
+                preferModeStep: 1,
+                zoomDelta: 1
+            )
+            shifts = placement.shifts
+            if shifts.isEmpty {
+                shifts = RouteKilometerMarkerDrawing.labelShifts(
+                    for: requests,
+                    endpointPoints: endpoints,
+                    contentScale: contentScale,
+                    imageSize: imageSize,
+                    sideInset: sideInset,
+                    routePolyline: routePolyline,
+                    pathHalfWidth: 4,
+                    titleBlockBottom: nil
+                )
+            }
+        }
+        // Spec §6/§7: dots for every km; labels only where the solver placed a shift
+        // (5km mode → non-multiples stay dot-only). Never invent fallback label offsets.
+        let useDetailBlue = !appearance.usesShareSummaryChrome
+        for request in requests {
+            RouteKilometerMarkerDrawing.drawRouteDot(
+                at: request.routePoint,
                 contentScale: contentScale,
                 in: cgContext
             )
+            guard var offset = shifts[request.kilometer]?.centerOffset else { continue }
+            let size = RouteKilometerMarkerDrawing.capsuleSize(
+                distanceLabel: request.distanceLabel,
+                timeLabel: request.timeLabel,
+                contentScale: contentScale
+            )
+            if imageSize.width > 1, size.width > 0 {
+                let centerX = request.routePoint.x + offset.x
+                let left = centerX - size.width / 2
+                let right = centerX + size.width / 2
+                let inset = sideInset
+                var flipped = offset
+                if right > imageSize.width - inset + 0.5 {
+                    flipped.x = -abs(offset.x)
+                } else if left < inset - 0.5 {
+                    flipped.x = abs(offset.x)
+                }
+                if flipped != offset {
+                    let trial = [request.kilometer: RouteKilometerLabelShift(centerOffset: flipped)]
+                    let hits = RouteKilometerLabelPlacement.auditCollisions(
+                        shifts: trial,
+                        markers: [request],
+                        endpointPoints: endpoints,
+                        routePolyline: routePolyline,
+                        contentScale: contentScale,
+                        pathHalfWidth: appearance.usesShareSummaryChrome
+                            ? ShareSummaryTokens.routeCasing / 2
+                            : 4
+                    )
+                    if hits.isZero { offset = flipped }
+                }
+            }
+            if useDetailBlue {
+                RouteKilometerMarkerDrawing.drawDetailCombinedMarker(
+                    distanceLabel: request.distanceLabel,
+                    timeLabel: request.timeLabel,
+                    routePoint: request.routePoint,
+                    centerOffset: offset,
+                    contentScale: contentScale,
+                    in: cgContext
+                )
+            } else {
+                RouteKilometerMarkerDrawing.drawCombinedMarker(
+                    distanceLabel: request.distanceLabel,
+                    timeLabel: request.timeLabel,
+                    routePoint: request.routePoint,
+                    centerOffset: offset,
+                    contentScale: contentScale,
+                    in: cgContext
+                )
+            }
         }
     }
 
