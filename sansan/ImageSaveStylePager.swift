@@ -4,9 +4,9 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v18f JW: shared crop SoT 314∶450. SC/SG bias +148 + logo omit_fill
-//  (logo clear of pill/edge; title clear). DC bias +424: tip clear under
-//  rounded top AND 1km blue below name pill; primary rows full.
+//  v18g JW: shared crop SoT 314∶510. SC/SG bias +32 + logo omit_fill;
+//  DC bias +308 (y0 kept 250 — tip/1km tops unchanged). Bottom fade 96px
+//  shared both phones so DC row2 corners + SG/SC glass foot clear.
 //  Page-dot gap SoT: dotsTopGap 22pt. Morph unchanged.
 //  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
 //  pre-framed per crop table (Android copies same numbers). 「선택 완료」
@@ -32,10 +32,10 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v18f).
-    /// Aspect **314∶450**; at list width ≈ 370pt → card height ≈ **530pt**.
+    /// Settings preview framing — shared crop SoT with Android (v18g).
+    /// Aspect **314∶510**; at list width ≈ 370pt → card height ≈ **601pt**.
     static let cardAspectWidth: CGFloat = 314
-    static let cardAspectHeight: CGFloat = 450
+    static let cardAspectHeight: CGFloat = 510
     static let pageCorner: CGFloat = 24
     /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
     static let titleSize: CGFloat = 17
@@ -235,7 +235,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶450 per shared crop SoT (see v18 CROP_SOT).
+            // Resources are pre-framed 314∶510 per shared crop SoT (see v18 CROP_SOT).
             // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
