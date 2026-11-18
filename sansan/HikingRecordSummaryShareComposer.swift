@@ -112,13 +112,18 @@ private struct SummaryMapSharePage: View {
 
             Color.clear.frame(height: ShareSummaryTokens.headerTitleGap * s)
 
+            // Layout frame stays headerTitleLineHeight (headerBottom / title-gap).
+            // Paint lh +16pt + allowInkOverflow so Hangul 받침 / descenders aren't
+            // under-cropped by the fixed line box.
             ShareSummaryTypeBox.text(
                 record.exportCardTitle,
                 size: ShareSummaryTokens.headerTitleSize * s,
                 weight: .bold,
-                lineHeight: ShareSummaryTokens.headerTitleLineHeight * s,
+                lineHeight: (ShareSummaryTokens.headerTitleLineHeight + 16) * s,
                 color: ShareSummaryTokens.inkUIColor,
-                tracking: -0.2 * s
+                tracking: -0.2 * s,
+                frameHeight: ShareSummaryTokens.headerTitleLineHeight * s,
+                allowInkOverflow: true
             )
             .lineLimit(1)
             .truncationMode(.tail)
@@ -326,9 +331,12 @@ private enum ShareSummaryTypeBox {
         tracking: CGFloat = 0,
         monospaced: Bool = false,
         baselineOffset override: CGFloat? = nil,
-        frameHeight: CGFloat? = nil
+        frameHeight: CGFloat? = nil,
+        /// When true, layout height stays `frameHeight`/`lineHeight` but ink may paint
+        /// outside so Hangul 받침 / descenders are not under-cropped by the line box.
+        allowInkOverflow: Bool = false
     ) -> some View {
-        Text(
+        let label = Text(
             attributed(
                 string,
                 size: size,
@@ -340,7 +348,16 @@ private enum ShareSummaryTypeBox {
                 baselineOffset: override
             )
         )
-        .frame(height: frameHeight ?? lineHeight, alignment: .center)
+        let boxHeight = frameHeight ?? lineHeight
+        if allowInkOverflow {
+            Color.clear
+                .frame(height: boxHeight)
+                .overlay(alignment: .center) {
+                    label.fixedSize(horizontal: false, vertical: true)
+                }
+        } else {
+            label.frame(height: boxHeight, alignment: .center)
+        }
     }
 }
 
