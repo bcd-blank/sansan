@@ -25,6 +25,10 @@ private enum ImageSaveStylePagerTokens {
     static let gap: CGFloat = 14
     static let pageHeight: CGFloat = 220
     static let pageCorner: CGFloat = 24
+    /// Option name below preview (not overlaid — v2 reject / JW v6). Shared with Android.
+    static let titleSize: CGFloat = 17
+    static let titleToPreviewGap: CGFloat = 12
+    static let titleToDotsGap: CGFloat = 12
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)
@@ -40,7 +44,7 @@ struct ImageSaveStylePager: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             TabView(selection: binding) {
                 ForEach(Array(styles.enumerated()), id: \.element.id) { _, style in
                     ImageSaveStylePagePreview(style: style)
@@ -56,6 +60,15 @@ struct ImageSaveStylePager: View {
             .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
             .accessibilityLabel("이미지 저장 방식")
             .accessibilityIdentifier("imageSaveStylePager")
+
+            // Separate line under preview — never over distance numerals on the sample art.
+            Text(selection.label)
+                .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
+                .foregroundStyle(ImageSaveStylePagerTokens.inverse)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, ImageSaveStylePagerTokens.titleToPreviewGap)
+                .accessibilityIdentifier("imageSaveStyleTitle")
 
             PillSpringDots(
                 count: styles.count,
@@ -73,6 +86,7 @@ struct ImageSaveStylePager: View {
                 },
                 labels: styles.map(\.label)
             )
+            .padding(.top, ImageSaveStylePagerTokens.titleToDotsGap)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 14)
@@ -124,7 +138,7 @@ private struct ImageSaveStylePagePreview: View {
     let style: HikingRecordImageSaveStyle
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack {
             if let image = ImageSaveStylePreviewImages.image(for: style) {
                 Image(uiImage: image)
                     .resizable()
@@ -134,16 +148,13 @@ private struct ImageSaveStylePagePreview: View {
             } else {
                 ImageSaveStylePagerTokens.surface
             }
+            // Soft bottom scrim only (Android parity) — no style-name Text on the art.
             LinearGradient(
-                colors: [.clear, .black.opacity(0.35)],
-                startPoint: UnitPoint(x: 0.5, y: 0.45),
+                colors: [.clear, .black.opacity(0.22)],
+                startPoint: UnitPoint(x: 0.5, y: 0.55),
                 endPoint: .bottom
             )
-            Text(style.label)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.leading, 16)
-                .padding(.bottom, 14)
+            .allowsHitTesting(false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ImageSaveStylePagerTokens.surface)
