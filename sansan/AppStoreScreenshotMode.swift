@@ -11,6 +11,8 @@ import Foundation
 
 enum AppStoreScreenshotMode: String {
     case dashboard
+    /// Dashboard + 일반설정 sheet scrolled to image-save-style pager.
+    case settings
     case records
     case imported
     case kmsc
@@ -40,11 +42,15 @@ enum AppStoreScreenshotMode: String {
 
     var opensRecordsTab: Bool {
         switch self {
-        case .dashboard: false
+        case .dashboard, .settings: false
         case .records, .imported, .kmsc, .kmscDetail, .detailZoom,
              .detailSaryang, .detailGahyeon, .detailSamak, .detailGamaji: true
         }
     }
+
+    var opensGeneralSettings: Bool { self == .settings }
+
+    var scrollsToImageSaveStyle: Bool { self == .settings }
 
     var recordsListTab: RecordsListTab? {
         switch self {
@@ -107,6 +113,31 @@ enum UITestMapCaptureHooks {
         CFNotificationCenterAddObserver(
             center, nil, uiTestMapZoomInNotify, zoomInName, nil, .deliverImmediately
         )
+        UITestSaveStyleCaptureHooks.installIfNeeded()
+    }
+}
+
+/// Darwin notify → image-save-style pager page (`saveStylePage0`…`2`).
+enum UITestSaveStyleCaptureHooks {
+    static let page0Name = "com.jw.sansan.uitest.saveStylePage0" as CFString
+    static let page1Name = "com.jw.sansan.uitest.saveStylePage1" as CFString
+    static let page2Name = "com.jw.sansan.uitest.saveStylePage2" as CFString
+
+    private static var installed = false
+
+    static func installIfNeeded() {
+        guard !installed else { return }
+        installed = true
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStylePage0Notify, page0Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStylePage1Notify, page1Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestSaveStylePage2Notify, page2Name, nil, .deliverImmediately
+        )
     }
 }
 
@@ -128,8 +159,32 @@ private let uiTestMapZoomInNotify: CFNotificationCallback = { _, _, _, _, _ in
     uiTestMapPostAction("zoomIn")
 }
 
+private func uiTestSaveStylePostPage(_ index: Int) {
+    DispatchQueue.main.async {
+        NotificationCenter.default.post(
+            name: .uiTestSaveStylePage,
+            object: nil,
+            userInfo: ["index": index]
+        )
+    }
+}
+
+private let uiTestSaveStylePage0Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostPage(0)
+}
+
+private let uiTestSaveStylePage1Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostPage(1)
+}
+
+private let uiTestSaveStylePage2Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestSaveStylePostPage(2)
+}
+
 extension Notification.Name {
     static let uiTestMapCaptureAction = Notification.Name("sansan.uiTestMapCaptureAction")
+    static let uiTestSaveStylePage = Notification.Name("sansan.uiTestSaveStylePage")
 }
 
 #endif
+

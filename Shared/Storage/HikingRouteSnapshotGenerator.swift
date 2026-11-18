@@ -509,22 +509,23 @@ enum HikingRouteSnapshotGenerator {
         let format = UIGraphicsImageRendererFormat()
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+        // Simple Color: heal Apple legal strip by cloning map pixels (no grey/white plate —
+        // that read as a hole under the floating card). Grey style still uses map paper.
+        let mapLayer: UIImage = appearance == .shareSummaryColor
+            ? RouteMapOverlayMetrics.coveringNativeAppleMapsAttribution(on: baseImage)
+            : baseImage
+
         return renderer.image { context in
             if appearance.usesGreyMapTone {
                 ShareSummaryTokens.mapPaperUIColor.setFill()
                 context.fill(CGRect(origin: .zero, size: canvasSize))
             }
-            baseImage.draw(in: CGRect(origin: .zero, size: canvasSize))
+            mapLayer.draw(in: CGRect(origin: .zero, size: canvasSize))
 
             // JW 18:25 — MKMapSnapshotter may still bake /Legal at bottom-left; keep only the
             // hand-drawn 「지도」 between map and card. Cover with map paper (not white).
             if appearance.usesGreyMapTone {
                 ShareSummaryTokens.mapPaperUIColor.setFill()
-                context.fill(
-                    RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
-                )
-            } else if appearance == .shareSummaryColor {
-                UIColor.white.withAlphaComponent(0.55).setFill()
                 context.fill(
                     RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
                 )

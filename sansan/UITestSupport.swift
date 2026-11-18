@@ -23,6 +23,7 @@ enum UITestSupport {
     private static var didSeedPlacementRecords = false
 
     static func applyIfNeeded() {
+        UITestMapCaptureHooks.installIfNeeded()
         guard seedRecords else { return }
         // Single main-queue pass after user activation (avoid merge-on-resave zigzag).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {

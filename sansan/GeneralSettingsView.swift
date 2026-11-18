@@ -218,6 +218,7 @@ struct GeneralSettingsView: View {
             } footer: {
                 Text(imageSaveStyle.footer)
             }
+            .id("imageSaveStyleSection")
 
             Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
@@ -279,7 +280,20 @@ struct GeneralSettingsView: View {
     }
 
     private var formWithPresentations: some View {
-        settingsForm
+        ScrollViewReader { proxy in
+            settingsForm
+                .onAppear {
+#if DEBUG
+                    guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(450))
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo("imageSaveStyleSection", anchor: .top)
+                        }
+                    }
+#endif
+                }
+        }
         .navigationTitle("일반설정")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

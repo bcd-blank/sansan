@@ -4,23 +4,27 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Viewing page = selected. Swipe + tap dots. No autoplay.
+//  Preview art = real sample renders (same assets as Android), not abstract shapes.
+//  Simple Grey sample must show warm paper #E6E2E0 / road #EEEBE9.
 //
 
 #if os(iOS)
 
 import SwiftUI
+import UIKit
 
 /// Light-mode pagination tokens from docs/image-save-style-pager/pagination-dots-reference.html
-/// (do NOT use black-stage dark tokens).
+/// (do NOT use black-stage dark tokens). Shared sizes with Android ImageSaveStylePagerTokens.
 private enum ImageSaveStylePagerTokens {
     static let fill3 = Color(red: 23 / 255, green: 24 / 255, blue: 26 / 255).opacity(0.12)
     static let inverse = Color(red: 14 / 255, green: 15 / 255, blue: 17 / 255)
     static let surface = Color.white
-    static let card = Color(red: 247 / 255, green: 247 / 255, blue: 246 / 255)
 
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
+    static let pageHeight: CGFloat = 220
+    static let pageCorner: CGFloat = 24
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)
@@ -48,9 +52,10 @@ struct ImageSaveStylePager: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .frame(height: ImageSaveStylePagerTokens.pageHeight)
+            .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
             .accessibilityLabel("이미지 저장 방식")
+            .accessibilityIdentifier("imageSaveStylePager")
 
             PillSpringDots(
                 count: styles.count,
@@ -69,6 +74,22 @@ struct ImageSaveStylePager: View {
                 labels: styles.map(\.label)
             )
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 14)
+#if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStylePage)) { note in
+            guard let raw = note.userInfo?["index"] as? Int,
+                  styles.indices.contains(raw) else { return }
+            withAnimation(
+                .interpolatingSpring(
+                    stiffness: ImageSaveStylePagerTokens.springPage.stiffness,
+                    damping: ImageSaveStylePagerTokens.springPage.damping
+                )
+            ) {
+                selection = styles[raw]
+            }
+        }
+#endif
     }
 
     private var binding: Binding<HikingRecordImageSaveStyle> {
@@ -88,7 +109,7 @@ struct ImageSaveStylePager: View {
     }
 }
 
-/// Offscreen export / snapshot helper (illustrative page art).
+/// Offscreen export / snapshot helper (real sample thumb).
 struct ImageSaveStylePageExportPreview: View {
     let style: HikingRecordImageSaveStyle
 
@@ -97,17 +118,25 @@ struct ImageSaveStylePageExportPreview: View {
     }
 }
 
-// MARK: - Page preview (illustrative; not live map render)
+// MARK: - Page preview (real sample render, cropped)
 
 private struct ImageSaveStylePagePreview: View {
     let style: HikingRecordImageSaveStyle
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            previewArt
+            if let image = ImageSaveStylePreviewImages.image(for: style) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                ImageSaveStylePagerTokens.surface
+            }
             LinearGradient(
                 colors: [.clear, .black.opacity(0.35)],
-                startPoint: .center,
+                startPoint: UnitPoint(x: 0.5, y: 0.45),
                 endPoint: .bottom
             )
             Text(style.label)
@@ -119,90 +148,27 @@ private struct ImageSaveStylePagePreview: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ImageSaveStylePagerTokens.surface)
     }
+}
 
-    @ViewBuilder
-    private var previewArt: some View {
+enum ImageSaveStylePreviewImages {
+    static func image(for style: HikingRecordImageSaveStyle) -> UIImage? {
+        let name: String
         switch style {
-        case .card:
-            VStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.55, green: 0.72, blue: 0.55),
-                                Color(red: 0.42, green: 0.58, blue: 0.42),
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(height: 96)
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white)
-                    .frame(height: 72)
-                    .overlay(alignment: .topLeading) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Capsule().fill(Color.black.opacity(0.12)).frame(width: 48, height: 6)
-                            Capsule().fill(Color.black.opacity(0.20)).frame(width: 88, height: 10)
-                            HStack(spacing: 8) {
-                                Capsule().fill(Color.black.opacity(0.10)).frame(width: 40, height: 6)
-                                Capsule().fill(Color.black.opacity(0.10)).frame(width: 40, height: 6)
-                            }
-                        }
-                        .padding(12)
-                    }
-                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ImageSaveStylePagerTokens.card)
-
-        case .summary:
-            ZStack(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color(red: 230 / 255, green: 226 / 255, blue: 224 / 255))
-                Capsule()
-                    .stroke(Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), lineWidth: 3)
-                    .frame(width: 140, height: 90)
-                    .rotationEffect(.degrees(-28))
-                    .offset(x: 20, y: -36)
-                    .opacity(0.9)
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white)
-                    .frame(height: 78)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-                    .shadow(color: .black.opacity(0.10), radius: 10, y: 6)
-            }
-
-        case .simpleColor:
-            ZStack(alignment: .bottom) {
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.62, green: 0.78, blue: 0.55),
-                        Color(red: 0.45, green: 0.62, blue: 0.42),
-                        Color(red: 0.72, green: 0.82, blue: 0.68),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Capsule()
-                    .stroke(Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255), lineWidth: 3)
-                    .frame(width: 140, height: 90)
-                    .rotationEffect(.degrees(-28))
-                    .offset(x: 20, y: -36)
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.65), lineWidth: 1)
-                    }
-                    .frame(height: 78)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-                    .shadow(color: .black.opacity(0.12), radius: 12, y: 8)
+        case .card: name = "data-card"
+        case .summary: name = "simple-grey"
+        case .simpleColor: name = "simple-color"
+        }
+        // Xcode may flatten Resources/image-save-style-previews/*.png to the bundle root.
+        let candidates: [URL?] = [
+            Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "image-save-style-previews"),
+            Bundle.main.url(forResource: name, withExtension: "png"),
+        ]
+        for url in candidates {
+            if let url, let image = UIImage(contentsOfFile: url.path) {
+                return image
             }
         }
+        return UIImage(named: "ImageSavePreview-\(name)")
     }
 }
 
@@ -250,6 +216,7 @@ private struct PillSpringDots: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(labels.indices.contains(index) ? labels[index] : "Slide \(index + 1)")
+                    .accessibilityIdentifier("imageSaveStyleDot\(index)")
                     .accessibilityAddTraits(index == selectedIndex ? [.isSelected, .isButton] : .isButton)
                 }
             }

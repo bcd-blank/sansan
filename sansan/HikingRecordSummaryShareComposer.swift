@@ -78,14 +78,21 @@ enum HikingRecordSummaryShareComposer {
 // MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
 
 private enum ShareSummaryGlassBackdrop {
+    /// Shared with Android `ShareSummaryGlass` — same opacity/blur/highlight on both phones.
+    static let blurRadiusPt: CGFloat = 36
+    static let glassFillAlpha: CGFloat = 0.38
+    static let washAlpha: CGFloat = 0.12
+    static let rimAlpha: CGFloat = 0.72
+    static let catchLightAlpha: CGFloat = 0.55
+
     /// Strong map blur + translucent fill + edge highlight, clipped to the card.
     static func bake(
         mapImage: UIImage,
         cardRect: CGRect,
-        cornerRadius: CGFloat,
-        blurRadius: CGFloat = 36,
-        glassFillAlpha: CGFloat = 0.38
+        cornerRadius: CGFloat
     ) -> UIImage? {
+        let blurRadius = blurRadiusPt
+        let fillAlpha = glassFillAlpha
         guard let cgImage = mapImage.cgImage else { return nil }
         let scale = mapImage.scale
         let pixelRect = CGRect(
@@ -131,18 +138,19 @@ private enum ShareSummaryGlassBackdrop {
             path.addClip()
             UIImage(cgImage: blurredCG, scale: scale, orientation: .up)
                 .draw(in: bounds)
-            UIColor.white.withAlphaComponent(glassFillAlpha).setFill()
+            UIColor.white.withAlphaComponent(fillAlpha).setFill()
             path.fill()
-            UIColor.white.withAlphaComponent(0.12).setFill()
+            UIColor.white.withAlphaComponent(washAlpha).setFill()
             path.fill()
             cg.restoreGState()
 
             cg.saveGState()
             path.addClip()
+            // 1pt rim (matches Android ShareSummaryGlass stroke), independent of @3x scale.
             cg.setLineWidth(1)
-            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.72).cgColor)
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(rimAlpha).cgColor)
             cg.stroke(bounds.insetBy(dx: 0.5, dy: 0.5))
-            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.55).cgColor)
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(catchLightAlpha).cgColor)
             cg.move(to: CGPoint(x: cornerRadius * 0.35, y: 0.75))
             cg.addLine(to: CGPoint(x: size.width - cornerRadius * 0.35, y: 0.75))
             cg.strokePath()
