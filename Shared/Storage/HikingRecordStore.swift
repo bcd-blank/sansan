@@ -515,6 +515,7 @@ final class HikingRecordStore: ObservableObject {
         fullScreen: Bool = false
     ) async -> UIImage? {
         guard let record = records.first(where: { $0.id == recordID }) else { return nil }
+        let mapOptions = HikingShareExportPreferences.applyingSharePhotoFeatureFlags(mapOptions)
         if HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer,
            let summary = Self.summaryImageRenderer {
             return await summary(record, mapOptions)

@@ -224,13 +224,20 @@ struct GeneralSettingsView: View {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
                 Toggle("시간 표시", isOn: $shareMapOptions.showsTimeMarkers)
                 Toggle("날씨 표시", isOn: $shareMapOptions.showsWeatherLabel)
-                Toggle("사진 위치 표시", isOn: $shareMapOptions.showsPhotoMarkers)
-                Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
+                // JW: 사진 위치 / 고정 썸네일은 저장·공유에서 플래그로 항상 off — 옵션 목록 숨김.
+                // 코드·UserDefaults는 유지. 상세 지도는 HikingRecordRouteMapView 별개.
+                if HikingShareExportPreferences.isSharePhotoMarkersEnabled {
+                    Toggle("사진 위치 표시", isOn: $shareMapOptions.showsPhotoMarkers)
+                }
+                if HikingShareExportPreferences.isSharePinnedThumbnailsEnabled {
+                    Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
+                }
             } header: {
                 Text("저장 · 공유 지도")
             } footer: {
                 Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 거리 라벨, 시간 표시는 그 지점까지 걸린 시간, 날씨 표시는 기록 상세 지도와 저장 이미지의 날씨 라벨입니다.")
             }
+            .id("shareMapExportSection")
 
             if FlythroughCapabilities.isFeatureEnabled {
                 flythroughSettingsSection
@@ -284,11 +291,16 @@ struct GeneralSettingsView: View {
             settingsForm
                 .onAppear {
 #if DEBUG
-                    guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true else { return }
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(450))
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            proxy.scrollTo("imageSaveStyleSection", anchor: .top)
+                        if AppStoreScreenshotMode.current?.scrollsToShareMapExport == true {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo("shareMapExportSection", anchor: .top)
+                            }
+                        } else if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo("imageSaveStyleSection", anchor: .top)
+                            }
                         }
                     }
 #endif

@@ -33,6 +33,7 @@ enum UITestSupport {
             reseedsPlacementRecords()
             exportSummariesIfNeeded()
             exportSaveStylesIfNeeded()
+            exportPhotoOffEvidenceIfNeeded()
         }
     }
 
@@ -313,6 +314,65 @@ enum UITestSupport {
 
             let done = dir.appendingPathComponent("SAVE_STYLES_DONE.txt")
             try? "ok\n".write(to: done, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// `SANSAN_EXPORT_PHOTO_OFF=1` → Documents/image-save-style-pager/photo-off/*
+    /// Record with trail photo + map pin; save PNG must omit photo markers/thumbnails.
+    private static func exportPhotoOffEvidenceIfNeeded() {
+        let env = ProcessInfo.processInfo.environment["SANSAN_EXPORT_PHOTO_OFF"]
+        let arg = ProcessInfo.processInfo.arguments.contains("-SANSAN_EXPORT_PHOTO_OFF")
+        guard env == "1" || arg else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.8))
+            let store = HikingRecordStore.shared
+            store.reloadForCurrentUser()
+            let dir = UserDataPaths.documentsDirectory
+                .appendingPathComponent("image-save-style-pager/photo-off", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            let recordID = seedSessionID
+            guard var record = store.records.first(where: { $0.id == recordID }),
+                  let photo = record.session.photos.first else {
+                print("[photo-off] missing seeded record with photo")
+                return
+            }
+            _ = store.pinMapPhoto(recordID: recordID, photoID: photo.id)
+            record = store.records.first(where: { $0.id == recordID }) ?? record
+            print("[photo-off] photos=\(record.session.photos.count) pinned=\(record.mapPinnedPhotoIDs.count)")
+
+            // Explicit true would have drawn markers; feature flags must force them off.
+            let tryOnOptions = HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: true,
+                showsPinnedThumbnails: true
+            )
+            let previous = HikingRecordImageSavePreferences.style
+            defer { HikingRecordImageSavePreferences.style = previous }
+
+            for (style, slug) in [
+                (HikingRecordImageSaveStyle.card, "data-card"),
+                (.simpleColor, "simple-color"),
+            ] as [(HikingRecordImageSaveStyle, String)] {
+                HikingRecordImageSavePreferences.style = style
+                guard let image = await store.shareImage(
+                    for: recordID,
+                    mapOptions: tryOnOptions,
+                    fullScreen: true
+                ), let data = image.pngData() else {
+                    print("[photo-off] render failed \(slug)")
+                    continue
+                }
+                let url = dir.appendingPathComponent("ios-photo-record-\(slug).png")
+                try? data.write(to: url, options: .atomic)
+                print("[photo-off] wrote \(url.lastPathComponent)")
+            }
+
+            let done = dir.appendingPathComponent("PHOTO_OFF_DONE.txt")
+            try? "ok\nphotos=\(record.session.photos.count) pinned=\(record.mapPinnedPhotoIDs.count)\n"
+                .write(to: done, atomically: true, encoding: .utf8)
         }
     }
 

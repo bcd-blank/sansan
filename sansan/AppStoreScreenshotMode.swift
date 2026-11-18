@@ -13,6 +13,8 @@ enum AppStoreScreenshotMode: String {
     case dashboard
     /// Dashboard + 일반설정 sheet scrolled to image-save-style pager.
     case settings
+    /// Dashboard + 일반설정 sheet scrolled to 「저장 · 공유 지도」 (photo toggles hidden).
+    case settingsShareMap = "settings-share-map"
     case records
     case imported
     case kmsc
@@ -42,15 +44,19 @@ enum AppStoreScreenshotMode: String {
 
     var opensRecordsTab: Bool {
         switch self {
-        case .dashboard, .settings: false
+        case .dashboard, .settings, .settingsShareMap: false
         case .records, .imported, .kmsc, .kmscDetail, .detailZoom,
              .detailSaryang, .detailGahyeon, .detailSamak, .detailGamaji: true
         }
     }
 
-    var opensGeneralSettings: Bool { self == .settings }
+    var opensGeneralSettings: Bool {
+        self == .settings || self == .settingsShareMap
+    }
 
     var scrollsToImageSaveStyle: Bool { self == .settings }
+
+    var scrollsToShareMapExport: Bool { self == .settingsShareMap }
 
     var recordsListTab: RecordsListTab? {
         switch self {

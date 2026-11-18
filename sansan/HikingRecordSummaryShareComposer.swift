@@ -42,7 +42,7 @@ enum HikingRecordSummaryShareComposer {
         let canvas = ShareSummaryTokens.canvasSize(widthPoints: width, pixelScale: scale)
         let s = ShareSummaryTokens.ptScale(for: canvas.width)
         let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvas.width)
-        var captureOptions = mapOptions
+        var captureOptions = HikingShareExportPreferences.applyingSharePhotoFeatureFlags(mapOptions)
         captureOptions.showsPinnedThumbnails = false
         guard let map = await HikingRouteSnapshotGenerator.fittedMapImage(
             record: record,

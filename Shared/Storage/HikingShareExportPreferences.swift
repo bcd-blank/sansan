@@ -86,6 +86,12 @@ final class HikingShareExportPreferencesObserver: ObservableObject {
 enum HikingShareExportPreferences {
     nonisolated private static let optionsBaseKey = "sansan.hikingShareMapExportOptions"
 
+    /// JW: 저장·공유 이미지에서 사진 위치 마커를 끈다. 코드·UserDefaults 값은 유지하고 읽기만 off.
+    /// 기록 상세 지도(`HikingRecordRouteMapView`)에는 적용하지 않는다.
+    nonisolated static let isSharePhotoMarkersEnabled = false
+    /// JW: 저장·공유 이미지에서 고정 사진 썸네일을 끈다. 코드·UserDefaults 값은 유지하고 읽기만 off.
+    nonisolated static let isSharePinnedThumbnailsEnabled = false
+
     nonisolated private static var optionsKey: String {
         guard let userID = UserDataPaths.currentUserID else { return optionsBaseKey }
         return "\(optionsBaseKey).\(userID)"
@@ -93,24 +99,50 @@ enum HikingShareExportPreferences {
 
     nonisolated static var mapOptions: HikingShareMapExportOptions {
         get {
-            guard let data = UserDefaults.standard.data(forKey: optionsKey) else {
-                return HikingShareMapExportOptions(
+            var options: HikingShareMapExportOptions
+            if let data = UserDefaults.standard.data(forKey: optionsKey) {
+                options = (try? JSONDecoder().decode(HikingShareMapExportOptions.self, from: data))
+                    ?? HikingShareMapExportOptions()
+                if !storedOptionsIncludeDistanceMarkers(data) {
+                    options.showsDistanceMarkers = HikingMapDisplayPreferences.legacyShowsDistanceMarkers
+                }
+            } else {
+                options = HikingShareMapExportOptions(
                     showsDistanceMarkers: HikingMapDisplayPreferences.legacyShowsDistanceMarkers
                 )
             }
-
-            var options = (try? JSONDecoder().decode(HikingShareMapExportOptions.self, from: data))
-                ?? HikingShareMapExportOptions()
-
-            if !storedOptionsIncludeDistanceMarkers(data) {
-                options.showsDistanceMarkers = HikingMapDisplayPreferences.legacyShowsDistanceMarkers
-            }
-            return options
+            return applyingSharePhotoFeatureFlags(options)
         }
         set {
-            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            // Keep previously stored photo/thumbnail bits when feature flags force runtime off,
+            // so an old "on" preference is not rewritten/deleted.
+            var toStore = newValue
+            if let data = UserDefaults.standard.data(forKey: optionsKey),
+               let existing = try? JSONDecoder().decode(HikingShareMapExportOptions.self, from: data) {
+                if !isSharePhotoMarkersEnabled {
+                    toStore.showsPhotoMarkers = existing.showsPhotoMarkers
+                }
+                if !isSharePinnedThumbnailsEnabled {
+                    toStore.showsPinnedThumbnails = existing.showsPinnedThumbnails
+                }
+            }
+            guard let data = try? JSONEncoder().encode(toStore) else { return }
             UserDefaults.standard.set(data, forKey: optionsKey)
         }
+    }
+
+    /// Share/save entry points call this so explicit `true` options cannot bypass the flags.
+    nonisolated static func applyingSharePhotoFeatureFlags(
+        _ options: HikingShareMapExportOptions
+    ) -> HikingShareMapExportOptions {
+        var result = options
+        if !isSharePhotoMarkersEnabled {
+            result.showsPhotoMarkers = false
+        }
+        if !isSharePinnedThumbnailsEnabled {
+            result.showsPinnedThumbnails = false
+        }
+        return result
     }
 
     nonisolated private static func storedOptionsIncludeDistanceMarkers(_ data: Data) -> Bool {
