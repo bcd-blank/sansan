@@ -4,9 +4,9 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v19a JW: shared card 314∶510. SG/SC same as v18h (+32, omit_fill).
-//  DC scale≈1.0993 fills map+2 rows to thumb foot (no empty plate band).
-//  Page-dot 22pt. Morph unchanged. Preview only.
+//  v20a JW: shared card 314∶510. SG/SC v18h (+32, omit_fill).
+//  DC full-width Y-only scale (no H scale-up) — side gutters like v18,
+//  map+2 rows fill height. Page-dot 22pt. Morph unchanged. Preview only.
 //  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
 //  pre-framed per crop table (Android copies same numbers). 「선택 완료」
 //  saved-only; footer follows VIEWED. Preview thumbs only — save untouched.
@@ -31,7 +31,7 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v19a).
+    /// Settings preview framing — shared crop SoT with Android (v20a).
     /// Aspect **314∶510**; at list width ≈ 370pt → card height ≈ **601pt**.
     static let cardAspectWidth: CGFloat = 314
     static let cardAspectHeight: CGFloat = 510
@@ -234,7 +234,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶510 per shared crop SoT (see v19 CROP_SOT).
+            // Resources are pre-framed 314∶510 per shared crop SoT (see v20 CROP_SOT).
             // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
