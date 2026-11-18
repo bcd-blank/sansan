@@ -4,10 +4,10 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v15 JW: image-as-card (radius, list-aligned width, 314∶220 height); NO card
-//  shadow/bg layer (pale strip was the shadow). Dots BELOW preview (v13), not
-//  on-card. Title TL + Morph TR; frame preview so km clears chrome (esp Simple
-//  Color 「4km 48:26」). 「선택 완료」 only on saved; footer follows VIEWED page.
+//  v16 JW: shared crop SoT 314∶320 (raised H so SC/SG glass + DC rows unclipped).
+//  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs pre-framed
+//  per crop table (Android copies same numbers). 「선택 완료」 saved-only; footer
+//  follows VIEWED. Preview thumbs only — save/export path untouched.
 //
 
 #if os(iOS)
@@ -29,10 +29,10 @@ private enum ImageSaveStylePagerTokens {
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing (pad 28 → 314×220). Width = list card; height = width × 220/314.
-    /// At list width ≈ 370pt → card height ≈ **259pt** (Android matches this SoT).
+    /// Settings preview framing — shared crop SoT with Android (v16).
+    /// Aspect **314∶320**; at list width ≈ 370pt → card height ≈ **377pt**.
     static let cardAspectWidth: CGFloat = 314
-    static let cardAspectHeight: CGFloat = 220
+    static let cardAspectHeight: CGFloat = 320
     static let pageCorner: CGFloat = 24
     /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
     static let titleSize: CGFloat = 17
@@ -232,7 +232,7 @@ struct ImageSaveStylePager: View {
     @ViewBuilder
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶220 so TL title + TR Morph stay clear of km.
+            // Resources are pre-framed 314∶320 per shared crop SoT (see v16 CROP_SOT).
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
