@@ -95,6 +95,8 @@ struct HikingRecordShareCardView: View {
     var preservesCapturedLogo: Bool = false
     /// 산행 중 스냅샷이면 일정 카드에 "현재" 라벨을 씁니다.
     var isInProgressSnapshot: Bool = false
+    /// When nil, falls back to `HikingShareExportPreferences.mapOptions.showsWeatherLabel`.
+    var showsWeatherLabel: Bool? = nil
 
     static let legacyExportWidth: CGFloat = 1080
     static let nineBySixteenHeight: CGFloat = 1920
@@ -250,7 +252,8 @@ struct HikingRecordShareCardView: View {
         }
         .frame(width: contentWidth, height: mapHeight)
         .overlay(alignment: HikingMapDisplayPreferences.weatherLabelOnLeading ? .topLeading : .topTrailing) {
-            if HikingShareExportPreferences.mapOptions.showsWeatherLabel, let weather = record.weather {
+            if showsWeatherLabel ?? HikingShareExportPreferences.mapOptions.showsWeatherLabel,
+               let weather = record.weather {
                 HikingRecordMapWeatherOverlay(weather: weather, layoutScale: layoutScale)
                     .padding(10 * layoutScale)
             }
@@ -271,14 +274,16 @@ enum HikingRecordShareComposer {
         routeImage: UIImage,
         format: HikingRecordShareExportFormat = .contentSized,
         preservesCapturedLogo: Bool = false,
-        isInProgressSnapshot: Bool = false
+        isInProgressSnapshot: Bool = false,
+        showsWeatherLabel: Bool? = nil
     ) -> UIImage? {
         let card = HikingRecordShareCardView(
             record: record,
             routeImage: routeImage,
             format: format,
             preservesCapturedLogo: preservesCapturedLogo,
-            isInProgressSnapshot: isInProgressSnapshot
+            isInProgressSnapshot: isInProgressSnapshot,
+            showsWeatherLabel: showsWeatherLabel
         )
 
         guard let image = renderCardBitmap(card) else {
@@ -335,7 +340,8 @@ enum HikingRecordShareComposer {
         while lastContent > 0, isPageBg(lastContent) {
             lastContent -= 1
         }
-        let padPx = max(Int((HikingRecordCardLayout.detailBottomPadding * image.scale).rounded()), 1)
+        // Match Android wrap trailing under GPS footer (~14pt); not the old 36pt buffer.
+        let padPx = max(Int((14 * image.scale).rounded()), 1)
         let newHeight = min(height, lastContent + 1 + padPx)
         guard newHeight > 8, newHeight < height else { return image }
         guard let cropped = cg.cropping(to: CGRect(x: 0, y: 0, width: width, height: newHeight)) else {

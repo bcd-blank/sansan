@@ -95,10 +95,10 @@ private enum ShareSummaryElevLegendSwatch {
 private enum ShareSummaryGlassBackdrop {
     /// Android `ShareSummaryGlass` code + v7 measured plate tune.
     /// Bake in **pixel space** with `designScale = widthPx/430` + stack-blur.
-    /// Fill/wash lowered from 0.38/0.12 — mid-card plate was ~+4.5 L vs Android (too milky).
+    /// Fill/wash lowered from 0.38/0.12 — mid-card plate was milky vs Android; 0.26/0.08 for map bleed.
     static let blurRadiusPt: CGFloat = 36
-    static let glassFillAlpha: CGFloat = 0.30
-    static let washAlpha: CGFloat = 0.09
+    static let glassFillAlpha: CGFloat = 0.26
+    static let washAlpha: CGFloat = 0.08
     static let rimAlpha: CGFloat = 0.72
     static let catchLightAlpha: CGFloat = 0.55
     private static let blurDownscaleFactor = 4

@@ -109,7 +109,8 @@ final class HikingRecordStore: ObservableObject {
 
     /// 공유·저장 이미지 — 상세 화면과 동일한 SwiftUI 레이아웃으로 렌더링(sansan 앱에서 등록).
     /// `fullScreen`이 true이면 기기 화면 전체 크기로 렌더링(사진 저장용).
-    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool) -> UIImage?)?
+    /// (record, routeImage, fullScreen, preservesCapturedLogo, mapOptions)
+    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool, HikingShareMapExportOptions) -> UIImage?)?
     static var summaryImageRenderer: (@MainActor (SavedHikingSession, HikingShareMapExportOptions) async -> UIImage?)?
 
     /// 사진 저장용 — 기록 상세 지도와 동일한 pt·배율(sansan 앱에서 등록).
@@ -526,7 +527,13 @@ final class HikingRecordStore: ObservableObject {
             fullScreen: fullScreen
         ) else { return nil }
         if let renderer = Self.shareImageRenderer {
-            return renderer(record, routeImage.image, fullScreen, routeImage.includesOnScreenLogo)
+            return renderer(
+                record,
+                routeImage.image,
+                fullScreen,
+                routeImage.includesOnScreenLogo,
+                mapOptions
+            )
         }
         return nil
     }

@@ -96,12 +96,13 @@ struct AppShellView: View {
         HikingRecordStore.summaryImageRenderer = { record, mapOptions in
             await HikingRecordSummaryShareComposer.render(record: record, mapOptions: mapOptions)
         }
-        HikingRecordStore.shareImageRenderer = { record, routeImage, fullScreen, preservesCapturedLogo in
+        HikingRecordStore.shareImageRenderer = { record, routeImage, fullScreen, preservesCapturedLogo, mapOptions in
             HikingRecordShareComposer.render(
                 record: record,
                 routeImage: routeImage,
                 format: fullScreen ? .fullScreen : .contentSized,
-                preservesCapturedLogo: preservesCapturedLogo
+                preservesCapturedLogo: preservesCapturedLogo,
+                showsWeatherLabel: mapOptions.showsWeatherLabel
             )
         }
         HikingRecordStore.detailShareMapCanvasProvider = {
