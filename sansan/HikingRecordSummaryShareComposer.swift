@@ -42,7 +42,8 @@ enum HikingRecordSummaryShareComposer {
         let page = SummaryMapSharePage(
             record: record,
             mapImage: map,
-            memoLineCount: memoLines
+            memoLineCount: memoLines,
+            showsWeatherLabel: mapOptions.showsWeatherLabel
         )
         .frame(width: canvas.width, height: canvas.height)
         .environment(\.colorScheme, .light)
@@ -60,11 +61,12 @@ private struct SummaryMapSharePage: View {
     let record: SavedHikingSession
     let mapImage: UIImage
     let memoLineCount: Int
+    let showsWeatherLabel: Bool
 
     private var s: CGFloat { ShareSummaryTokens.ptScale(for: mapImage.size.width) }
 
     private var showsWeather: Bool {
-        HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
+        showsWeatherLabel && record.weather != nil
     }
 
     var body: some View {

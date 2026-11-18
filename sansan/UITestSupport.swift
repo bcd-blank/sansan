@@ -174,6 +174,16 @@ enum UITestSupport {
             let dir = UserDataPaths.documentsDirectory
                 .appendingPathComponent("label-placement", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            // Parity with Android label-placement JSON (weather=null) + prior compare: no weather chip.
+            // Seoul-epoch seeds can fetch Open-Meteo after save; export forces weather off.
+            let exportMapOptions = HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: true,
+                showsPinnedThumbnails: false
+            )
+
             let map: [(String, UUID)] = [
                 ("saryangdo", saryangdoSeedID),
                 ("gahyeonsan", gahyeonsanSeedID),
@@ -189,7 +199,7 @@ enum UITestSupport {
                 let previous = HikingRecordImageSavePreferences.style
                 HikingRecordImageSavePreferences.style = .summary
                 defer { HikingRecordImageSavePreferences.style = previous }
-                guard let image = await store.shareImage(for: id) else {
+                guard let image = await store.shareImage(for: id, mapOptions: exportMapOptions) else {
                     print("[km-label] summary export render failed \(name) title=\(record.displayName ?? "?")")
                     continue
                 }
@@ -208,14 +218,16 @@ enum UITestSupport {
                 defer { HikingRecordImageSavePreferences.style = previous }
 
                 store.updateMemo(id: gamaID, memo: "")
-                if let image = await store.shareImage(for: gamaID), let data = image.pngData() {
+                if let image = await store.shareImage(for: gamaID, mapOptions: exportMapOptions),
+                   let data = image.pngData() {
                     let url = dir.appendingPathComponent("ios-summary-gamajicheon-memo-none.png")
                     try? data.write(to: url, options: .atomic)
                     print("[km-label] wrote \(url.lastPathComponent)")
                 }
 
                 store.updateMemo(id: gamaID, memo: "가마지천 따라 한 바퀴. 저녁 산책.")
-                if let image = await store.shareImage(for: gamaID), let data = image.pngData() {
+                if let image = await store.shareImage(for: gamaID, mapOptions: exportMapOptions),
+                   let data = image.pngData() {
                     let url = dir.appendingPathComponent("ios-summary-gamajicheon-memo-on.png")
                     try? data.write(to: url, options: .atomic)
                     print("[km-label] wrote \(url.lastPathComponent)")
