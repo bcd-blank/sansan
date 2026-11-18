@@ -233,9 +233,10 @@ struct ImageSaveStylePager: View {
     private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
             // Resources are pre-framed 314∶320 per shared crop SoT (see v16 CROP_SOT).
+            // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
             Image(uiImage: image)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
         } else {
