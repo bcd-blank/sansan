@@ -386,8 +386,8 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Paper #F0F0F0 mode; roads only at near-white → #FDFDFD; labels → #9A9A9E (S5 / impl3 #3).
-    /// CIToneCurve alone left muted land at #FDFDFD — remap pixels explicitly.
+    /// Paper #D8D8D8 mode (×0.9 of prior #F0F0F0); roads → #E4E4E4; labels → #8B8B8E.
+    /// Apple MKMapSnapshotter cannot recolor style paints — luminance remap is the style-equivalent path (no overlay/multiply).
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width
@@ -407,9 +407,9 @@ enum HikingRouteSnapshotGenerator {
         ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        let mapLabel = 154.0 // #9A9A9E
-        let paper = 240.0    // #F0F0F0
-        let road = 253.0     // #FDFDFD
+        let mapLabel = 139.0 // #8B8B8E (×0.9 of #9A9A9E)
+        let paper = 216.0    // #D8D8D8 (×0.9 of #F0F0F0)
+        let road = 228.0     // #E4E4E4 (×0.9 of #FDFDFD)
         let count = width * height
         for i in 0..<count {
             let o = i * bytesPerPixel
@@ -426,7 +426,7 @@ enum HikingRouteSnapshotGenerator {
             } else {
                 // Land collapses to paper with tiny variation so roads above paper still read.
                 let t = (y - 0.40) / (0.985 - 0.40)
-                out = paper - 2.0 + t * 4.0 // ≈238…242 around paper
+                out = paper - 2.0 + t * 4.0 // ≈214…218 around paper
             }
             let v = UInt8(max(0, min(255, out.rounded())))
             pixels[o] = v
