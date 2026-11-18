@@ -4,9 +4,10 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v13 JW: image-as-card (radius+shadow, list-aligned width, 314∶220 height);
-//  option title OVERLAPS preview (dark pill, lifted clear of glass/4.20);
+//  v14 JW: image-as-card (radius+shadow, list-aligned width, 314∶220 height);
+//  option title OVERLAPS preview — dark pill top-LEADING (same Y/margin as chip);
 //  「선택 완료」 top-trailing only on saved style; section footer follows VIEWED page.
+//  Collapse UIPageControl gutter (~40pt) so clipped preview has no pale strip.
 //
 //  Overlays are drawn ABOVE TabView (not inside pages) — UIPageViewController
 //  hosting drops in-page SwiftUI overlays on some OS builds.
@@ -38,13 +39,13 @@ private enum ImageSaveStylePagerTokens {
     static let pageCorner: CGFloat = 24
     /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
     static let titleSize: CGFloat = 17
-    static let titleLeading: CGFloat = 16
-    static let titleBottom: CGFloat = 14
-    /// Lift title clear of Simple Color / Grey glass + 「4.20」.
-    /// SoT: 14 + 88 = 102pt from card bottom (Android matches this).
-    static let titleBottomLift: CGFloat = 88
+    /// Title top-leading mirrors chip top-trailing (same Y + inset).
+    static let titleTop: CGFloat = 12
+    static let titleLeading: CGFloat = 12
     static let selectedChipTop: CGFloat = 12
     static let selectedChipTrailing: CGFloat = 12
+    /// UIPageViewController reserves page-control height even with `.never` (~40pt pale strip).
+    static let pageControlGutter: CGFloat = 40
     static let dotsTopGap: CGFloat = 12
     static let cardShadow = Color.black.opacity(0.14)
     static let springLead = (stiffness: 520.0, damping: 34.0)
@@ -83,6 +84,8 @@ struct ImageSaveStylePager: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
+                // Fill the reserved page-control gutter so the clipped card has no pale strip.
+                .padding(.bottom, -ImageSaveStylePagerTokens.pageControlGutter)
 
                 // Drawn above TabView so chip/title always paint (UIPageViewController-safe).
                 cardOverlays
@@ -153,24 +156,21 @@ struct ImageSaveStylePager: View {
 
     private var cardOverlays: some View {
         ZStack {
+            // Bottom glass scrim + light top scrim for top-leading title legibility.
             LinearGradient(
-                colors: [.clear, .black.opacity(0.50)],
-                startPoint: UnitPoint(x: 0.5, y: 0.42),
+                stops: [
+                    .init(color: .black.opacity(0.28), location: 0),
+                    .init(color: .clear, location: 0.22),
+                    .init(color: .clear, location: 0.42),
+                    .init(color: .black.opacity(0.50), location: 1),
+                ],
+                startPoint: .top,
                 endPoint: .bottom
             )
 
             VStack {
-                HStack {
-                    Spacer(minLength: 0)
-                    if showsCheckOnViewedPage {
-                        selectedCompleteChip
-                            .padding(.top, ImageSaveStylePagerTokens.selectedChipTop)
-                            .padding(.trailing, ImageSaveStylePagerTokens.selectedChipTrailing)
-                    }
-                }
-                Spacer(minLength: 0)
-                HStack {
-                    // Dark pill + white text; lifted so Simple Color/Grey glass + 4.20 stay clear.
+                HStack(alignment: .top) {
+                    // v14: top-leading dark pill — clear of OpenFreeMap attribution + glass/4.20.
                     Text(viewedPage.label)
                         .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
                         .foregroundStyle(.white)
@@ -181,13 +181,16 @@ struct ImageSaveStylePager: View {
                                 .fill(ImageSaveStylePagerTokens.titlePill)
                         )
                         .accessibilityIdentifier("imageSaveStyleTitle")
+                        .padding(.leading, ImageSaveStylePagerTokens.titleLeading)
+                        .padding(.top, ImageSaveStylePagerTokens.titleTop)
                     Spacer(minLength: 0)
+                    if showsCheckOnViewedPage {
+                        selectedCompleteChip
+                            .padding(.top, ImageSaveStylePagerTokens.selectedChipTop)
+                            .padding(.trailing, ImageSaveStylePagerTokens.selectedChipTrailing)
+                    }
                 }
-                .padding(.leading, ImageSaveStylePagerTokens.titleLeading)
-                .padding(
-                    .bottom,
-                    ImageSaveStylePagerTokens.titleBottom + ImageSaveStylePagerTokens.titleBottomLift
-                )
+                Spacer(minLength: 0)
             }
         }
     }

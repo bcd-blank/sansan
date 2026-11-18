@@ -214,13 +214,13 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // v13: no white Form plate — image-as-card L/R matches white list cards;
+                // v14: image-as-card; title top-leading; no pale page-control strip;
                 // footer follows VIEWED page (swipe), not only saved preference.
                 ImageSaveStylePager(
                     selection: $imageSaveStyle,
                     viewedPage: $viewedImageSaveStyle
                 )
-                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } header: {
