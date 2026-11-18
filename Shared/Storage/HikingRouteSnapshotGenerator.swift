@@ -15,6 +15,21 @@ enum HikingRouteSnapshotAppearance {
     case standard
     /// 공유 요약 A안 — 회색 지도, 흰 외곽선 초록 경로, 합친 km 라벨, 끝점 잉크.
     case shareSummary
+    /// Simple Color — 컬러 지도(프리-그레이), 동일 레이아웃·경로·km 규칙.
+    case shareSummaryColor
+
+    /// Share-summary layout family (grey or color): top-aligned fit, km clamps, route chrome.
+    var usesShareSummaryChrome: Bool {
+        switch self {
+        case .shareSummary, .shareSummaryColor: true
+        case .standard: false
+        }
+    }
+
+    /// Greyscale paper-tone remapping + solid map-paper fade.
+    var usesGreyMapTone: Bool {
+        self == .shareSummary
+    }
 }
 
 enum HikingRouteSnapshotGenerator {
@@ -54,7 +69,7 @@ enum HikingRouteSnapshotGenerator {
         switch appearance {
         case .standard:
             return canvasWidth / mapLayoutReferenceWidth
-        case .shareSummary:
+        case .shareSummary, .shareSummaryColor:
             return ShareSummaryTokens.ptScale(for: canvasWidth)
         }
     }
@@ -312,14 +327,14 @@ enum HikingRouteSnapshotGenerator {
             insetRight: insetRight,
             routeFillFraction: routeFillFraction,
             // Share summary: hug headerBottom+clearance when the route is width-limited (memo-none).
-            verticalAlign: appearance == .shareSummary ? .top : .center
+            verticalAlign: appearance.usesShareSummaryChrome ? .top : .center
         )
         options.size = snapshotCanvas
         options.scale = pixelScale
-        options.preferredConfiguration = appearance == .shareSummary
+        options.preferredConfiguration = appearance.usesGreyMapTone
             ? HikingMapCaptureConfiguration.shareSummaryMuted
             : HikingMapCaptureConfiguration.standard
-        let interfaceStyle: UIUserInterfaceStyle = appearance == .shareSummary
+        let interfaceStyle: UIUserInterfaceStyle = appearance.usesShareSummaryChrome
             ? .light
             : AppExportAppearance.resolvedUserInterfaceStyle()
         options.traitCollection = UITraitCollection(userInterfaceStyle: interfaceStyle)
@@ -333,7 +348,7 @@ enum HikingRouteSnapshotGenerator {
 
                 let projector = SnapshotCoordinateProjector(snapshot: snapshot)
                 let baseImage: UIImage
-                if appearance == .shareSummary {
+                if appearance.usesGreyMapTone {
                     baseImage = shareSummaryTonedMapImage(snapshot.image) ?? snapshot.image
                 } else {
                     baseImage = snapshot.image
@@ -365,6 +380,38 @@ enum HikingRouteSnapshotGenerator {
             ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(ShareSummaryTokens.fadeSolidOpacity).cgColor,
             ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(ShareSummaryTokens.fadeSolidOpacity).cgColor,
             ShareSummaryTokens.mapPaperUIColor.withAlphaComponent(0).cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [
+            0,
+            max(solidEndY / canvasSize.height, 0),
+            min(fadeEnd / canvasSize.height, 1)
+        ]
+        guard let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: colors,
+            locations: locations
+        ) else { return }
+        cgContext.saveGState()
+        cgContext.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 0, y: canvasSize.height),
+            options: []
+        )
+        cgContext.restoreGState()
+    }
+
+    /// Soft white → clear so logo/title stay readable while color map shows through.
+    private static func drawShareSummaryColorTitleBlend(
+        solidEndY: CGFloat,
+        canvasSize: CGSize,
+        in cgContext: CGContext
+    ) {
+        let fadeEnd = min(solidEndY + ShareSummaryTokens.fadeTail, canvasSize.height)
+        let colors = [
+            UIColor.white.withAlphaComponent(0.72).cgColor,
+            UIColor.white.withAlphaComponent(0.42).cgColor,
+            UIColor.white.withAlphaComponent(0).cgColor
         ] as CFArray
         let locations: [CGFloat] = [
             0,
@@ -454,7 +501,7 @@ enum HikingRouteSnapshotGenerator {
         format.scale = pixelScale
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
         return renderer.image { context in
-            if appearance == .shareSummary {
+            if appearance.usesGreyMapTone {
                 ShareSummaryTokens.mapPaperUIColor.setFill()
                 context.fill(CGRect(origin: .zero, size: canvasSize))
             }
@@ -462,16 +509,27 @@ enum HikingRouteSnapshotGenerator {
 
             // JW 18:25 — MKMapSnapshotter may still bake /Legal at bottom-left; keep only the
             // hand-drawn 「지도」 between map and card. Cover with map paper (not white).
-            if appearance == .shareSummary {
+            if appearance.usesGreyMapTone {
                 ShareSummaryTokens.mapPaperUIColor.setFill()
+                context.fill(
+                    RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
+                )
+            } else if appearance == .shareSummaryColor {
+                UIColor.white.withAlphaComponent(0.55).setFill()
                 context.fill(
                     RouteMapOverlayMetrics.nativeAttributionMaskRect(forCanvasSize: canvasSize)
                 )
             }
 
             // Layer order (finding 2): map → fade → route → markers → labels.
-            if appearance == .shareSummary, let solidEnd = fadeSolidEndY, solidEnd > 0 {
+            if appearance.usesGreyMapTone, let solidEnd = fadeSolidEndY, solidEnd > 0 {
                 drawShareSummaryPaperFade(
+                    solidEndY: solidEnd,
+                    canvasSize: canvasSize,
+                    in: context.cgContext
+                )
+            } else if appearance == .shareSummaryColor, let solidEnd = fadeSolidEndY, solidEnd > 0 {
+                drawShareSummaryColorTitleBlend(
                     solidEndY: solidEnd,
                     canvasSize: canvasSize,
                     in: context.cgContext
@@ -545,7 +603,7 @@ enum HikingRouteSnapshotGenerator {
                 in: context.cgContext
             )
 
-            if appearance != .shareSummary,
+            if !appearance.usesShareSummaryChrome,
                mapOptions.showsPinnedThumbnails,
                !record.mapPinnedPhotos.isEmpty {
                 drawPinnedThumbnails(
@@ -657,7 +715,7 @@ enum HikingRouteSnapshotGenerator {
                 forceChunks: false,
                 in: cgContext
             )
-        case .shareSummary:
+        case .shareSummary, .shareSummaryColor:
             // JW/팀장: continuous Path (white→green, no join seams) + local white→green
             // overlay only at true self-crossings. No gray shadow on AFTER.
             // `-SANSAN_ROUTE_CHUNKS` exports the old chunk before for compare captures.
@@ -958,7 +1016,7 @@ enum HikingRouteSnapshotGenerator {
             outer = detailEndpointOuterDiameter
             inner = detailEndpointInnerDiameter
             endFill = endPointColor
-        case .shareSummary:
+        case .shareSummary, .shareSummaryColor:
             outer = ShareSummaryTokens.markerOuter
             inner = ShareSummaryTokens.markerInner
             endFill = ShareSummaryTokens.inkUIColor
@@ -1075,13 +1133,13 @@ enum HikingRouteSnapshotGenerator {
             )
         }
         // Share-summary: final-spec v3 placement; clamp to canvas × side inset 24.
-        let clampBounds = appearance == .shareSummary
+        let clampBounds = appearance.usesShareSummaryChrome
         let imageSize = clampBounds ? canvasSize : canvasSize
         let sideInset = clampBounds ? ShareSummaryTokens.kmLabelBoundsInset * contentScale : 0
         let routePolyline = coordinates.map { projector.point(for: $0) }
         // Title(+memo) bottom → forbidden band for km labels (titleLabelMinGap).
         let titleBlockBottom: CGFloat? = {
-            guard appearance == .shareSummary else { return nil }
+            guard appearance.usesShareSummaryChrome else { return nil }
             let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvasSize.width)
             return ShareSummaryTokens.headerBottom(memoLineCount: memoLines) * contentScale
         }()

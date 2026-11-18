@@ -2,6 +2,7 @@
 import Foundation
 import UIKit
 import CoreLocation
+import SwiftUI
 
 #if DEBUG
 /// #73 DEBUG 전용. release 빌드에서는 `#else` no-op만 남습니다.
@@ -30,6 +31,7 @@ enum UITestSupport {
             didSeedPlacementRecords = true
             reseedsPlacementRecords()
             exportSummariesIfNeeded()
+            exportSaveStylesIfNeeded()
         }
     }
 
@@ -237,6 +239,78 @@ enum UITestSupport {
             }
             // Signal done
             let done = dir.appendingPathComponent("SUMMARIES_DONE.txt")
+            try? "ok\n".write(to: done, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// `SANSAN_EXPORT_SAVE_STYLES=1` → Documents/image-save-style-pager/*.png
+    /// Three save styles for 가마지천 + settings pager page stills.
+    private static func exportSaveStylesIfNeeded() {
+        let env = ProcessInfo.processInfo.environment["SANSAN_EXPORT_SAVE_STYLES"]
+        let arg = ProcessInfo.processInfo.arguments.contains("-SANSAN_EXPORT_SAVE_STYLES")
+        guard env == "1" || arg else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            let store = HikingRecordStore.shared
+            store.reloadForCurrentUser()
+            let dir = UserDataPaths.documentsDirectory
+                .appendingPathComponent("image-save-style-pager", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            let exportMapOptions = HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: true,
+                showsPinnedThumbnails: false
+            )
+
+            let gamaID = gamajicheonSeedID
+            guard store.records.contains(where: { $0.id == gamaID }) else {
+                print("[save-style] missing gamajicheon seed")
+                return
+            }
+            store.updateMemo(id: gamaID, memo: "")
+
+            let styles: [(HikingRecordImageSaveStyle, String)] = [
+                (.card, "data-card"),
+                (.summary, "simple-grey"),
+                (.simpleColor, "simple-color"),
+            ]
+            let previous = HikingRecordImageSavePreferences.style
+            defer { HikingRecordImageSavePreferences.style = previous }
+
+            for (style, slug) in styles {
+                HikingRecordImageSavePreferences.style = style
+                guard let image = await store.shareImage(
+                    for: gamaID,
+                    mapOptions: exportMapOptions,
+                    fullScreen: true
+                ), let data = image.pngData() else {
+                    print("[save-style] render failed \(slug)")
+                    continue
+                }
+                let url = dir.appendingPathComponent("ios-gamajicheon-\(slug).png")
+                try? data.write(to: url, options: .atomic)
+                print("[save-style] wrote \(url.lastPathComponent) \(Int(image.size.width))×\(Int(image.size.height))@\(Int(image.scale))")
+            }
+
+            // Settings pager page stills (illustrative previews).
+            for style in HikingRecordImageSaveStyle.pagerOrder {
+                let preview = ImageSaveStylePageExportPreview(style: style)
+                    .frame(width: 320, height: 220)
+                let renderer = ImageRenderer(content: preview)
+                renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+                renderer.scale = 3
+                if let image = renderer.uiImage, let data = image.pngData() {
+                    let slug = style.rawValue
+                    let url = dir.appendingPathComponent("settings-page-\(slug).png")
+                    try? data.write(to: url, options: .atomic)
+                    print("[save-style] wrote \(url.lastPathComponent)")
+                }
+            }
+
+            let done = dir.appendingPathComponent("SAVE_STYLES_DONE.txt")
             try? "ok\n".write(to: done, atomically: true, encoding: .utf8)
         }
     }

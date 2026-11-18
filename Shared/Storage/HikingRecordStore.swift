@@ -515,7 +515,8 @@ final class HikingRecordStore: ObservableObject {
         fullScreen: Bool = false
     ) async -> UIImage? {
         guard let record = records.first(where: { $0.id == recordID }) else { return nil }
-        if HikingRecordImageSavePreferences.style == .summary, let summary = Self.summaryImageRenderer {
+        if HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer,
+           let summary = Self.summaryImageRenderer {
             return await summary(record, mapOptions)
         }
         guard let routeImage = await routeImageForShare(

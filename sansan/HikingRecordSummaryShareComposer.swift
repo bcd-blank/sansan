@@ -2,21 +2,40 @@
 //  HikingRecordSummaryShareComposer.swift
 //  sansan
 //
-//  Share-summary A안: gray map + floating white card. Layout from share.summary.*
-//  tokens; km labels via shared RouteKilometerMarkerMetrics.
+//  Share-summary: Simple Grey (gray map + white card) and Simple Color
+//  (color map + liquid-glass card). Layout from share.summary.* tokens.
 //
 
 #if os(iOS)
 
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import CoreText
 import SwiftUI
 import UIKit
 
 @MainActor
 enum HikingRecordSummaryShareComposer {
+    enum Variant: Sendable {
+        case simpleGrey
+        case simpleColor
+
+        var appearance: HikingRouteSnapshotAppearance {
+            switch self {
+            case .simpleGrey: .shareSummary
+            case .simpleColor: .shareSummaryColor
+            }
+        }
+
+        static func fromPreferences() -> Variant {
+            HikingRecordImageSavePreferences.style == .simpleColor ? .simpleColor : .simpleGrey
+        }
+    }
+
     static func render(
         record: SavedHikingSession,
-        mapOptions: HikingShareMapExportOptions
+        mapOptions: HikingShareMapExportOptions,
+        variant: Variant = .fromPreferences()
     ) async -> UIImage? {
         let width = HikingRecordShareDeviceMetrics.fullScreenBounds.width
         let scale = HikingRecordShareDeviceMetrics.nativeScale
@@ -35,7 +54,7 @@ enum HikingRecordSummaryShareComposer {
             insetLeft: ShareSummaryTokens.mapRouteSideInset * s,
             insetRight: ShareSummaryTokens.mapRouteSideInset * s,
             routeFillFraction: 1,
-            appearance: .shareSummary,
+            appearance: variant.appearance,
             fadeSolidEndY: ShareSummaryTokens.fadeSolidEnd(memoLineCount: memoLines) * s
         ) else { return nil }
 
@@ -43,7 +62,8 @@ enum HikingRecordSummaryShareComposer {
             record: record,
             mapImage: map,
             memoLineCount: memoLines,
-            showsWeatherLabel: mapOptions.showsWeatherLabel
+            showsWeatherLabel: mapOptions.showsWeatherLabel,
+            variant: variant
         )
         .frame(width: canvas.width, height: canvas.height)
         .environment(\.colorScheme, .light)
@@ -55,6 +75,82 @@ enum HikingRecordSummaryShareComposer {
     }
 }
 
+// MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
+
+private enum ShareSummaryGlassBackdrop {
+    /// Strong map blur + translucent fill + edge highlight, clipped to the card.
+    static func bake(
+        mapImage: UIImage,
+        cardRect: CGRect,
+        cornerRadius: CGFloat,
+        blurRadius: CGFloat = 36,
+        glassFillAlpha: CGFloat = 0.38
+    ) -> UIImage? {
+        guard let cgImage = mapImage.cgImage else { return nil }
+        let scale = mapImage.scale
+        let pixelRect = CGRect(
+            x: cardRect.minX * scale,
+            y: cardRect.minY * scale,
+            width: cardRect.width * scale,
+            height: cardRect.height * scale
+        )
+        let pad = blurRadius * 3 * scale
+        let expanded = pixelRect.insetBy(dx: -pad, dy: -pad)
+        let imageBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        let crop = expanded.intersection(imageBounds)
+        guard crop.width > 1, crop.height > 1,
+              let cropped = cgImage.cropping(to: crop.integral) else { return nil }
+
+        let ciInput = CIImage(cgImage: cropped)
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = ciInput.clampedToExtent()
+        filter.radius = Float(blurRadius * scale)
+        guard let blurred = filter.outputImage else { return nil }
+
+        let localCard = CGRect(
+            x: pixelRect.minX - crop.minX,
+            y: pixelRect.minY - crop.minY,
+            width: pixelRect.width,
+            height: pixelRect.height
+        )
+        let focused = blurred.cropped(to: localCard)
+
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let blurredCG = context.createCGImage(focused, from: localCard) else { return nil }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        let size = cardRect.size
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            let bounds = CGRect(origin: .zero, size: size)
+            let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerRadius)
+            cg.saveGState()
+            path.addClip()
+            UIImage(cgImage: blurredCG, scale: scale, orientation: .up)
+                .draw(in: bounds)
+            UIColor.white.withAlphaComponent(glassFillAlpha).setFill()
+            path.fill()
+            UIColor.white.withAlphaComponent(0.12).setFill()
+            path.fill()
+            cg.restoreGState()
+
+            cg.saveGState()
+            path.addClip()
+            cg.setLineWidth(1)
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.72).cgColor)
+            cg.stroke(bounds.insetBy(dx: 0.5, dy: 0.5))
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(0.55).cgColor)
+            cg.move(to: CGPoint(x: cornerRadius * 0.35, y: 0.75))
+            cg.addLine(to: CGPoint(x: size.width - cornerRadius * 0.35, y: 0.75))
+            cg.strokePath()
+            cg.restoreGState()
+        }
+    }
+}
+
 // MARK: - Page
 
 private struct SummaryMapSharePage: View {
@@ -62,6 +158,7 @@ private struct SummaryMapSharePage: View {
     let mapImage: UIImage
     let memoLineCount: Int
     let showsWeatherLabel: Bool
+    let variant: HikingRecordSummaryShareComposer.Variant
 
     private var s: CGFloat { ShareSummaryTokens.ptScale(for: mapImage.size.width) }
 
@@ -69,10 +166,29 @@ private struct SummaryMapSharePage: View {
         showsWeatherLabel && record.weather != nil
     }
 
+    private var cardRect: CGRect {
+        let inset = ShareSummaryTokens.cardInset * s
+        let height = ShareSummaryTokens.cardHeight * s
+        return CGRect(
+            x: inset,
+            y: mapImage.size.height - inset - height,
+            width: mapImage.size.width - inset * 2,
+            height: height
+        )
+    }
+
+    private var glassBackdrop: UIImage? {
+        guard variant == .simpleColor else { return nil }
+        return ShareSummaryGlassBackdrop.bake(
+            mapImage: mapImage,
+            cardRect: cardRect,
+            cornerRadius: ShareSummaryTokens.cardRadius * s
+        )
+    }
+
     var body: some View {
         ZStack {
-            // Concept A: toned Simple Grey snapshot stays full-bleed under/beside the floating
-            // card — never a solid MapPaper plate behind the card footprint.
+            // Full-bleed map under/beside the floating card (no solid MapPaper plate).
             Image(uiImage: mapImage)
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
@@ -85,10 +201,14 @@ private struct SummaryMapSharePage: View {
             mapsAttribution
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            SummaryInfoCard(record: record, scale: s)
-                .padding(.horizontal, ShareSummaryTokens.cardInset * s)
-                .padding(.bottom, ShareSummaryTokens.cardInset * s)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            SummaryInfoCard(
+                record: record,
+                scale: s,
+                glassBackdrop: glassBackdrop
+            )
+            .padding(.horizontal, ShareSummaryTokens.cardInset * s)
+            .padding(.bottom, ShareSummaryTokens.cardInset * s)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .frame(width: mapImage.size.width, height: mapImage.size.height)
         .clipped()
@@ -169,21 +289,29 @@ private struct SummaryMapSharePage: View {
                 .font(.system(size: ShareSummaryTokens.attributionFontSize * s, weight: .medium))
                 .tracking(0)
         }
-        .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
+        .foregroundStyle(
+            variant == .simpleColor
+                ? Color(ShareSummaryTokens.inkUIColor).opacity(0.72)
+                : Color(ShareSummaryTokens.mapTextUIColor)
+        )
         .padding(clear)
         .background {
+            let halo = variant == .simpleColor
+                ? Color.white.opacity(0.78)
+                : Color(ShareSummaryTokens.mapPaperUIColor)
             ZStack {
-                // Soft edge first (under), then solid paper over the glyph box + pad.
                 Rectangle()
-                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
+                    .fill(halo)
                     .blur(radius: clear)
                 Rectangle()
-                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
+                    .fill(halo)
             }
         }
         .padding(-clear)
         .shadow(
-            color: Color(ShareSummaryTokens.mapPaperUIColor),
+            color: variant == .simpleColor
+                ? Color.white
+                : Color(ShareSummaryTokens.mapPaperUIColor),
             radius: ShareSummaryTokens.attributionHaloBlur * s,
             x: 0,
             y: 0
@@ -447,6 +575,8 @@ private struct ShareSummaryWeatherCard: View {
 private struct SummaryInfoCard: View {
     let record: SavedHikingSession
     let scale: CGFloat
+    /// Pre-baked liquid-glass plate for Simple Color; nil → opaque white (Simple Grey).
+    var glassBackdrop: UIImage? = nil
 
     private var elevationSamples: [HikingElevationChartSample] {
         if let stored = record.session.elevationProfile, stored.count >= 2 {
@@ -499,10 +629,20 @@ private struct SummaryInfoCard: View {
         .padding(.bottom, ShareSummaryTokens.cardPaddingBottom * scale)
         .frame(height: ShareSummaryTokens.cardHeight * scale, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color.white,
-            in: RoundedRectangle(cornerRadius: ShareSummaryTokens.cardRadius * scale, style: .continuous)
-        )
+        .background {
+            let shape = RoundedRectangle(
+                cornerRadius: ShareSummaryTokens.cardRadius * scale,
+                style: .continuous
+            )
+            if let glassBackdrop {
+                Image(uiImage: glassBackdrop)
+                    .resizable()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipShape(shape)
+            } else {
+                Color.white.clipShape(shape)
+            }
+        }
         .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.10), radius: 16 * scale, y: 12 * scale)
         .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.06), radius: 1.5 * scale, y: 1 * scale)
     }

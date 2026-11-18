@@ -251,7 +251,7 @@ final class HikingRecordExportCoordinator: ObservableObject {
         guard shareImage == nil, saveImage == nil else { return }
         guard !isExportCapturing, !isPrewarmingExportImage, !isMenuBusy else { return }
 
-        let usesOffscreenSummary = HikingRecordImageSavePreferences.style == .summary
+        let usesOffscreenSummary = HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer
         if !usesOffscreenSummary {
             for _ in 0..<30 {
                 if !isBackgroundWorkCurrent(token) || Task.isCancelled { return }
@@ -319,9 +319,9 @@ final class HikingRecordExportCoordinator: ObservableObject {
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else { return nil }
 
-        // Summary style is fully offscreen (MKMapSnapshotter + ImageRenderer). Do not wait on
+        // Summary styles are fully offscreen (MKMapSnapshotter + ImageRenderer). Do not wait on
         // the live detail map or toggle chromeHidden — that was expanding the on-screen gray map.
-        let usesOffscreenSummary = HikingRecordImageSavePreferences.style == .summary
+        let usesOffscreenSummary = HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer
         if !usesOffscreenSummary {
             guard LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil else { return nil }
         }
