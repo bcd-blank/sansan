@@ -49,6 +49,13 @@ enum RouteKilometerMarkerMetrics {
         guard sotWidth > 0 else { return 1 }
         return sotWidth / labelDesignCanvasWidth
     }
+
+    /// Live detail on-screen scale — fill AABB **65px @3x** (= Simple summary SoT ±1).
+    /// Frame pt targets 68px @3x because strict blue-fill AABB under-reads ~3px vs
+    /// the SwiftUI layout height (anti-alias / stroke).
+    static var liveDetailLabelContentScale: CGFloat {
+        (68.0 / 3.0) / labelHeight
+    }
     /// Detail-map wholesale hideSteps ladder (visible-only subset). 1 → 5 → 10 → 20 → 50.
     static let detailLabelHideSteps: [Int] = [1, 5, 10, 20, 50]
     /// Detail-map side inset for capsule bounds (x [24, W−24]).

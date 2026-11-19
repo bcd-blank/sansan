@@ -45,6 +45,17 @@ enum UITestSupport {
 
     private static func reseedsPlacementRecords() {
         let store = HikingRecordStore.shared
+        // Warm relaunch: keep existing cached fixtures — wiping forced no-cache opens
+        // and 3–9s prepare while other seeds blocked the main actor.
+        let fixturesReady = UITestMountainPathFixtures.all.allSatisfy { fixture in
+            store.records.contains {
+                $0.id == fixture.id && $0.session.hasPersistedDisplayCache
+            }
+        }
+        if fixturesReady {
+            seedHangjunaruFixtureIfNeeded()
+            return
+        }
         let ids = UITestMountainPathFixtures.all.map(\.id) + [seedSessionID, hangjunaruSeedID]
         for id in ids {
             if store.records.contains(where: { $0.id == id }) {
@@ -52,7 +63,13 @@ enum UITestSupport {
             }
         }
         seedDummyRecordIfNeeded()
-        for fixture in UITestMountainPathFixtures.all {
+        // Seed the screenshot-target fixture first so detail open hits display cache
+        // before other mountains' finalizeForPersistence blocks the main actor.
+        let priorityID = AppStoreScreenshotMode.current?.opensSeededDetailRecordID
+        let ordered = UITestMountainPathFixtures.all.sorted { a, b in
+            (a.id == priorityID ? 0 : 1) < (b.id == priorityID ? 0 : 1)
+        }
+        for fixture in ordered {
             seedFixture(fixture)
         }
         seedHangjunaruFixtureIfNeeded()
@@ -177,7 +194,7 @@ enum UITestSupport {
                 elapsedTime = last.timestamp.timeIntervalSince(started)
             }
         }
-        let session = HikingSessionData(
+        var session = HikingSessionData(
             sessionID: fixture.id,
             state: .idle,
             startedAt: started,
@@ -189,6 +206,26 @@ enum UITestSupport {
             stepCount: fixture.stepCount > 0 ? fixture.stepCount : Int(measured / 0.7),
             activeEnergyKilocalories: fixture.activeEnergyKilocalories,
             elevationGainMeters: fixture.elevationGainMeters
+        )
+        // Lightweight display cache (coords + km) so detail open is a ≤1s cache hit
+        // without main-actor elevation smoothing during multi-fixture seed.
+        let routeCoords = HikingSessionMetrics.routeCoordinates(from: seededPoints)
+        let maxCoords = HikingSessionDisplayCacheBuilder.maxDisplayRouteCoordinates
+        let stride = max(1, routeCoords.count / maxCoords)
+        let displayCoords = routeCoords.enumerated().compactMap { idx, c -> HikingDisplayCoordinate? in
+            guard idx % stride == 0 || idx == routeCoords.count - 1 else { return nil }
+            return HikingDisplayCoordinate(latitude: c.latitude, longitude: c.longitude)
+        }
+        let kmMarkers = HikingSessionMetrics.kilometerMarkerPlacements(from: seededPoints)
+        session.applyDisplayCache(
+            HikingSessionDisplayCacheBuilder.Built(
+                elevationGainMeters: fixture.elevationGainMeters,
+                elevationProfile: nil,
+                heartRateProfile: nil,
+                displayRouteCoordinates: displayCoords,
+                kilometerMarkers: kmMarkers,
+                nearbySummits: []
+            )
         )
         store.save(session)
         store.renameRecord(id: fixture.id, title: fixture.title)

@@ -47,6 +47,8 @@ struct HikingRecordRouteMapView: View {
     @State private var labelLayoutDebounceTask: Task<Void, Never>?
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
+    /// Self-cross overlays — computed off-main; sync body must not O(n²) on GPS.
+    @State private var routeCrossOverlays: [[CLLocationCoordinate2D]] = []
 #if DEBUG
     @State private var detailOpenStartedAt: CFAbsoluteTime?
 #endif
@@ -243,6 +245,7 @@ struct HikingRecordRouteMapView: View {
                 }
             }
             .onAppear {
+                fitRouteInView(animated: false)
                 scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
                 // 저장 시점에 화면 지도가 실제로 보여주는 영역을 그대로 가져와 클론에 적용합니다.
                 // (onMapCameraChange가 초기 프로그램적 카메라에서 안 뜨는 경우 대비)
@@ -380,10 +383,9 @@ struct HikingRecordRouteMapView: View {
         let generation = kilometerLabelLayoutGeneration
         let idleAt = CFAbsoluteTimeGetCurrent()
 
+        // Match Simple summary fill AABB 65px @3x (±1).
+        let labelScale = RouteKilometerMarkerMetrics.liveDetailLabelContentScale
         DispatchQueue.global(qos: .userInitiated).async {
-            // Live detail: absolute design tokens (scale 1) so screen-pt matches
-            // Simple save fill AABB (~66px @3x). Save/DC use width/430 (+fullBleed).
-            let labelScale: CGFloat = 1
             let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
                 for: requests,
                 endpointPoints: endpoints,
@@ -424,9 +426,13 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
-    /// True self-cross later-suffix overlays (white→green) for the live detail map.
-    private var routeCrossOverlays: [[CLLocationCoordinate2D]] {
-        RouteSelfCrossing.coordinateHits(in: routeCoordinates).map(\.overlayCoordinates)
+    private func refreshRouteCrossOverlays(using coordinates: [CLLocationCoordinate2D]) {
+        Task.detached(priority: .utility) {
+            let overlays = RouteSelfCrossing.coordinateHits(in: coordinates).map(\.overlayCoordinates)
+            await MainActor.run {
+                routeCrossOverlays = overlays
+            }
+        }
     }
 
     @MapContentBuilder
@@ -490,7 +496,7 @@ struct HikingRecordRouteMapView: View {
                             timeText: timeText,
                             centerOffset: shift?.centerOffset ?? fallback.centerOffset,
                             showsLabel: showsLabel,
-                            contentScale: 1
+                            contentScale: RouteKilometerMarkerMetrics.liveDetailLabelContentScale
                         )
                         .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }
                     }
@@ -640,6 +646,10 @@ struct HikingRecordRouteMapView: View {
     }
 
     private func prepareRouteDisplayData() async {
+#if DEBUG
+        // Measure prepare itself — not seed/navigation wait before the record exists.
+        detailOpenStartedAt = CFAbsoluteTimeGetCurrent()
+#endif
         guard let record, record.session.points.count >= 2 else {
             isRouteDisplayReady = false
             routeCoordinates = []
@@ -650,6 +660,8 @@ struct HikingRecordRouteMapView: View {
         }
 
         if loadPersistedRouteDisplayIfAvailable(from: record) {
+            // Yield so Map is in the hierarchy before camera fit (avoids blank grid).
+            await Task.yield()
             fitRouteInView(animated: false)
 #if DEBUG
             logDetailOpenReady(stage: "cache")
@@ -691,10 +703,28 @@ struct HikingRecordRouteMapView: View {
         kilometerArrivalLabels = arrivalLabels(for: record)
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
+        refreshRouteCrossOverlays(using: routeCoordinates)
         fitRouteInView(animated: false)
 #if DEBUG
         logDetailOpenReady(stage: "prepared")
 #endif
+        // Persist display cache so the next open is a ≤1s cache hit.
+        HikingRecordStore.shared.backfillDisplayCache(for: recordID)
+        if includeSummits, nearbySummits.isEmpty {
+            Task { await refreshSummitsWhenCatalogReady() }
+        }
+    }
+
+    private func refreshSummitsWhenCatalogReady() async {
+        await MountainSummitCatalog.waitUntilReady(timeout: .seconds(8))
+        guard mapDisplayPreferences.showsSummitMarkers,
+              routeCoordinates.count >= 2 else { return }
+        let coords = routeCoordinates
+        let summits = await Task.detached(priority: .utility) {
+            MountainSummitRouteFilter.summits(near: coords)
+        }.value
+        guard !summits.isEmpty else { return }
+        nearbySummits = summits
     }
 
 #if DEBUG
@@ -738,6 +768,7 @@ struct HikingRecordRouteMapView: View {
             ? (record.session.nearbySummits ?? [])
             : []
         isRouteDisplayReady = true
+        refreshRouteCrossOverlays(using: routeCoordinates)
         return true
     }
 

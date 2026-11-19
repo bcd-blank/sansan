@@ -15,9 +15,9 @@ enum HikingRecordRouteDisplayPreparer {
     }
 
     static func prepare(points: [HikingPoint], includeSummits: Bool) async -> DisplayData {
-        if includeSummits {
-            await MountainSummitCatalog.waitUntilReady()
-        }
+        // Never `waitUntilReady` here — catalog load can take seconds and blocked
+        // detail open (3–9s). Use whatever summits are already loaded; caller may
+        // refresh when the catalog finishes.
         return await Task.detached(priority: .userInitiated) {
             let coordinates = HikingSessionMetrics.routeCoordinates(from: points)
             let kilometerMarkers = HikingSessionMetrics.kilometerMarkerPlacements(from: points)

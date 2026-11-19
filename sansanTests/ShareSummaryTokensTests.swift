@@ -137,6 +137,14 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.graphLegendHRHeight, 1, accuracy: 0.01)
     }
 
+    func testLiveDetailLabelScaleMatchesSummary65pxBand() {
+        let scale = RouteKilometerMarkerMetrics.liveDetailLabelContentScale
+        // Layout height 68px @3x → measured fill AABB lands on Simple's 65±1.
+        let layoutHeightPx = RouteKilometerMarkerMetrics.labelHeight * scale * 3
+        XCTAssertEqual(layoutHeightPx, 68, accuracy: 0.01)
+        XCTAssertEqual(RouteKilometerMarkerMetrics.labelStrokeWidth, 0.5, accuracy: 0.01)
+    }
+
     func testDetailMapBlueLabelTokens() {
         XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelHideSteps, [1, 5, 10, 20, 50])
         XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelSideInset, 24, accuracy: 0.01)

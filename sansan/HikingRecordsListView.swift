@@ -741,7 +741,11 @@ struct HikingRecordsListView: View {
             // Strict seed-id only — never open another mountain by title substring.
             Task { @MainActor in
                 for attempt in 0..<100 {
-                    store.reloadForCurrentUser()
+                    // Prefer in-memory seed (with display cache). Reloading from disk
+                    // before async persist finishes wiped cache and forced 3–9s prepare.
+                    if store.records.contains(where: { $0.id == seedID }) == false {
+                        store.reloadForCurrentUser()
+                    }
                     if let record = store.records.first(where: { $0.id == seedID }) {
                         detailRoute = RecordDetailRoute(recordID: seedID)
                         let title = record.displayName ?? record.listTitle
@@ -754,7 +758,8 @@ struct HikingRecordsListView: View {
                             }
                             return "nil"
                         }()
-                        let line = "open detail mode=\(mode.rawValue) env=\(envShot) arg=\(argShot) id=\(seedID) title=\(title) dist=\(Int(record.session.totalDistance))m attempt=\(attempt)\n"
+                        let cache = record.session.hasPersistedDisplayCache ? "cache" : "no-cache"
+                        let line = "open detail mode=\(mode.rawValue) env=\(envShot) arg=\(argShot) id=\(seedID) title=\(title) dist=\(Int(record.session.totalDistance))m attempt=\(attempt) \(cache)\n"
                         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                             let url = dir.appendingPathComponent("label-placement/OPEN_DETAIL.txt")
                             try? FileManager.default.createDirectory(

@@ -742,6 +742,27 @@ final class HikingRecordStore: ObservableObject {
         }
     }
 
+    /// Eagerly build+persist display cache for one record (detail open path).
+    func backfillDisplayCache(for id: UUID) {
+        guard let index = records.firstIndex(where: { $0.id == id }),
+              !records[index].session.hasPersistedDisplayCache,
+              records[index].session.points.count >= 2 else { return }
+        let points = records[index].session.points
+        let heartRateSamples = records[index].session.heartRateSamples
+        Task.detached(priority: .utility) {
+            let built = HikingSessionDisplayCacheBuilder.build(
+                points: points,
+                heartRateSamples: heartRateSamples
+            )
+            await MainActor.run {
+                guard let index = self.records.firstIndex(where: { $0.id == id }),
+                      !self.records[index].session.hasPersistedDisplayCache else { return }
+                self.records[index] = self.records[index].withDisplayCache(built)
+                Task { await self.persistOffMain() }
+            }
+        }
+    }
+
     /// 구버전 기록의 표시용 캐시를 백그라운드에서 한 번 계산해 이후에는 불러오기만 합니다.
     private func scheduleDisplayCacheBackfillIfNeeded() {
         let pending: [(UUID, [HikingPoint], [HikingHeartRateSample])] = records.compactMap { record in
@@ -752,8 +773,9 @@ final class HikingRecordStore: ObservableObject {
         guard !pending.isEmpty else { return }
 
         Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(2))
-            await MountainSummitCatalog.waitUntilReady()
+            // Do not wait on summit catalog — empty summits are fine; detail open
+            // must stay ≤~1s. Brief yield so first frame can paint.
+            try? await Task.sleep(for: .milliseconds(50))
             let computed = pending.map { id, points, heartRateSamples in
                 (
                     id,
