@@ -505,10 +505,37 @@ private struct SummaryMapSharePage: View {
 
     /// Apple Maps credit between map and card (§13 / S10).
     /// MKMapSnapshotter does not bake legal marks into the image — we draw them.
-    /// clearZone: glyph box + 4pt solid paper, soft 4pt edge so basemap labels don't read as "지도…" (impl4 #11).
+    /// Android parity: glyph + ~1px white stroke only — no paper clearZone / no plate.
     private var mapsAttribution: some View {
-        let clear = ShareSummaryTokens.attributionClearZone * s
-        return HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
+        // ~1.25–1.4px stroke @3x — hard offset copies, not blur/shadow (those read as a pill).
+        let halo = 0.4 * s
+        let ink: Color = variant == .simpleColor
+            ? Color(ShareSummaryTokens.inkUIColor).opacity(0.72)
+            : Color(ShareSummaryTokens.mapTextUIColor)
+        let offsets: [(CGFloat, CGFloat)] = [
+            (-halo, 0), (halo, 0), (0, -halo), (0, halo),
+            (-halo, -halo), (-halo, halo), (halo, -halo), (halo, halo),
+        ]
+        return ZStack {
+            ForEach(0..<offsets.count, id: \.self) { i in
+                attributionGlyphs
+                    .foregroundStyle(Color.white)
+                    .offset(x: offsets[i].0, y: offsets[i].1)
+            }
+            attributionGlyphs
+                .foregroundStyle(ink)
+        }
+        .frame(height: ShareSummaryTokens.attributionLineHeight * s, alignment: .center)
+        .frame(maxWidth: ShareSummaryTokens.attributionMaxWidth * s, alignment: .leading)
+        .padding(.leading, ShareSummaryTokens.attributionX * s)
+        .padding(
+            .bottom,
+            (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + ShareSummaryTokens.attributionGapAboveCard) * s
+        )
+    }
+
+    private var attributionGlyphs: some View {
+        HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
             Image(systemName: "apple.logo")
                 .font(.system(size: ShareSummaryTokens.attributionLogoHeight * s, weight: .medium))
                 .frame(
@@ -519,40 +546,6 @@ private struct SummaryMapSharePage: View {
                 .font(.system(size: ShareSummaryTokens.attributionFontSize * s, weight: .medium))
                 .tracking(0)
         }
-        .foregroundStyle(
-            variant == .simpleColor
-                ? Color(ShareSummaryTokens.inkUIColor).opacity(0.72)
-                : Color(ShareSummaryTokens.mapTextUIColor)
-        )
-        .padding(clear)
-        .background {
-            let halo = variant == .simpleColor
-                ? Color.white.opacity(0.78)
-                : Color(ShareSummaryTokens.mapPaperUIColor)
-            ZStack {
-                Rectangle()
-                    .fill(halo)
-                    .blur(radius: clear)
-                Rectangle()
-                    .fill(halo)
-            }
-        }
-        .padding(-clear)
-        .shadow(
-            color: variant == .simpleColor
-                ? Color.white
-                : Color(ShareSummaryTokens.mapPaperUIColor),
-            radius: ShareSummaryTokens.attributionHaloBlur * s,
-            x: 0,
-            y: 0
-        )
-        .frame(height: ShareSummaryTokens.attributionLineHeight * s, alignment: .center)
-        .frame(maxWidth: ShareSummaryTokens.attributionMaxWidth * s, alignment: .leading)
-        .padding(.leading, ShareSummaryTokens.attributionX * s)
-        .padding(
-            .bottom,
-            (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + ShareSummaryTokens.attributionGapAboveCard) * s
-        )
     }
 }
 

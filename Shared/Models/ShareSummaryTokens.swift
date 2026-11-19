@@ -201,10 +201,10 @@ enum ShareSummaryTokens {
     static let attributionGapAboveCard: CGFloat = 8
     static let attributionX: CGFloat = 40
     static let attributionMaxWidth: CGFloat = 350
-    /// Paper halo (map.paper, blur 1–2pt) so basemap roads under the mark stay ≥4.5:1 (§13/§15).
+    /// Deprecated: paper-plate blur removed — thin white glyph halo only (Android parity).
     static let attributionHaloBlur: CGFloat = 2
-    /// Opaque paper pad around attribution glyphs; soft edge = same radius (impl4 #11).
-    static let attributionClearZone: CGFloat = 4
+    /// Deprecated JW: clearZone paper rect removed — halo only. Kept for token parity (=0).
+    static let attributionClearZone: CGFloat = 0
     /// Legacy alias — line box height.
     static var attributionHeight: CGFloat { attributionLineHeight }
 
