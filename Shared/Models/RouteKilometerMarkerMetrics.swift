@@ -29,13 +29,21 @@ enum RouteKilometerMarkerMetrics {
     /// Detail + Data Card label `contentScale` must use this denominator so visible
     /// pill size matches Simple (not the old detail layout width 377).
     static let labelDesignCanvasWidth: CGFloat = 430
+    /// Horizontal inset of the detail / Data Card map vs Simple full-bleed
+    /// (`HikingRecordCardLayout.detailContentWidthInset`). Label scale uses
+    /// full-bleed width so same-canvas saves match Simple ±1px.
+    static let labelFullBleedWidthInset: CGFloat = 16
     /// Legacy scale hook — combined labels use absolute pt tokens above.
     static let markerLabelScale: CGFloat = 1
 
     /// Label content scale for a canvas/map width (Simple SoT = width / 430).
-    static func labelContentScale(forWidth width: CGFloat) -> CGFloat {
-        guard width > 0 else { return 1 }
-        return width / labelDesignCanvasWidth
+    /// - Parameter fullBleed: Detail / Data Card maps are inset by
+    ///   `labelFullBleedWidthInset`; pass `true` so scale matches Simple’s
+    ///   full-bleed canvas (screen-pt parity + same-canvas ±1px).
+    static func labelContentScale(forWidth width: CGFloat, fullBleed: Bool = false) -> CGFloat {
+        let sotWidth = fullBleed ? width + labelFullBleedWidthInset : width
+        guard sotWidth > 0 else { return 1 }
+        return sotWidth / labelDesignCanvasWidth
     }
     /// Detail-map wholesale hideSteps ladder (visible-only subset). 1 → 5 → 10 → 20 → 50.
     static let detailLabelHideSteps: [Int] = [1, 5, 10, 20, 50]

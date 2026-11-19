@@ -19,6 +19,10 @@ enum UITestSupport {
     static var saryangdoSeedID: UUID { UITestMountainPathFixtures.saryangdo.id }
     static var samaksanSeedID: UUID { UITestMountainPathFixtures.samaksan.id }
     static var gamajicheonSeedID: UUID { UITestMountainPathFixtures.gamajicheon.id }
+    /// Samsung backup SoT for pager previews (read-only device id).
+    static var hangjunaruSeedID: UUID {
+        UUID(uuidString: "26EDF0AC-CD95-44E6-9E32-18930E5A4DB7")!
+    }
 
     private static var didSeedPlacementRecords = false
 
@@ -31,6 +35,8 @@ enum UITestSupport {
                 didSeedPlacementRecords = true
                 reseedsPlacementRecords()
             }
+            // Hangjunaru JSON fixture is always available for pager export (no device needed).
+            seedHangjunaruFixtureIfNeeded()
             exportSummariesIfNeeded()
             exportSaveStylesIfNeeded()
             exportPhotoOffEvidenceIfNeeded()
@@ -39,7 +45,7 @@ enum UITestSupport {
 
     private static func reseedsPlacementRecords() {
         let store = HikingRecordStore.shared
-        let ids = UITestMountainPathFixtures.all.map(\.id) + [seedSessionID]
+        let ids = UITestMountainPathFixtures.all.map(\.id) + [seedSessionID, hangjunaruSeedID]
         for id in ids {
             if store.records.contains(where: { $0.id == id }) {
                 store.delete(id: id)
@@ -48,6 +54,32 @@ enum UITestSupport {
         seedDummyRecordIfNeeded()
         for fixture in UITestMountainPathFixtures.all {
             seedFixture(fixture)
+        }
+        seedHangjunaruFixtureIfNeeded()
+    }
+
+    /// Bundled `Resources/uitest-fixtures/hangjunaru.json` (Samsung backup id 26edf0ac…).
+    private static func seedHangjunaruFixtureIfNeeded() {
+        let store = HikingRecordStore.shared
+        if store.records.contains(where: { $0.id == hangjunaruSeedID }) { return }
+        guard UserDataPaths.isUserSelected else { return }
+        guard let url = Bundle.main.url(
+            forResource: "hangjunaru",
+            withExtension: "json",
+            subdirectory: "uitest-fixtures"
+        ) ?? Bundle.main.url(forResource: "hangjunaru", withExtension: "json") else {
+            print("[uitest] hangjunaru.json fixture missing from bundle")
+            return
+        }
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let record = try decoder.decode(SavedHikingSession.self, from: data)
+            store.importSeededRecord(record)
+            print("[uitest] seeded hangjunaru \(record.displayName ?? "?") pts=\(record.session.points.count)")
+        } catch {
+            print("[uitest] hangjunaru seed failed: \(error)")
         }
     }
 
@@ -341,19 +373,15 @@ enum UITestSupport {
             let previous = HikingRecordImageSavePreferences.style
             defer { HikingRecordImageSavePreferences.style = previous }
 
-            /// Prefer 행주나루길 when present (pager fixture SoT); else gamajicheon seed.
-            let hangju = store.records.first(where: { ($0.displayName ?? "").contains("행주나루") })
+            /// Export both when present: hangjunaru = pager SoT; gamajicheon = label-size SoT.
+            let hangju = store.records.first(where: {
+                $0.id == hangjunaruSeedID || ($0.displayName ?? "").contains("행주나루")
+            })
             let gamaID = gamajicheonSeedID
             let gama = store.records.first(where: { $0.id == gamaID })
-            let exportTargets: [(UUID, String)] = {
-                if let hangju {
-                    return [(hangju.id, "hangjunaru")]
-                }
-                if let gama {
-                    return [(gama.id, "gamajicheon")]
-                }
-                return []
-            }()
+            var exportTargets: [(UUID, String)] = []
+            if let hangju { exportTargets.append((hangju.id, "hangjunaru")) }
+            if let gama { exportTargets.append((gama.id, "gamajicheon")) }
             if exportTargets.isEmpty {
                 print("[save-style] missing hangjunaru + gamajicheon")
                 return

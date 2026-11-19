@@ -66,10 +66,12 @@ enum HikingRouteSnapshotGenerator {
     private static let startPointColor = UIColor(red: 52.0 / 255.0, green: 199.0 / 255.0, blue: 89.0 / 255.0, alpha: 1)
     private static let endPointColor = UIColor(red: 255.0 / 255.0, green: 59.0 / 255.0, blue: 48.0 / 255.0, alpha: 1)
 
-    /// Km/route overlay scale — same Simple SoT (`width/430`) for detail, Data Card, and Simple.
+    /// Km/route overlay scale — Simple SoT `width/430`.
+    /// Data Card / detail maps are inset vs Simple full-bleed; use fullBleed
+    /// so capsule H matches Simple on same-canvas saves (±1px).
     private static func mapContentScale(for canvasWidth: CGFloat, appearance: HikingRouteSnapshotAppearance) -> CGFloat {
-        _ = appearance
-        return RouteKilometerMarkerMetrics.labelContentScale(forWidth: canvasWidth)
+        let insetMap = !appearance.usesShareSummaryChrome
+        return RouteKilometerMarkerMetrics.labelContentScale(forWidth: canvasWidth, fullBleed: insetMap)
     }
 
     /// 캐시된 경로 PNG 위에 공유 옵션(사진 마커·핀 썸네일)만 빠르게 합성합니다.

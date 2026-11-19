@@ -227,6 +227,11 @@ final class HikingRecordStore: ObservableObject {
         }
     }
 
+    /// DEBUG/UITest: insert a fully-formed record (e.g. bundled hangjunaru fixture).
+    func importSeededRecord(_ saved: SavedHikingSession) {
+        insertSavedRecord(saved)
+    }
+
     /// 산행 시작~종료 구간의 날씨 스냅샷을 채웁니다. 없거나 구 기록(평균만 있음)이면 다시 받습니다.
     func attachWeatherIfNeeded(for recordID: UUID) async {
         guard let index = records.firstIndex(where: { $0.id == recordID }) else { return }

@@ -352,7 +352,9 @@ struct HikingRecordRouteMapView: View {
         let idleAt = CFAbsoluteTimeGetCurrent()
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let labelScale = RouteKilometerMarkerMetrics.labelContentScale(forWidth: mapWidth)
+            // Live detail: absolute design tokens (scale 1) so screen-pt matches
+            // Simple save fill AABB (~66px @3x). Save/DC use width/430 (+fullBleed).
+            let labelScale: CGFloat = 1
             let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
                 for: requests,
                 endpointPoints: endpoints,
@@ -459,7 +461,7 @@ struct HikingRecordRouteMapView: View {
                             timeText: timeText,
                             centerOffset: shift?.centerOffset ?? fallback.centerOffset,
                             showsLabel: showsLabel,
-                            contentScale: RouteKilometerMarkerMetrics.labelContentScale(forWidth: mapWidth)
+                            contentScale: 1
                         )
                         .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }
                     }
