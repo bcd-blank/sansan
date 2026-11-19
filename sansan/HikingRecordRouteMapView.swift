@@ -268,12 +268,13 @@ struct HikingRecordRouteMapView: View {
             fitRouteInView(animated: false)
         case .zoomIn:
             // Zoom near the end so mid/late km stay on-screen (TC-01: 3·4km on ~4.28km).
+            // Span tighter than route-fit so zoom± captures actually differ (가마지천 fit ≈ 0.006).
             let centerIndex = min(
                 max(Int(Double(routeCoordinates.count) * 0.72), 0),
                 routeCoordinates.count - 1
             )
             let center = routeCoordinates[centerIndex]
-            let span = MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
+            let span = MKCoordinateSpan(latitudeDelta: 0.0028, longitudeDelta: 0.0028)
             mapPosition = .region(MKCoordinateRegion(center: center, span: span))
         }
     }

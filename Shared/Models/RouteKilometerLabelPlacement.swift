@@ -647,11 +647,13 @@ enum RouteKilometerLabelPlacement {
             if d < r { return false }
             if m.kilometer != marker.kilometer, d < ownDist + ownMargin { return false }
         }
+        // Endpoints: hard radius only (Android `aloneOk` endpoint dots). Do not apply
+        // ownDist+ownMargin — that gate is for other km items. Loop finishes near the
+        // start (행주나루 3km) otherwise lose every L-bend candidate vs nearby endpoints.
         for ep in context.endpointPoints {
             let r = endpointRadius * scale + clear.pointExtra * scale
             let d = outlineDistance(point: ep, center: cand.center, width: cand.width, height: cand.height)
             if d < r { return false }
-            if d < ownDist + ownMargin { return false }
         }
 
         if !context.routePolyline.isEmpty {

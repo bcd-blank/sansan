@@ -372,4 +372,78 @@ final class ShareSummaryTokensTests: XCTestCase {
     func testMaxMemoLengthIs200() {
         XCTAssertEqual(SavedHikingSession.maxMemoLength, 200)
     }
+
+    /// 행주나루길 loop: 3km sits near start/end. Endpoint ownMargin must not drop it
+    /// (Android aloneOk hard-clears endpoints only) — Simple Grey/Color parity.
+    func testHangjunaruPlaceSummaryKeepsThreeKmNearEndpoints() throws {
+        let fixture = URL(fileURLWithPath:
+            "/Users/jeongwook/Documents/sansan-보관/작업복사본-iOS/sansan-ios-detail-label-zoom-e75c/sansan/Resources/uitest-fixtures/hangjunaru.json"
+        )
+        let data = try Data(contentsOf: fixture)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let record = try decoder.decode(SavedHikingSession.self, from: data)
+        let coords = record.session.points.map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+        }
+        XCTAssertGreaterThanOrEqual(coords.count, 2)
+
+        let canvas = ShareSummaryTokens.canvasSize(widthPoints: 402, pixelScale: 1)
+        let memoLines = 0
+        let region = HikingMapRegion.fitting(
+            coordinates: coords,
+            viewSize: canvas,
+            insetTop: ShareSummaryTokens.mapTopInset(memoLineCount: memoLines),
+            insetLeft: ShareSummaryTokens.mapRouteSideInset,
+            insetBottom: ShareSummaryTokens.mapBottomInset,
+            insetRight: ShareSummaryTokens.mapRouteSideInset,
+            verticalAlign: .top
+        )
+        func project(_ c: CLLocationCoordinate2D) -> CGPoint {
+            HikingMapRegion.point(for: c, in: region, canvasSize: canvas)
+        }
+
+        let markers = HikingSessionMetrics.kilometerMarkerPlacements(from: record.session.points)
+        let times = HikingSessionMetrics.kilometerArrivalElapsedLabels(
+            from: record.session.points,
+            startedAt: record.session.effectiveStartedAt,
+            segmentBreaks: record.session.segmentBreaks
+        )
+        let requests: [RouteKilometerLabelRequest] = markers.map { marker in
+            RouteKilometerLabelRequest(
+                kilometer: marker.kilometer,
+                distanceLabel: marker.labelText,
+                timeLabel: times[marker.kilometer],
+                routePoint: project(marker.coordinate),
+                preferredLeadingSide: marker.placesLabelOnLeadingSide
+            )
+        }
+        XCTAssertEqual(Set(requests.map(\.kilometer)), Set([1, 2, 3]))
+
+        var endpoints: [CGPoint] = [project(coords[0])]
+        if coords.count > 1 { endpoints.append(project(coords[coords.count - 1])) }
+        let poly = coords.map(project)
+        let contentScale = RouteKilometerMarkerMetrics.labelContentScale(forWidth: canvas.width)
+        let titleBottom = ShareSummaryTokens.headerBottom(memoLineCount: memoLines) * contentScale
+
+        let previousBudget = RouteKilometerLabelPlacement.softTimeBudgetSeconds
+        RouteKilometerLabelPlacement.softTimeBudgetSeconds = 2.0
+        defer { RouteKilometerLabelPlacement.softTimeBudgetSeconds = previousBudget }
+
+        let placed = RouteKilometerLabelPlacement.placeSummary(
+            markers: requests,
+            endpointPoints: endpoints,
+            routePolyline: poly,
+            contentScale: contentScale,
+            imageSize: canvas,
+            sideInset: ShareSummaryTokens.kmLabelBoundsInset * contentScale,
+            pathHalfWidth: ShareSummaryTokens.routeCasing / 2,
+            titleBlockBottom: titleBottom
+        )
+        XCTAssertEqual(
+            Set(placed.shifts.keys),
+            Set([1, 2, 3]),
+            "hangjunaru Simple must keep 3km near loop endpoints; stage=\(placed.stageName) partial=\(placed.partial) keys=\(placed.shifts.keys.sorted())"
+        )
+    }
 }
