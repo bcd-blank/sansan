@@ -25,8 +25,18 @@ enum RouteKilometerMarkerMetrics {
     static let labelHeight: CGFloat = 24
     static let labelPadH: CGFloat = 9
     static let labelFontSize: CGFloat = 12
+    /// Design canvas width shared with Simple Grey/Color (`ShareSummaryTokens.canvasWidth`).
+    /// Detail + Data Card label `contentScale` must use this denominator so visible
+    /// pill size matches Simple (not the old detail layout width 377).
+    static let labelDesignCanvasWidth: CGFloat = 430
     /// Legacy scale hook — combined labels use absolute pt tokens above.
     static let markerLabelScale: CGFloat = 1
+
+    /// Label content scale for a canvas/map width (Simple SoT = width / 430).
+    static func labelContentScale(forWidth width: CGFloat) -> CGFloat {
+        guard width > 0 else { return 1 }
+        return width / labelDesignCanvasWidth
+    }
     /// Detail-map wholesale hideSteps ladder (visible-only subset). 1 → 5 → 10 → 20 → 50.
     static let detailLabelHideSteps: [Int] = [1, 5, 10, 20, 50]
     /// Detail-map side inset for capsule bounds (x [24, W−24]).

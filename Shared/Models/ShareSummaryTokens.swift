@@ -57,6 +57,8 @@ enum ShareSummaryTokens {
         static let mapPaper = "E6E2E0"
         /// Warm Simple Grey roads (#EEEBE9) — slightly above paper so mesh still reads.
         static let mapRoad = "EEEBE9"
+        /// Warm Simple Grey water (#D9D3D0) — cooler than paper; style remap, not overlay.
+        static let mapWater = "D9D3D0"
     }
 
 #if canImport(UIKit)
@@ -71,6 +73,8 @@ enum ShareSummaryTokens {
     static let surfaceUIColor = UIColor.white
     static let mapPaperUIColor = UIColor(red: 230 / 255, green: 226 / 255, blue: 224 / 255, alpha: 1)
     static let mapRoadUIColor = UIColor(red: 238 / 255, green: 235 / 255, blue: 233 / 255, alpha: 1)
+    /// Warm Simple Grey water (#D9D3D0).
+    static let mapWaterUIColor = UIColor(red: 217 / 255, green: 211 / 255, blue: 208 / 255, alpha: 1)
     /// Record-detail elev orange (glass3 §9 / elevation-color-v2 white card).
     static let chartElevUIColor = UIColor(red: 255 / 255, green: 141 / 255, blue: 40 / 255, alpha: 1) // #FF8D28
     /// Record-detail HR red.

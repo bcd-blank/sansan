@@ -58,20 +58,18 @@ enum HikingRouteSnapshotGenerator {
         var includesLiveDetailContent: Bool = false
         let cleanup: () -> Void
     }
-    /// 상세 지도 콘텐츠 너비(377pt) 대비 스냅샷 스케일.
+    /// Legacy detail layout width (card chrome). Label scale no longer uses this —
+    /// km pills share Simple’s 430pt design space (`RouteKilometerMarkerMetrics.labelDesignCanvasWidth`).
     private static let mapLayoutReferenceWidth: CGFloat = 377
     private static let snapshotScale: CGFloat = 2
     /// 시작·종료·일시정지 점. Android 경로 지도와 같은 색입니다.
     private static let startPointColor = UIColor(red: 52.0 / 255.0, green: 199.0 / 255.0, blue: 89.0 / 255.0, alpha: 1)
     private static let endPointColor = UIColor(red: 255.0 / 255.0, green: 59.0 / 255.0, blue: 48.0 / 255.0, alpha: 1)
 
+    /// Km/route overlay scale — same Simple SoT (`width/430`) for detail, Data Card, and Simple.
     private static func mapContentScale(for canvasWidth: CGFloat, appearance: HikingRouteSnapshotAppearance) -> CGFloat {
-        switch appearance {
-        case .standard:
-            return canvasWidth / mapLayoutReferenceWidth
-        case .shareSummary, .shareSummaryColor:
-            return ShareSummaryTokens.ptScale(for: canvasWidth)
-        }
+        _ = appearance
+        return RouteKilometerMarkerMetrics.labelContentScale(forWidth: canvasWidth)
     }
 
     /// 캐시된 경로 PNG 위에 공유 옵션(사진 마커·핀 썸네일)만 빠르게 합성합니다.
@@ -433,8 +431,9 @@ enum HikingRouteSnapshotGenerator {
         cgContext.restoreGState()
     }
 
-    /// Warm Simple Grey: paper #E6E2E0; roads → #EEEBE9; labels → #8B8B8E (contrast on warm paper).
-    /// Apple MKMapSnapshotter cannot recolor style paints — luminance→warm RGB remap is the style-equivalent path (no overlay/multiply).
+    /// Warm Simple Grey: paper #E6E2E0; roads → #EEEBE9; water → #D9D3D0; labels → #8B8B8E.
+    /// Apple MKMapSnapshotter cannot recolor style paints — luminance/hue→warm RGB remap is the
+    /// style-equivalent path (no overlay/multiply). Title-bg / paper / roads unchanged.
     private static func shareSummaryTonedMapImage(_ image: UIImage) -> UIImage? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width
@@ -454,10 +453,11 @@ enum HikingRouteSnapshotGenerator {
         ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        // Warm chromatic targets (not achromatic R=G=B) — #E6E2E0 / #EEEBE9 / #8B8B8E.
+        // Warm chromatic targets — #E6E2E0 / #EEEBE9 / #D9D3D0 / #8B8B8E.
         let labelR = 139.0, labelG = 139.0, labelB = 142.0
         let paperR = 230.0, paperG = 226.0, paperB = 224.0
         let roadR = 238.0, roadG = 235.0, roadB = 233.0
+        let waterR = 217.0, waterG = 211.0, waterB = 208.0 // #D9D3D0
         let count = width * height
         for i in 0..<count {
             let o = i * bytesPerPixel
@@ -465,6 +465,8 @@ enum HikingRouteSnapshotGenerator {
             let g = Double(pixels[o + 1])
             let b = Double(pixels[o + 2])
             let y = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+            // Muted Apple water reads cooler/bluer than land before flatten.
+            let coolBlue = (b > r + 6) && (b >= g - 2) && (y >= 0.42) && (y <= 0.92)
             let outR: Double
             let outG: Double
             let outB: Double
@@ -478,6 +480,10 @@ enum HikingRouteSnapshotGenerator {
                 outR = roadR
                 outG = roadG
                 outB = roadB
+            } else if coolBlue {
+                outR = waterR
+                outG = waterG
+                outB = waterB
             } else {
                 // Flat warm paper #E6E2E0; near-white roads stay in y>0.985 → #EEEBE9.
                 outR = paperR
@@ -871,11 +877,14 @@ enum HikingRouteSnapshotGenerator {
         let bridgeCasing = casingWidth
         let bridgeFill = fillWidth
 
+        // minSeparationEdges ≥ 5: edges only 2–4 apart are adjacent bends/joints, not
+        // true non-adjacent crossings. Separation=2 + proximity was painting white
+        // bridges across continuous joints (false seams).
         var bridgeSource = rawPoints
         var hits = RouteSelfCrossing.hits(
             in: rawPoints,
             minLoopLength: minLoopLength,
-            minSeparationEdges: 2,
+            minSeparationEdges: 5,
             minCrossSin: 0.20,
             dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
             proximityDistance: casingWidth * 0.65
@@ -885,7 +894,7 @@ enum HikingRouteSnapshotGenerator {
             hits = RouteSelfCrossing.hits(
                 in: drawPoints,
                 minLoopLength: minLoopLength,
-                minSeparationEdges: 2,
+                minSeparationEdges: 5,
                 minCrossSin: 0.20,
                 dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
                 proximityDistance: casingWidth * 0.65

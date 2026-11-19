@@ -24,13 +24,13 @@ enum UITestSupport {
 
     static func applyIfNeeded() {
         UITestMapCaptureHooks.installIfNeeded()
-        guard seedRecords else { return }
-        // Single main-queue pass after user activation (avoid merge-on-resave zigzag).
+        // Seed is optional; exports still run when their flags are set (e.g. hangjunaru inject).
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             guard UserDataPaths.isUserSelected else { return }
-            guard !didSeedPlacementRecords else { return }
-            didSeedPlacementRecords = true
-            reseedsPlacementRecords()
+            if seedRecords, !didSeedPlacementRecords {
+                didSeedPlacementRecords = true
+                reseedsPlacementRecords()
+            }
             exportSummariesIfNeeded()
             exportSaveStylesIfNeeded()
             exportPhotoOffEvidenceIfNeeded()
@@ -333,22 +333,6 @@ enum UITestSupport {
                 showsPinnedThumbnails: false
             )
 
-            let gamaID = gamajicheonSeedID
-            guard let gama = store.records.first(where: { $0.id == gamaID }) else {
-                print("[save-style] missing gamajicheon seed")
-                return
-            }
-            store.updateMemo(id: gamaID, memo: "")
-            let kmLabels = HikingSessionMetrics.kilometerArrivalElapsedLabels(
-                from: gama.session.points,
-                startedAt: gama.session.startedAt,
-                segmentBreaks: gama.session.segmentBreaks
-            )
-            print(
-                "[save-style] gamajicheon dist=\(String(format: "%.2f", gama.session.totalDistance / 1000))km "
-                    + "4km=\(kmLabels[4] ?? "?")"
-            )
-
             let styles: [(HikingRecordImageSaveStyle, String)] = [
                 (.card, "data-card"),
                 (.summary, "simple-grey"),
@@ -357,19 +341,51 @@ enum UITestSupport {
             let previous = HikingRecordImageSavePreferences.style
             defer { HikingRecordImageSavePreferences.style = previous }
 
-            for (style, slug) in styles {
-                HikingRecordImageSavePreferences.style = style
-                guard let image = await store.shareImage(
-                    for: gamaID,
-                    mapOptions: exportMapOptions,
-                    fullScreen: true
-                ), let data = image.pngData() else {
-                    print("[save-style] render failed \(slug)")
-                    continue
+            /// Prefer 행주나루길 when present (pager fixture SoT); else gamajicheon seed.
+            let hangju = store.records.first(where: { ($0.displayName ?? "").contains("행주나루") })
+            let gamaID = gamajicheonSeedID
+            let gama = store.records.first(where: { $0.id == gamaID })
+            let exportTargets: [(UUID, String)] = {
+                if let hangju {
+                    return [(hangju.id, "hangjunaru")]
                 }
-                let url = dir.appendingPathComponent("ios-gamajicheon-\(slug).png")
-                try? data.write(to: url, options: .atomic)
-                print("[save-style] wrote \(url.lastPathComponent) \(Int(image.size.width))×\(Int(image.size.height))@\(Int(image.scale))")
+                if let gama {
+                    return [(gama.id, "gamajicheon")]
+                }
+                return []
+            }()
+            if exportTargets.isEmpty {
+                print("[save-style] missing hangjunaru + gamajicheon")
+                return
+            }
+            for (recordID, hikeSlug) in exportTargets {
+                if recordID == gamaID {
+                    store.updateMemo(id: gamaID, memo: "")
+                }
+                guard let record = store.records.first(where: { $0.id == recordID }) else { continue }
+                let kmLabels = HikingSessionMetrics.kilometerArrivalElapsedLabels(
+                    from: record.session.points,
+                    startedAt: record.session.startedAt,
+                    segmentBreaks: record.session.segmentBreaks
+                )
+                print(
+                    "[save-style] \(hikeSlug) dist=\(String(format: "%.2f", record.session.totalDistance / 1000))km "
+                        + "name=\(record.displayName ?? "?") 4km=\(kmLabels[4] ?? "?")"
+                )
+                for (style, slug) in styles {
+                    HikingRecordImageSavePreferences.style = style
+                    guard let image = await store.shareImage(
+                        for: recordID,
+                        mapOptions: exportMapOptions,
+                        fullScreen: true
+                    ), let data = image.pngData() else {
+                        print("[save-style] render failed \(hikeSlug)-\(slug)")
+                        continue
+                    }
+                    let url = dir.appendingPathComponent("ios-\(hikeSlug)-\(slug).png")
+                    try? data.write(to: url, options: .atomic)
+                    print("[save-style] wrote \(url.lastPathComponent) \(Int(image.size.width))×\(Int(image.size.height))@\(Int(image.scale))")
+                }
             }
 
             // Settings pager page stills (illustrative previews).

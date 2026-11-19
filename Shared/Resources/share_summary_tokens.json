@@ -22,7 +22,8 @@
     "hr": "#FF383C",
     "surface": "#FFFFFF",
     "mapPaper": "#E6E2E0",
-    "mapRoad": "#EEEBE9"
+    "mapRoad": "#EEEBE9",
+    "mapWater": "#D9D3D0"
   },
   "header": {
     "top": 24,
