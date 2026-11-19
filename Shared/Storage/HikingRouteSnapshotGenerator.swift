@@ -877,15 +877,15 @@ enum HikingRouteSnapshotGenerator {
         let bridgeCasing = casingWidth
         let bridgeFill = fillWidth
 
-        // minSeparationEdges ≥ 5: edges only 2–4 apart are adjacent bends/joints, not
-        // true non-adjacent crossings. Separation=2 + proximity was painting white
-        // bridges across continuous joints (false seams).
+        // Android jMin = i+2. False joint seams are filtered by proximity |sin|≥0.28
+        // + soft interior (RouteSelfCrossing), not by raising separation.
         var bridgeSource = rawPoints
         var hits = RouteSelfCrossing.hits(
             in: rawPoints,
             minLoopLength: minLoopLength,
-            minSeparationEdges: 5,
+            minSeparationEdges: 2,
             minCrossSin: 0.20,
+            minProximitySin: 0.28,
             dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
             proximityDistance: casingWidth * 0.65
         )
@@ -894,8 +894,9 @@ enum HikingRouteSnapshotGenerator {
             hits = RouteSelfCrossing.hits(
                 in: drawPoints,
                 minLoopLength: minLoopLength,
-                minSeparationEdges: 5,
+                minSeparationEdges: 2,
                 minCrossSin: 0.20,
+                minProximitySin: 0.28,
                 dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
                 proximityDistance: casingWidth * 0.65
             )

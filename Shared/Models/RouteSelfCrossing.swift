@@ -56,11 +56,13 @@ enum RouteSelfCrossing {
     /// Screen/canvas-space crossings. Pass already-cleaned points; indices match that array.
     /// `minLoopLength` is in the same units as `points`.
     /// `proximityDistance`: also treat near-parallel approaches within this gap as crosses.
+    /// `minProximitySin`: Android parity — proximity branch needs |sin θ| ≥ 0.28 (~12°).
     static func hits(
         in points: [CGPoint],
         minLoopLength: CGFloat,
         minSeparationEdges: Int = 5,
         minCrossSin: CGFloat = 0.18,
+        minProximitySin: CGFloat = 0.28,
         dedupeDistance: CGFloat,
         proximityDistance: CGFloat = 0
     ) -> [Hit] {
@@ -73,6 +75,9 @@ enum RouteSelfCrossing {
             guard jMin <= lastEdge else { continue }
             for j in jMin...lastEdge {
                 if pathLength(points, from: i, to: j) < minLoopLength { continue }
+                let sin = edgesSin(points, i: i, j: j)
+                // Reject near-collinear crawls (Android shareRouteAllCrossings).
+                if sin < minCrossSin { continue }
                 if let hit = segmentIntersection(
                     points[i], points[i + 1],
                     points[j], points[j + 1],
@@ -82,7 +87,9 @@ enum RouteSelfCrossing {
                     continue
                 }
                 // Near-parallel proximity: ribbons visually cross even without a strict X.
+                // Require steeper angle than hard X so dense curve joints do not false-hit.
                 if proximityDistance > 0,
+                   sin >= minProximitySin,
                    let near = segmentProximity(
                     points[i], points[i + 1],
                     points[j], points[j + 1],
@@ -273,7 +280,8 @@ enum RouteSelfCrossing {
         guard abs(denom) > 1e-6 else { return nil }
         let t = ((b0.x - a0.x) * (b1.y - b0.y) - (b0.y - a0.y) * (b1.x - b0.x)) / denom
         let u = ((b0.x - a0.x) * (a1.y - a0.y) - (b0.y - a0.y) * (a1.x - a0.x)) / denom
-        guard t > 0.02, t < 0.98, u > 0.02, u < 0.98 else { return nil }
+        // Soft interior — T merges hug endpoints (Android 0.04 / 0.96).
+        guard t > 0.04, t < 0.96, u > 0.04, u < 0.96 else { return nil }
         let ax = a1.x - a0.x, ay = a1.y - a0.y
         let bx = b1.x - b0.x, by = b1.y - b0.y
         let aLen = hypot(ax, ay), bLen = hypot(bx, by)
@@ -284,6 +292,16 @@ enum RouteSelfCrossing {
             point: CGPoint(x: b0.x + u * (b1.x - b0.x), y: b0.y + u * (b1.y - b0.y)),
             u: u
         )
+    }
+
+    /// |sin θ| of edge directions (Android `shareEdgesSin`).
+    private static func edgesSin(_ points: [CGPoint], i: Int, j: Int) -> CGFloat {
+        guard i + 1 < points.count, j + 1 < points.count else { return 0 }
+        let ax = points[i + 1].x - points[i].x, ay = points[i + 1].y - points[i].y
+        let bx = points[j + 1].x - points[j].x, by = points[j + 1].y - points[j].y
+        let aLen = hypot(ax, ay), bLen = hypot(bx, by)
+        guard aLen > 0.5, bLen > 0.5 else { return 0 }
+        return abs(ax * by - ay * bx) / (aLen * bLen)
     }
 
     /// Closest approach between two segments when they nearly graze (parallel proximity).
@@ -299,6 +317,7 @@ enum RouteSelfCrossing {
         // Sample a few parameters on the later edge; keep the closest mid-segment pair.
         var bestDist = CGFloat.greatestFiniteMagnitude
         var bestU: CGFloat = 0.5
+        var bestT: CGFloat = 0.5
         var bestPoint = b0
         for sample in 1...8 {
             let u = CGFloat(sample) / 9
@@ -311,12 +330,14 @@ enum RouteSelfCrossing {
             if dist < bestDist {
                 bestDist = dist
                 bestU = u
+                bestT = t
                 bestPoint = bp
             }
         }
         // Android shareSegmentClosest: any gap ≤ proximity counts (including near-zero
-        // parallel grazes). Do not reject sub-0.35 gaps — that dropped 사량도.
+        // parallel grazes). Soft interior rejects endpoint T-merges at joints.
         guard bestDist <= maxDistance else { return nil }
+        guard bestT > 0.04, bestT < 0.96, bestU > 0.04, bestU < 0.96 else { return nil }
         return (point: bestPoint, u: bestU)
     }
 }
