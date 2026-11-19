@@ -43,8 +43,13 @@ struct HikingRecordRouteMapView: View {
     @State private var lastLabelLayoutZoom: Double?
     /// Generation token — stale background layouts are dropped; previous labels stay until apply.
     @State private var kilometerLabelLayoutGeneration: UInt64 = 0
+    /// Debounce zoom/pan-end label solves (camera can fire bursts).
+    @State private var labelLayoutDebounceTask: Task<Void, Never>?
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
+#if DEBUG
+    @State private var detailOpenStartedAt: CFAbsoluteTime?
+#endif
 
     private var record: SavedHikingSession? {
         store.records.first { $0.id == recordID }
@@ -144,6 +149,11 @@ struct HikingRecordRouteMapView: View {
         }
         .onAppear {
             isLiveRegistryActive = true
+#if DEBUG
+            if detailOpenStartedAt == nil {
+                detailOpenStartedAt = CFAbsoluteTimeGetCurrent()
+            }
+#endif
         }
         .task(id: routePreparationToken) {
             await prepareRouteDisplayData()
@@ -203,7 +213,7 @@ struct HikingRecordRouteMapView: View {
             }
             .mapStyle(.standard(elevation: .flat))
             .onMapCameraChange(frequency: .onEnd) { context in
-                updateKilometerLabelShifts(proxy: proxy, cameraDistance: context.camera.distance)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: context.camera.distance)
                 guard isLiveRegistryActive else { return }
                 LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
                     recordID: recordID,
@@ -212,13 +222,13 @@ struct HikingRecordRouteMapView: View {
                 )
             }
             .onChange(of: kilometerMarkerPlacements) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .onChange(of: showsDistanceMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .onChange(of: showsTimeMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .background {
                 RouteMapVisibleRenderRegistrar(recordID: recordID)
@@ -233,7 +243,7 @@ struct HikingRecordRouteMapView: View {
                 }
             }
             .onAppear {
-                updateKilometerLabelShifts(proxy: proxy, cameraDistance: nil)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
                 // 저장 시점에 화면 지도가 실제로 보여주는 영역을 그대로 가져와 클론에 적용합니다.
                 // (onMapCameraChange가 초기 프로그램적 카메라에서 안 뜨는 경우 대비)
                 LiveRouteMapSnapshotRegistry.shared.registerVisibleRectProvider(recordID: recordID) {
@@ -297,6 +307,24 @@ struct HikingRecordRouteMapView: View {
             rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0, height: 0))
         }
         return rect.isNull ? nil : rect
+    }
+
+    /// Debounced camera-idle layout; marker/toggle changes can pass `immediate`.
+    private func scheduleKilometerLabelLayout(
+        proxy: MapProxy,
+        cameraDistance: Double?,
+        immediate: Bool = false
+    ) {
+        labelLayoutDebounceTask?.cancel()
+        if immediate {
+            updateKilometerLabelShifts(proxy: proxy, cameraDistance: cameraDistance)
+            return
+        }
+        labelLayoutDebounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            updateKilometerLabelShifts(proxy: proxy, cameraDistance: cameraDistance)
+        }
     }
 
     /// Detail map: #007AFF capsules; final-spec v3. Camera idle → background layout ≤~300ms.
@@ -623,13 +651,38 @@ struct HikingRecordRouteMapView: View {
 
         if loadPersistedRouteDisplayIfAvailable(from: record) {
             fitRouteInView(animated: false)
+#if DEBUG
+            logDetailOpenReady(stage: "cache")
+#endif
             return
         }
 
-        isRouteDisplayReady = false
+        // Already enriched (token may re-fire when displayCacheVersion updates) — keep map.
+        if isRouteDisplayReady,
+           !kilometerMarkerPlacements.isEmpty,
+           routeCoordinates.count >= 2 {
+#if DEBUG
+            logDetailOpenReady(stage: "skip-ready")
+#endif
+            return
+        }
+
+        // Map first: show raw polyline immediately; enrich markers/summits off-main.
+        // Do not clear `isRouteDisplayReady` — avoids blanking an already-visible map.
+        let points = record.session.points
+        let quickCoords = points.map(\.coordinate)
+        if routeCoordinates.isEmpty {
+            routeCoordinates = quickCoords
+            isRouteDisplayReady = true
+            fitRouteInView(animated: false)
+#if DEBUG
+            logDetailOpenReady(stage: "map-first")
+#endif
+        }
+
         let includeSummits = mapDisplayPreferences.showsSummitMarkers
         let displayData = await HikingRecordRouteDisplayPreparer.prepare(
-            points: record.session.points,
+            points: points,
             includeSummits: includeSummits
         )
 
@@ -639,7 +692,37 @@ struct HikingRecordRouteMapView: View {
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
         fitRouteInView(animated: false)
+#if DEBUG
+        logDetailOpenReady(stage: "prepared")
+#endif
     }
+
+#if DEBUG
+    private func logDetailOpenReady(stage: String) {
+        guard let t0 = detailOpenStartedAt else { return }
+        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        let name = record?.displayName ?? recordID.uuidString
+        let line = String(
+            format: "[detail-open] %@ stage=%@ ready=%.1fms pts=%d\n",
+            name, stage, ms, routeCoordinates.count
+        )
+        print(line, terminator: "")
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let url = dir.appendingPathComponent("detail-open-perf.log")
+            if let data = line.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    if let handle = try? FileHandle(forWritingTo: url) {
+                        defer { try? handle.close() }
+                        try? handle.seekToEnd()
+                        try? handle.write(contentsOf: data)
+                    }
+                } else {
+                    try? data.write(to: url)
+                }
+            }
+        }
+    }
+#endif
 
     /// 저장 시 계산해 둔 경로·마커·정상 데이터를 그대로 사용합니다.
     private func loadPersistedRouteDisplayIfAvailable(from record: SavedHikingSession) -> Bool {

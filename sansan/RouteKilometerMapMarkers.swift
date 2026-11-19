@@ -28,7 +28,7 @@ struct RouteKilometerRouteDot: View {
 }
 
 /// Combined blue capsule: both → `1km 16:50`; km-only / time-only → single part.
-/// Fill #007AFF, white text (km 600 / time 400), white 1pt stroke, dual shadows.
+/// Exact Simple label tokens (font/weight/pad/corner/height/stroke); fill #007AFF only.
 /// `contentScale` matches Simple SoT (`width/430`) so live detail pills match save size.
 struct RouteKilometerCombinedLabelCapsule: View {
     var distanceText: String?
@@ -37,23 +37,27 @@ struct RouteKilometerCombinedLabelCapsule: View {
 
     private var parts: [(text: String, weight: Font.Weight, color: Color)] {
         let white = Color(RouteKilometerMarkerMetrics.detailLabelTextUIColor)
+        let kmWeight = Font.Weight.semibold
+        let timeWeight: Font.Weight = distanceText != nil ? .regular : .medium
         if let distanceText, let timeText {
             return [
-                (distanceText, .semibold, white),
-                (timeText, .regular, white)
+                (distanceText, kmWeight, white),
+                (timeText, timeWeight, white)
             ]
         }
         if let distanceText {
-            return [(distanceText, .semibold, white)]
+            return [(distanceText, kmWeight, white)]
         }
         if let timeText {
-            return [(timeText, .regular, white)]
+            return [(timeText, timeWeight, white)]
         }
         return []
     }
 
     var body: some View {
         let s = contentScale
+        let height = RouteKilometerMarkerMetrics.labelHeight * s
+        let corner = RouteKilometerMarkerMetrics.labelCornerRadius * s
         HStack(spacing: RouteKilometerMarkerMetrics.combinedInnerGap * s) {
             ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
                 Text(part.text)
@@ -63,28 +67,18 @@ struct RouteKilometerCombinedLabelCapsule: View {
             }
         }
         .padding(.horizontal, RouteKilometerMarkerMetrics.labelPadH * s)
-        .frame(height: RouteKilometerMarkerMetrics.labelHeight * s)
+        .frame(height: height)
         .background(
             Color(RouteKilometerMarkerMetrics.detailLabelFillUIColor),
-            in: Capsule(style: .continuous)
+            in: RoundedRectangle(cornerRadius: corner, style: .circular)
         )
         .overlay {
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: corner, style: .circular)
                 .strokeBorder(
                     Color(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor),
-                    lineWidth: RouteKilometerMarkerMetrics.detailLabelStrokeWidth * s
+                    lineWidth: max(RouteKilometerMarkerMetrics.labelStrokeWidth * s, 0.5)
                 )
         }
-        .shadow(
-            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowSecondary.color),
-            radius: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.radius * s,
-            y: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.y * s
-        )
-        .shadow(
-            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowPrimary.color),
-            radius: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.radius * s,
-            y: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.y * s
-        )
     }
 }
 

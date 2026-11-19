@@ -141,7 +141,31 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelHideSteps, [1, 5, 10, 20, 50])
         XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelSideInset, 24, accuracy: 0.01)
         XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelVerticalInset, 8, accuracy: 0.01)
-        XCTAssertEqual(RouteKilometerMarkerMetrics.detailLabelStrokeWidth, 1, accuracy: 0.01)
+        // Detail stroke aliases Simple — geometry shared; color only differs.
+        XCTAssertEqual(RouteKilometerMarkerMetrics.labelStrokeWidth, 0.5, accuracy: 0.01)
+        XCTAssertEqual(
+            RouteKilometerMarkerMetrics.detailLabelStrokeWidth,
+            RouteKilometerMarkerMetrics.labelStrokeWidth,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            RouteKilometerMarkerMetrics.labelCornerRadius,
+            RouteKilometerMarkerMetrics.labelHeight / 2,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(RouteKilometerMarkerMetrics.distanceLabelWeight, .semibold)
+        XCTAssertEqual(RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: true), .regular)
+        XCTAssertEqual(RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: false), .medium)
+        XCTAssertEqual(
+            RouteKilometerMarkerMetrics.detailTimeLabelWeight(hasDistance: true),
+            RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: true)
+        )
+        let whiteSize = RouteKilometerMarkerDrawing.capsuleSize(
+            distanceLabel: "1km",
+            timeLabel: "16:50",
+            contentScale: 1
+        )
+        XCTAssertEqual(whiteSize.height, RouteKilometerMarkerMetrics.labelHeight, accuracy: 0.01)
         var r: CGFloat = 0
         var g: CGFloat = 0
         var b: CGFloat = 0

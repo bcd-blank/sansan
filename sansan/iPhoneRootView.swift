@@ -242,6 +242,7 @@ struct iPhoneRootView: View {
                 applyAppStoreScreenshotModeIfNeeded()
                 exportLayoutPreviewCardIfNeeded()
                 WorkoutManager.shared.presentLayoutPreviewSummaryIfNeeded()
+                runTabSwitchBenchIfNeeded()
             }
 #endif
             .environment(\.chromeCapsuleHeight, chromeCapsuleHeight)
@@ -334,6 +335,13 @@ struct iPhoneRootView: View {
                 }
             }
             .onChange(of: selectedTab) { _, tab in
+#if DEBUG
+                let t0 = CFAbsoluteTimeGetCurrent()
+                DispatchQueue.main.async {
+                    let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+                    print(String(format: "[tab-switch] →%@ settle=%.1fms (Map kept alive; no recreate)", tab.title, ms))
+                }
+#endif
                 if tab == .records {
                     isRecordsTabPrepared = true
                     WorkoutManager.shared.cancelStartCountdown()
@@ -841,6 +849,41 @@ private extension iPhoneRootView {
         guard let mode = AppStoreScreenshotMode.current, mode.opensRecordsTab else { return }
         isRecordsTabPrepared = true
         selectedTab = .records
+    }
+
+    /// `-UITestTabSwitchBench` — 10× 메인↔모음; Map kept alive; write ms table to Documents.
+    func runTabSwitchBenchIfNeeded() {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-UITestTabSwitchBench") else { return }
+        Task { @MainActor in
+            // Let dashboard Map finish first paint.
+            try? await Task.sleep(for: .seconds(3))
+            var lines: [String] = ["round,to_records_ms,to_dashboard_ms"]
+            var totalRecords: Double = 0
+            var totalDashboard: Double = 0
+            for round in 1...10 {
+                let t0 = CFAbsoluteTimeGetCurrent()
+                isRecordsTabPrepared = true
+                selectedTab = .records
+                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(50))
+                let toRecords = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+                let t1 = CFAbsoluteTimeGetCurrent()
+                selectedTab = .dashboard
+                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(50))
+                let toDashboard = (CFAbsoluteTimeGetCurrent() - t1) * 1000
+                totalRecords += toRecords
+                totalDashboard += toDashboard
+                lines.append(String(format: "%d,%.1f,%.1f", round, toRecords, toDashboard))
+                print(String(format: "[tab-switch-bench] round=%d →모음=%.1fms →메인=%.1fms", round, toRecords, toDashboard))
+            }
+            lines.append(String(format: "avg,%.1f,%.1f", totalRecords / 10, totalDashboard / 10))
+            let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let url = dir.appendingPathComponent("tab-switch-bench.csv")
+            try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+            print("[tab-switch-bench] wrote \(url.path)")
+        }
     }
 
     /// `SANSAN_LAYOUT_PREVIEW=cardExport` — 극단 폭 점검용 fullScreen 카드 PNG를 Documents에 저장.

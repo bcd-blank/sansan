@@ -495,16 +495,20 @@ enum RouteKilometerMarkerDrawing {
         drawRouteDot(at: routePoint, contentScale: contentScale, in: cgContext)
 
         let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
-        let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let kmFont = UIFont.systemFont(
+            ofSize: fontSize,
+            weight: RouteKilometerMarkerMetrics.distanceLabelWeight
+        )
+        // Detail blue shares exact summary type tokens — color only differs.
         let timeFont = UIFont.systemFont(
             ofSize: fontSize,
-            weight: style == .detailBlue
-                ? .regular
-                : RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
+            weight: RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
         )
         let height = RouteKilometerMarkerMetrics.labelHeight * contentScale
         let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
         let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
+        let corner = RouteKilometerMarkerMetrics.labelCornerRadius * contentScale
+        let strokeWidth = RouteKilometerMarkerMetrics.labelStrokeWidth * contentScale
 
         let textColor: UIColor = {
             switch style {
@@ -549,39 +553,27 @@ enum RouteKilometerMarkerDrawing {
             width: capsuleWidth,
             height: height
         )
-        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: height / 2)
+        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: corner)
 
         cgContext.saveGState()
+        // No drop-shadow — Simple white and detail blue share fill+stroke geometry;
+        // only fill/text/stroke colors differ (visible px parity).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
         switch style {
         case .shareSummaryWhite:
-            // No capsule drop-shadow — share-summary AFTER must show white+green only.
-            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             cgContext.setFillColor(UIColor.white.cgColor)
             cgContext.addPath(path.cgPath)
             cgContext.fillPath()
             cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
-            cgContext.setLineWidth(max(0.5 * contentScale, 0.5))
+            cgContext.setLineWidth(max(strokeWidth, 0.5))
             cgContext.addPath(path.cgPath)
             cgContext.strokePath()
         case .detailBlue:
-            let secondary = RouteKilometerMarkerMetrics.detailLabelShadowSecondary
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: secondary.y * contentScale),
-                blur: secondary.radius * contentScale,
-                color: secondary.color.cgColor
-            )
-            let primary = RouteKilometerMarkerMetrics.detailLabelShadowPrimary
-            cgContext.setShadow(
-                offset: CGSize(width: 0, height: primary.y * contentScale),
-                blur: primary.radius * contentScale,
-                color: primary.color.cgColor
-            )
             cgContext.setFillColor(RouteKilometerMarkerMetrics.detailLabelFillUIColor.cgColor)
             cgContext.addPath(path.cgPath)
             cgContext.fillPath()
-            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             cgContext.setStrokeColor(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor.cgColor)
-            cgContext.setLineWidth(RouteKilometerMarkerMetrics.detailLabelStrokeWidth * contentScale)
+            cgContext.setLineWidth(max(strokeWidth, 0.5))
             cgContext.addPath(path.cgPath)
             cgContext.strokePath()
         }

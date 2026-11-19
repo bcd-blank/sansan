@@ -21,10 +21,14 @@ enum RouteKilometerMarkerMetrics {
     static let labelGap: CGFloat = 10
     /// Inner gap between "1km" and "16:50" inside the combined capsule.
     static let combinedInnerGap: CGFloat = 5
-    /// Combined capsule height / corner radius (pill).
+    /// Combined capsule height / corner radius (pill). Shared Simple + detail.
     static let labelHeight: CGFloat = 24
     static let labelPadH: CGFloat = 9
     static let labelFontSize: CGFloat = 12
+    /// Capsule outline width — Simple white and detail blue share this (color differs).
+    static let labelStrokeWidth: CGFloat = 0.5
+    /// Corner radius of the combined pill (= height/2).
+    static var labelCornerRadius: CGFloat { labelHeight / 2 }
     /// Design canvas width shared with Simple Grey/Color (`ShareSummaryTokens.canvasWidth`).
     /// Detail + Data Card label `contentScale` must use this denominator so visible
     /// pill size matches Simple (not the old detail layout width 377).
@@ -63,19 +67,8 @@ enum RouteKilometerMarkerMetrics {
     /// White text / stroke on detail blue capsules.
     static let detailLabelTextUIColor = UIColor.white
     static let detailLabelStrokeUIColor = UIColor.white
-    static let detailLabelStrokeWidth: CGFloat = 1
-    /// Shadow 0 1 2 #000 22%.
-    static let detailLabelShadowPrimary = (
-        color: UIColor.black.withAlphaComponent(0.22),
-        radius: CGFloat(2),
-        y: CGFloat(1)
-    )
-    /// Shadow 0 2 6 #0B0D1F 10%.
-    static let detailLabelShadowSecondary = (
-        color: UIColor(red: 11 / 255, green: 13 / 255, blue: 31 / 255, alpha: 0.10),
-        radius: CGFloat(6),
-        y: CGFloat(2)
-    )
+    /// Alias — same geometric stroke as Simple (`labelStrokeWidth`).
+    static var detailLabelStrokeWidth: CGFloat { labelStrokeWidth }
 
     /// `1km 16:50` when both; otherwise the single available part.
     static func combinedLabel(distance: String?, time: String?) -> String? {
@@ -87,14 +80,17 @@ enum RouteKilometerMarkerMetrics {
         }
     }
 
-    /// Time-only capsule uses medium (500) so gray text stays readable (S9).
-    /// Detail blue capsules use regular (400) for time even when alone (spec §5).
+    /// Km always semibold; time regular when paired, medium when time-only (S9).
+    /// Detail blue uses the **same** weights — only fill/text color differs.
     static func timeLabelWeight(hasDistance: Bool) -> UIFont.Weight {
         hasDistance ? .regular : .medium
     }
 
     static func detailTimeLabelWeight(hasDistance: Bool) -> UIFont.Weight {
-        .regular
+        timeLabelWeight(hasDistance: hasDistance)
     }
+
+    /// Km label weight — shared Simple + detail.
+    static let distanceLabelWeight: UIFont.Weight = .semibold
 #endif
 }
