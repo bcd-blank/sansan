@@ -11,11 +11,11 @@
         <scene sceneID="EHf-IW-A2E">
             <objects>
                 <viewController id="01J-lp-oVM" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                    <view key="view" clipsSubviews="YES" contentMode="scaleToFill" id="Ze5-6b-2t3">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreenFull" translatesAutoresizingMaskIntoConstraints="NO" id="img-launch">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreenFull" translatesAutoresizingMaskIntoConstraints="NO" id="img-launch">
                                 <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                             </imageView>
                         </subviews>
@@ -25,7 +25,7 @@
                             <constraint firstItem="img-launch" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="launch-top"/>
                             <constraint firstItem="img-launch" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="launch-leading"/>
                             <constraint firstItem="Ze5-6b-2t3" firstAttribute="trailing" secondItem="img-launch" secondAttribute="trailing" id="launch-trailing"/>
-                            <constraint firstItem="Ze5-6b-2t3" firstAttribute="bottom" secondItem="img-launch" secondAttribute="bottom" id="launch-bottom"/>
+                            <constraint firstItem="img-launch" firstAttribute="height" secondItem="img-launch" secondAttribute="width" multiplier="2556:1179" id="launch-aspect"/>
                         </constraints>
                     </view>
                 </viewController>
