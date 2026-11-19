@@ -1,0 +1,238 @@
+//
+//  WorkoutSummaryView.swift
+//  sansan
+//
+//  기록 종료 직후 저장 전 종합 데이터 검토 화면.
+//
+
+#if os(iOS)
+
+import MapKit
+import SwiftUI
+
+/// 종료 버튼 후 표시되는 요약 검토 화면 — 데이터 확인 후 저장/삭제.
+struct WorkoutSummaryView: View {
+    let session: HikingSessionData
+    let onSave: () -> Void
+    let onDiscard: () -> Void
+
+    @ObservedObject private var workout = WorkoutManager.shared
+    @State private var showDiscardConfirmation = false
+    /// 메인/기록 하단 크롬과 동일 — 폭 측정 전엔 SE(375) 가정.
+    @State private var chromeWidth: CGFloat = 375
+
+    private static let routeColor = Color(red: 0.12, green: 0.72, blue: 0.45)
+    private var isSaving: Bool { workout.isConfirmingSummary }
+
+    private var controlHeight: CGFloat {
+        iPhoneBottomChromeLayout.chromeControlHeight(forWidth: chromeWidth)
+    }
+
+    private var horizontalPadding: CGFloat {
+        iPhoneBottomChromeLayout.chromeHorizontalPadding(forWidth: chromeWidth)
+    }
+
+    private var floatingChromeHeight: CGFloat {
+        iPhoneBottomChromeLayout.floatingChromeHeight(forWidth: chromeWidth)
+    }
+
+    private var record: SavedHikingSession {
+        SavedHikingSession(session: session)
+    }
+
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        session.points.map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+        }
+    }
+
+    private var stationaryLocation: CLLocationCoordinate2D? {
+        HikingSessionMetrics.stationaryCoordinate(from: session.points)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    routePreview
+                    HikingRecordSummarySection(record: record)
+                    dataQualityNote
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                // 플로팅 액션 바와 메인 탭과 동일한 하단 여유.
+                .padding(.bottom, floatingChromeHeight + iPhoneBottomChromeLayout.scrollEndBuffer)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("기록 요약")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .overlay(alignment: .bottom) {
+            // fullScreenCover 안에서도 메인 탭과 같이 화면 맨 아래 기준으로 26pt.
+            actionBar
+                .padding(.bottom, iPhoneBottomChromeLayout.chromeBottomInset)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { chromeWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in
+                        chromeWidth = width
+                    }
+            }
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
+        .interactiveDismissDisabled(true)
+    }
+
+    // MARK: - 경로 미리보기
+
+    @ViewBuilder
+    private var routePreview: some View {
+        if let location = stationaryLocation {
+            Map(initialPosition: .region(
+                MKCoordinateRegion(
+                    center: location,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                )
+            )) {
+                Annotation("현재 위치", coordinate: location) {
+                    routeEndpointDot(color: RoutePointColors.start)
+                }
+            }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .allowsHitTesting(false)
+        } else if routeCoordinates.count >= 2 {
+            Map(initialPosition: .region(
+                HikingMapRegion.fitting(
+                    coordinates: routeCoordinates,
+                    viewSize: CGSize(width: 340, height: 220)
+                )
+            )) {
+                MapPolyline(coordinates: routeCoordinates)
+                    .stroke(Self.routeColor, lineWidth: 5)
+
+                if let start = routeCoordinates.first {
+                    Annotation("시작", coordinate: start) {
+                        routeEndpointDot(color: RoutePointColors.start)
+                    }
+                }
+                if let end = routeCoordinates.last {
+                    Annotation("종료", coordinate: end) {
+                        routeEndpointDot(color: RoutePointColors.end)
+                    }
+                }
+            }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .allowsHitTesting(false)
+        } else {
+            DashboardChartEmptyPlaceholder(
+                systemImage: "map",
+                title: "경로 없음",
+                description: "기록된 GPS 포인트가 부족합니다. 저장 전에 확인하세요."
+            )
+            .frame(height: 180)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func routeEndpointDot(color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 14, height: 14)
+            .overlay {
+                Circle().strokeBorder(.white, lineWidth: 2.5)
+            }
+            .shadow(radius: 2)
+    }
+
+    private var dataQualityNote: some View {
+        Label(
+            "데이터가 제대로 수집됐는지 확인한 뒤 저장하세요.",
+            systemImage: "checkmark.seal"
+        )
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, 4)
+    }
+
+    // MARK: - 하단 액션 (메인 탭 기하와 동일)
+
+    private var actionBar: some View {
+        HStack(spacing: iPhoneBottomChromeLayout.chromeItemSpacing(forWidth: chromeWidth)) {
+            summaryActionButton(
+                title: "삭제",
+                systemImage: "trash",
+                tint: .red,
+                isBold: false
+            ) {
+                showDiscardConfirmation = true
+            }
+
+            summaryActionButton(
+                title: "저장 완료",
+                systemImage: "checkmark",
+                tint: Self.routeColor,
+                isBold: true,
+                isDisabled: isSaving,
+                action: onSave
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: max(controlHeight, iPhoneBottomChromeLayout.minTouch))
+        .padding(.horizontal, horizontalPadding)
+        .confirmationDialog(
+            "이 기록을 삭제할까요?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("삭제", role: .destructive) {
+                onDiscard()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("저장하지 않고 기록을 폐기합니다. 되돌릴 수 없습니다.")
+        }
+    }
+
+    private func summaryActionButton(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        isBold: Bool,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        // 메인 「기록 시작」과 동일 스케일·프레임 — glass 높이가 탭 기하를 넘지 않게 맞춤.
+        let scale = iPhoneBottomChromeLayout.scale(forWidth: chromeWidth)
+        let labelSize = iPhoneBottomChromeLayout.startLabelSize(forWidth: chromeWidth)
+        let icon = 15 * scale
+        return Button(action: action) {
+            HStack(spacing: 8 * scale) {
+                Image(systemName: systemImage)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .frame(width: icon, height: icon)
+                Text(title)
+                    .font(.system(size: labelSize, weight: isBold ? .bold : .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .padding(.horizontal, 12 * scale)
+            .frame(maxWidth: .infinity)
+            .frame(height: controlHeight)
+            .frame(minHeight: iPhoneBottomChromeLayout.minTouch)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(tint)
+        .buttonBorderShape(.capsule)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.72 : 1)
+    }
+}
+
+#endif
