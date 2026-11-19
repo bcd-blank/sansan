@@ -125,7 +125,7 @@ final class ShareSummaryTokensTests: XCTestCase {
         XCTAssertEqual(ShareSummaryTokens.attributionFontSize, 10, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.attributionLogoHeight, 9, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.attributionLineHeight, 12, accuracy: 0.01)
-        XCTAssertEqual(ShareSummaryTokens.attributionClearZone, 4, accuracy: 0.01)
+        XCTAssertEqual(ShareSummaryTokens.attributionClearZone, 0, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.memoLineHeight, 17, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.weatherIconSize, 18, accuracy: 0.01)
         XCTAssertEqual(ShareSummaryTokens.graphElevWidth, 1, accuracy: 0.01)
