@@ -65,10 +65,14 @@ struct iPhoneDashboardView: View {
                     try? await Task.sleep(for: .milliseconds(900))
                     await WorkoutManager.shared.prepareAfterMainScreenReady()
 #if DEBUG
+                    // Match shouldSkipLocationPromptForScreenshots — dashboard/detail
+                    // captures must not raise the system location alert over chrome.
                     let env = ProcessInfo.processInfo.environment
+                    let args = ProcessInfo.processInfo.arguments
                     let skipLocationPrompt = env["SANSAN_LAYOUT_PREVIEW"] != nil
                         || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
-                        || AppStoreScreenshotMode.current?.opensGeneralSettings == true
+                        || args.contains("-UITestSkipLocationAuth")
+                        || AppStoreScreenshotMode.current != nil
                     if !skipLocationPrompt {
                         WorkoutManager.shared.prepareDashboardMapLocation()
                     }
