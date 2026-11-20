@@ -225,12 +225,13 @@ struct GeneralSettingsView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } header: {
+                // Anchor on the title text so scrollTo(.top) pins 「이미지 저장 방식」 under nav
+                // (Android gallery-at-top SoT). Section .id alone left 신체 정보 peeking.
                 Text("이미지 저장 방식")
+                    .id("imageSaveStyleSection")
             } footer: {
                 Text(viewedImageSaveStyle.footer)
             }
-            // Scroll so section header stays under nav (not buried / not 신체 정보).
-            .id("imageSaveStyleSection")
 
             Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
@@ -298,11 +299,12 @@ struct GeneralSettingsView: View {
         }
 #if DEBUG
         .onAppear {
-            guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true else { return }
+            // settings-top: leave Y=0. image-save: pin section under nav (Android SoT).
+            guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true,
+                  AppStoreScreenshotMode.current?.keepsSettingsScrollAtTop != true else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.02))
-                }
+                // .top hides 신체 정보; y:0.02 left it peeking (JW titlebaseline reject).
+                proxy.scrollTo("imageSaveStyleSection", anchor: .top)
             }
         }
 #endif
@@ -317,15 +319,16 @@ struct GeneralSettingsView: View {
 #if DEBUG
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(450))
+                        if AppStoreScreenshotMode.current?.keepsSettingsScrollAtTop == true {
+                            return
+                        }
                         if AppStoreScreenshotMode.current?.scrollsToShareMapExport == true {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                proxy.scrollTo("shareMapExportSection", anchor: .top)
-                            }
+                            proxy.scrollTo("shareMapExportSection", anchor: .top)
                         } else if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
-                            // Keep 「이미지 저장 방식」 under nav; hide 신체 정보 above.
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.02))
-                            }
+                            // Pin 「이미지 저장 방식」 under nav — match Android gallery-at-top SoT.
+                            proxy.scrollTo("imageSaveStyleSection", anchor: .top)
+                            try? await Task.sleep(for: .milliseconds(200))
+                            proxy.scrollTo("imageSaveStyleSection", anchor: .top)
                         }
                     }
 #endif

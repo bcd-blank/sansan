@@ -13,6 +13,8 @@ enum AppStoreScreenshotMode: String {
     case dashboard
     /// Dashboard + 일반설정 sheet scrolled to image-save-style pager.
     case settings
+    /// Dashboard + 일반설정 sheet at scroll Y=0 (size-parity titlebaseline top).
+    case settingsTop = "settings-top"
     /// Dashboard + 일반설정 sheet scrolled to 「저장 · 공유 지도」 (photo toggles hidden).
     case settingsShareMap = "settings-share-map"
     case records
@@ -48,17 +50,21 @@ enum AppStoreScreenshotMode: String {
 
     var opensRecordsTab: Bool {
         switch self {
-        case .dashboard, .settings, .settingsShareMap, .imageSave: false
+        case .dashboard, .settings, .settingsTop, .settingsShareMap, .imageSave: false
         case .records, .imported, .kmsc, .kmscDetail, .detail, .detailZoom,
              .detailSaryang, .detailGahyeon, .detailSamak, .detailGamaji: true
         }
     }
 
     var opensGeneralSettings: Bool {
-        self == .settings || self == .settingsShareMap || self == .imageSave
+        self == .settings || self == .settingsTop || self == .settingsShareMap || self == .imageSave
     }
 
+    /// Scroll so 「이미지 저장 방식」 sits under nav (Android gallery-at-top SoT).
     var scrollsToImageSaveStyle: Bool { self == .settings || self == .imageSave }
+
+    /// Leave settings at scroll Y=0 (do not auto-scroll).
+    var keepsSettingsScrollAtTop: Bool { self == .settingsTop }
 
     var scrollsToShareMapExport: Bool { self == .settingsShareMap }
 
