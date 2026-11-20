@@ -107,7 +107,8 @@ enum UITestSupport {
         if store.records.contains(where: { $0.id == seedSessionID }) { return }
         guard UserDataPaths.isUserSelected else { return }
 
-        let started = Date().addingTimeInterval(-3_600)
+        // Fixed Asia/Seoul wall clock — size-parity A001 SoT is 09:33–10:23 (50m), never Date()-relative.
+        let started = fixedA001StartedAt()
         let coords: [(Double, Double, Double)] = [
             (37.5665, 126.9780, 40),
             (37.5670, 126.9790, 55),
@@ -279,6 +280,23 @@ enum UITestSupport {
                 horizontalAccuracy: point.horizontalAccuracy
             )
         }
+    }
+
+    /// A001 size-parity seed: 2026-11-20 09:33 Asia/Seoul → end 10:23 (elapsed 3000s).
+    private static func fixedA001StartedAt() -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+        let components = DateComponents(
+            calendar: calendar,
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 11,
+            day: 20,
+            hour: 9,
+            minute: 33,
+            second: 0
+        )
+        return calendar.date(from: components) ?? Date(timeIntervalSince1970: 1_795_128_780)
     }
 
     /// Epoch millis aligned with Android `app/src/debug/assets/label-placement/*.json`.
