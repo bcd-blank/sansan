@@ -2,28 +2,47 @@
 //  HikingRecordSummaryShareComposer.swift
 //  sansan
 //
-//  Share-summary A안: gray map + floating white card. Layout from share.summary.*
-//  tokens; km labels via shared RouteKilometerMarkerMetrics.
+//  Share-summary: Simple Grey (gray map + white card) and Simple Color
+//  (color map + liquid-glass card). Layout from share.summary.* tokens.
 //
 
 #if os(iOS)
 
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import CoreText
 import SwiftUI
 import UIKit
 
 @MainActor
 enum HikingRecordSummaryShareComposer {
+    enum Variant: Sendable {
+        case simpleGrey
+        case simpleColor
+
+        var appearance: HikingRouteSnapshotAppearance {
+            switch self {
+            case .simpleGrey: .shareSummary
+            case .simpleColor: .shareSummaryColor
+            }
+        }
+
+        static func fromPreferences() -> Variant {
+            HikingRecordImageSavePreferences.style == .simpleColor ? .simpleColor : .simpleGrey
+        }
+    }
+
     static func render(
         record: SavedHikingSession,
-        mapOptions: HikingShareMapExportOptions
+        mapOptions: HikingShareMapExportOptions,
+        variant: Variant = .fromPreferences()
     ) async -> UIImage? {
         let width = HikingRecordShareDeviceMetrics.fullScreenBounds.width
         let scale = HikingRecordShareDeviceMetrics.nativeScale
         let canvas = ShareSummaryTokens.canvasSize(widthPoints: width, pixelScale: scale)
         let s = ShareSummaryTokens.ptScale(for: canvas.width)
         let memoLines = ShareSummaryTokens.memoLineCount(record.memo, canvasWidth: canvas.width)
-        var captureOptions = mapOptions
+        var captureOptions = HikingShareExportPreferences.applyingSharePhotoFeatureFlags(mapOptions)
         captureOptions.showsPinnedThumbnails = false
         guard let map = await HikingRouteSnapshotGenerator.fittedMapImage(
             record: record,
@@ -35,14 +54,16 @@ enum HikingRecordSummaryShareComposer {
             insetLeft: ShareSummaryTokens.mapRouteSideInset * s,
             insetRight: ShareSummaryTokens.mapRouteSideInset * s,
             routeFillFraction: 1,
-            appearance: .shareSummary,
+            appearance: variant.appearance,
             fadeSolidEndY: ShareSummaryTokens.fadeSolidEnd(memoLineCount: memoLines) * s
         ) else { return nil }
 
         let page = SummaryMapSharePage(
             record: record,
             mapImage: map,
-            memoLineCount: memoLines
+            memoLineCount: memoLines,
+            showsWeatherLabel: mapOptions.showsWeatherLabel,
+            variant: variant
         )
         .frame(width: canvas.width, height: canvas.height)
         .environment(\.colorScheme, .light)
@@ -54,21 +75,350 @@ enum HikingRecordSummaryShareComposer {
     }
 }
 
+// MARK: - Elev legend swatch (baked #FF8D28 — ImageRenderer/glass must not grey it)
+
+private enum ShareSummaryElevLegendSwatch {
+    static func image(width: CGFloat, height: CGFloat) -> UIImage {
+        let size = CGSize(width: max(width, 1), height: max(height, 1))
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            ShareSummaryTokens.chartElevUIColor.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+    }
+}
+
+// MARK: - Liquid glass backdrop (baked into PNG — ImageRenderer cannot flatten materials)
+
+private enum ShareSummaryGlassBackdrop {
+    /// Android `ShareSummaryGlass` code + v7 measured plate tune.
+    /// Bake in **pixel space** with `designScale = widthPx/430` + stack-blur.
+    /// Fill/wash lowered from 0.38/0.12 — mid-card plate was milky vs Android; 0.26/0.08 for map bleed.
+    static let blurRadiusPt: CGFloat = 36
+    static let glassFillAlpha: CGFloat = 0.26
+    static let washAlpha: CGFloat = 0.08
+    static let rimAlpha: CGFloat = 0.72
+    static let catchLightAlpha: CGFloat = 0.55
+    private static let blurDownscaleFactor = 4
+
+    /// Map blur + translucent fill + edge highlight, clipped to the card.
+    /// Pixel recipe mirrors Android `ShareSummaryGlass.bake` (not point×nativeScale).
+    static func bake(
+        mapImage: UIImage,
+        cardRect: CGRect,
+        cornerRadius: CGFloat
+    ) -> UIImage? {
+        guard let cgImage = mapImage.cgImage else { return nil }
+        let imageScale = max(mapImage.scale, 1)
+        let widthPx = mapImage.size.width * imageScale
+        // Android: `scale = ShareSummaryTokens.scale(widthPx)` = widthPx / 430.
+        let designScale = widthPx / ShareSummaryTokens.canvasWidth
+        let pixelRect = CGRect(
+            x: cardRect.minX * imageScale,
+            y: cardRect.minY * imageScale,
+            width: cardRect.width * imageScale,
+            height: cardRect.height * imageScale
+        )
+        let blurPx = blurRadiusPt * designScale
+        let pad = ceil(blurPx * 3)
+        let expanded = pixelRect.insetBy(dx: -pad, dy: -pad)
+        let imageBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        let crop = expanded.intersection(imageBounds)
+        guard crop.width > 1, crop.height > 1,
+              let cropped = cgImage.cropping(to: crop.integral) else { return nil }
+
+        let localCard = CGRect(
+            x: pixelRect.minX - crop.minX,
+            y: pixelRect.minY - crop.minY,
+            width: pixelRect.width,
+            height: pixelRect.height
+        ).integral
+        guard localCard.width > 1, localCard.height > 1,
+              let blurredCG = androidMatchedBlur(cropped: cropped, blurPx: blurPx),
+              let slice = blurredCG.cropping(to: localCard) else { return nil }
+
+        let cardW = Int(localCard.width)
+        let cardH = Int(localCard.height)
+        let cornerPx = cornerRadius * imageScale
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let pixelSize = CGSize(width: cardW, height: cardH)
+        let plate = UIGraphicsImageRenderer(size: pixelSize, format: format).image { ctx in
+            let cg = ctx.cgContext
+            let bounds = CGRect(origin: .zero, size: pixelSize)
+            let path = UIBezierPath(roundedRect: bounds, cornerRadius: cornerPx)
+            cg.saveGState()
+            path.addClip()
+            UIImage(cgImage: slice, scale: 1, orientation: .up).draw(in: bounds)
+            // Same two source-over white passes as Android `drawColor(GLASS_FILL)` + `drawColor(WASH)`.
+            UIColor.white.withAlphaComponent(glassFillAlpha).setFill()
+            path.fill()
+            UIColor.white.withAlphaComponent(washAlpha).setFill()
+            path.fill()
+            cg.restoreGState()
+
+            cg.saveGState()
+            path.addClip()
+            // Android: strokeWidth = max(1f, scale) in **pixels**.
+            let stroke = max(1, designScale)
+            cg.setLineWidth(stroke)
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(rimAlpha).cgColor)
+            cg.stroke(bounds.insetBy(dx: 0.5, dy: 0.5))
+            cg.setStrokeColor(UIColor.white.withAlphaComponent(catchLightAlpha).cgColor)
+            cg.move(to: CGPoint(x: cornerPx * 0.35, y: 0.75))
+            cg.addLine(to: CGPoint(x: CGFloat(cardW) - cornerPx * 0.35, y: 0.75))
+            cg.strokePath()
+            cg.restoreGState()
+        }
+        // Present at map point size (ImageRenderer scale = imageScale).
+        guard let plateCG = plate.cgImage else { return plate }
+        return UIImage(cgImage: plateCG, scale: imageScale, orientation: .up)
+    }
+
+    /// Android `ShareSummaryGlass.blurBitmap`: 1/4 scale → stack-blur → upscale.
+    private static func androidMatchedBlur(cropped: CGImage, blurPx: CGFloat) -> CGImage? {
+        let factor = blurDownscaleFactor
+        let fullW = cropped.width
+        let fullH = cropped.height
+        let smallW = max(1, fullW / factor)
+        let smallH = max(1, fullH / factor)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let smallImage = UIGraphicsImageRenderer(
+            size: CGSize(width: smallW, height: smallH),
+            format: format
+        ).image { _ in
+            UIImage(cgImage: cropped, scale: 1, orientation: .up)
+                .draw(in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
+        }
+        guard let smallCG = smallImage.cgImage else { return nil }
+        let radius = max(1, min(25, Int((blurPx / CGFloat(factor)).rounded())))
+        guard let blurredSmall = stackBlur(smallCG, radius: radius) else { return nil }
+        let up = UIGraphicsImageRenderer(
+            size: CGSize(width: fullW, height: fullH),
+            format: format
+        ).image { _ in
+            UIImage(cgImage: blurredSmall, scale: 1, orientation: .up)
+                .draw(in: CGRect(x: 0, y: 0, width: fullW, height: fullH))
+        }
+        return up.cgImage
+    }
+
+    /// Mario Klingemann stack blur — same algorithm as Android `ShareSummaryGlass.stackBlur`.
+    private static func stackBlur(_ image: CGImage, radius: Int) -> CGImage? {
+        guard radius >= 1 else { return image }
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return nil }
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let wm = width - 1
+        let hm = height - 1
+        let wh = width * height
+        let div = radius + radius + 1
+        var r = [Int](repeating: 0, count: wh)
+        var g = [Int](repeating: 0, count: wh)
+        var b = [Int](repeating: 0, count: wh)
+        var vmin = [Int](repeating: 0, count: max(width, height))
+        var divsum = (div + 1) >> 1
+        divsum *= divsum
+        var dv = [Int](repeating: 0, count: 256 * divsum)
+        for i in 0..<(256 * divsum) { dv[i] = i / divsum }
+        var stack = [[Int]](repeating: [0, 0, 0], count: div)
+        let r1 = radius + 1
+
+        var yi = 0
+        var yw = 0
+        for y in 0..<height {
+            var rinsum = 0, ginsum = 0, binsum = 0
+            var routsum = 0, goutsum = 0, boutsum = 0
+            var rsum = 0, gsum = 0, bsum = 0
+            for i in -radius...radius {
+                let p = (yi + min(wm, max(i, 0))) * 4
+                var sir = stack[i + radius]
+                sir[0] = Int(pixels[p])
+                sir[1] = Int(pixels[p + 1])
+                sir[2] = Int(pixels[p + 2])
+                stack[i + radius] = sir
+                let rbs = r1 - abs(i)
+                rsum += sir[0] * rbs
+                gsum += sir[1] * rbs
+                bsum += sir[2] * rbs
+                if i > 0 {
+                    rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+                } else {
+                    routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+                }
+            }
+            var stackpointer = radius
+            for x in 0..<width {
+                r[yi] = dv[rsum]
+                g[yi] = dv[gsum]
+                b[yi] = dv[bsum]
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+                let stackstart = stackpointer - radius + div
+                var sir = stack[stackstart % div]
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+                if y == 0 { vmin[x] = min(x + radius + 1, wm) }
+                let p = (yw + vmin[x]) * 4
+                sir[0] = Int(pixels[p])
+                sir[1] = Int(pixels[p + 1])
+                sir[2] = Int(pixels[p + 2])
+                stack[stackstart % div] = sir
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer % div]
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+                stack[stackpointer % div] = sir
+                yi += 1
+            }
+            yw += width
+        }
+
+        for x in 0..<width {
+            var rinsum = 0, ginsum = 0, binsum = 0
+            var routsum = 0, goutsum = 0, boutsum = 0
+            var rsum = 0, gsum = 0, bsum = 0
+            var yp = -radius * width
+            for i in -radius...radius {
+                let yi2 = max(0, yp) + x
+                var sir = stack[i + radius]
+                sir[0] = r[yi2]
+                sir[1] = g[yi2]
+                sir[2] = b[yi2]
+                stack[i + radius] = sir
+                let rbs = r1 - abs(i)
+                rsum += r[yi2] * rbs
+                gsum += g[yi2] * rbs
+                bsum += b[yi2] * rbs
+                if i > 0 {
+                    rinsum += sir[0]; ginsum += sir[1]; binsum += sir[2]
+                } else {
+                    routsum += sir[0]; goutsum += sir[1]; boutsum += sir[2]
+                }
+                if i < hm { yp += width }
+            }
+            var yi2 = x
+            var stackpointer = radius
+            for y in 0..<height {
+                let idx = yi2 * 4
+                pixels[idx] = UInt8(dv[rsum])
+                pixels[idx + 1] = UInt8(dv[gsum])
+                pixels[idx + 2] = UInt8(dv[bsum])
+                // keep alpha
+                rsum -= routsum
+                gsum -= goutsum
+                bsum -= boutsum
+                let stackstart = stackpointer - radius + div
+                var sir = stack[stackstart % div]
+                routsum -= sir[0]
+                goutsum -= sir[1]
+                boutsum -= sir[2]
+                if x == 0 { vmin[y] = min(y + r1, hm) * width }
+                let p = x + vmin[y]
+                sir[0] = r[p]
+                sir[1] = g[p]
+                sir[2] = b[p]
+                stack[stackstart % div] = sir
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+                rsum += rinsum
+                gsum += ginsum
+                bsum += binsum
+                stackpointer = (stackpointer + 1) % div
+                sir = stack[stackpointer % div]
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+                rinsum -= sir[0]
+                ginsum -= sir[1]
+                binsum -= sir[2]
+                stack[stackpointer % div] = sir
+                yi2 += width
+            }
+        }
+
+        guard let out = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )?.makeImage() else { return nil }
+        return out
+    }
+}
+
 // MARK: - Page
 
 private struct SummaryMapSharePage: View {
     let record: SavedHikingSession
     let mapImage: UIImage
     let memoLineCount: Int
+    let showsWeatherLabel: Bool
+    let variant: HikingRecordSummaryShareComposer.Variant
 
     private var s: CGFloat { ShareSummaryTokens.ptScale(for: mapImage.size.width) }
 
     private var showsWeather: Bool {
-        HikingShareExportPreferences.mapOptions.showsWeatherLabel && record.weather != nil
+        showsWeatherLabel && record.weather != nil
+    }
+
+    private var cardRect: CGRect {
+        let inset = ShareSummaryTokens.cardInset * s
+        let height = ShareSummaryTokens.cardHeight * s
+        return CGRect(
+            x: inset,
+            y: mapImage.size.height - inset - height,
+            width: mapImage.size.width - inset * 2,
+            height: height
+        )
+    }
+
+    private var glassBackdrop: UIImage? {
+        guard variant == .simpleColor else { return nil }
+        return ShareSummaryGlassBackdrop.bake(
+            mapImage: mapImage,
+            cardRect: cardRect,
+            cornerRadius: ShareSummaryTokens.cardRadius * s
+        )
     }
 
     var body: some View {
         ZStack {
+            // Full-bleed map under/beside the floating card (no solid MapPaper plate).
             Image(uiImage: mapImage)
                 .resizable()
                 .frame(width: mapImage.size.width, height: mapImage.size.height)
@@ -81,12 +431,14 @@ private struct SummaryMapSharePage: View {
             mapsAttribution
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Concept A: muted gray map stays full-bleed to canvas bottom; only the
-            // floating card itself is white (no white hinter under/beside the card).
-            SummaryInfoCard(record: record, scale: s)
-                .padding(.horizontal, ShareSummaryTokens.cardInset * s)
-                .padding(.bottom, ShareSummaryTokens.cardInset * s)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            SummaryInfoCard(
+                record: record,
+                scale: s,
+                glassBackdrop: glassBackdrop
+            )
+            .padding(.horizontal, ShareSummaryTokens.cardInset * s)
+            .padding(.bottom, ShareSummaryTokens.cardInset * s)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .frame(width: mapImage.size.width, height: mapImage.size.height)
         .clipped()
@@ -110,13 +462,18 @@ private struct SummaryMapSharePage: View {
 
             Color.clear.frame(height: ShareSummaryTokens.headerTitleGap * s)
 
+            // Layout frame stays headerTitleLineHeight (headerBottom / title-gap).
+            // Paint lh +8pt + allowInkOverflow (topLeading) so 받침 clear without
+            // shifting the left-under-logo slot.
             ShareSummaryTypeBox.text(
                 record.exportCardTitle,
                 size: ShareSummaryTokens.headerTitleSize * s,
                 weight: .bold,
-                lineHeight: ShareSummaryTokens.headerTitleLineHeight * s,
+                lineHeight: (ShareSummaryTokens.headerTitleLineHeight + 8) * s,
                 color: ShareSummaryTokens.inkUIColor,
-                tracking: -0.2 * s
+                tracking: -0.2 * s,
+                frameHeight: ShareSummaryTokens.headerTitleLineHeight * s,
+                allowInkOverflow: true
             )
             .lineLimit(1)
             .truncationMode(.tail)
@@ -148,10 +505,37 @@ private struct SummaryMapSharePage: View {
 
     /// Apple Maps credit between map and card (§13 / S10).
     /// MKMapSnapshotter does not bake legal marks into the image — we draw them.
-    /// clearZone: glyph box + 4pt solid paper, soft 4pt edge so basemap labels don't read as "지도…" (impl4 #11).
+    /// Android parity: glyph + ~1px white stroke only — no paper clearZone / no plate.
     private var mapsAttribution: some View {
-        let clear = ShareSummaryTokens.attributionClearZone * s
-        return HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
+        // ~1.25–1.4px stroke @3x — hard offset copies, not blur/shadow (those read as a pill).
+        let halo = 0.4 * s
+        let ink: Color = variant == .simpleColor
+            ? Color(ShareSummaryTokens.inkUIColor).opacity(0.72)
+            : Color(ShareSummaryTokens.mapTextUIColor)
+        let offsets: [(CGFloat, CGFloat)] = [
+            (-halo, 0), (halo, 0), (0, -halo), (0, halo),
+            (-halo, -halo), (-halo, halo), (halo, -halo), (halo, halo),
+        ]
+        return ZStack {
+            ForEach(0..<offsets.count, id: \.self) { i in
+                attributionGlyphs
+                    .foregroundStyle(Color.white)
+                    .offset(x: offsets[i].0, y: offsets[i].1)
+            }
+            attributionGlyphs
+                .foregroundStyle(ink)
+        }
+        .frame(height: ShareSummaryTokens.attributionLineHeight * s, alignment: .center)
+        .frame(maxWidth: ShareSummaryTokens.attributionMaxWidth * s, alignment: .leading)
+        .padding(.leading, ShareSummaryTokens.attributionX * s)
+        .padding(
+            .bottom,
+            (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + ShareSummaryTokens.attributionGapAboveCard) * s
+        )
+    }
+
+    private var attributionGlyphs: some View {
+        HStack(alignment: .center, spacing: ShareSummaryTokens.attributionLogoGap * s) {
             Image(systemName: "apple.logo")
                 .font(.system(size: ShareSummaryTokens.attributionLogoHeight * s, weight: .medium))
                 .frame(
@@ -162,32 +546,6 @@ private struct SummaryMapSharePage: View {
                 .font(.system(size: ShareSummaryTokens.attributionFontSize * s, weight: .medium))
                 .tracking(0)
         }
-        .foregroundStyle(Color(ShareSummaryTokens.mapTextUIColor))
-        .padding(clear)
-        .background {
-            ZStack {
-                // Soft edge first (under), then solid paper over the glyph box + pad.
-                Rectangle()
-                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
-                    .blur(radius: clear)
-                Rectangle()
-                    .fill(Color(ShareSummaryTokens.mapPaperUIColor))
-            }
-        }
-        .padding(-clear)
-        .shadow(
-            color: Color(ShareSummaryTokens.mapPaperUIColor),
-            radius: ShareSummaryTokens.attributionHaloBlur * s,
-            x: 0,
-            y: 0
-        )
-        .frame(height: ShareSummaryTokens.attributionLineHeight * s, alignment: .center)
-        .frame(maxWidth: ShareSummaryTokens.attributionMaxWidth * s, alignment: .leading)
-        .padding(.leading, ShareSummaryTokens.attributionX * s)
-        .padding(
-            .bottom,
-            (ShareSummaryTokens.cardInset + ShareSummaryTokens.cardHeight + ShareSummaryTokens.attributionGapAboveCard) * s
-        )
     }
 }
 
@@ -324,9 +682,12 @@ private enum ShareSummaryTypeBox {
         tracking: CGFloat = 0,
         monospaced: Bool = false,
         baselineOffset override: CGFloat? = nil,
-        frameHeight: CGFloat? = nil
+        frameHeight: CGFloat? = nil,
+        /// When true, layout height stays `frameHeight`/`lineHeight` but ink may paint
+        /// outside so Hangul 받침 / descenders are not under-cropped by the line box.
+        allowInkOverflow: Bool = false
     ) -> some View {
-        Text(
+        let label = Text(
             attributed(
                 string,
                 size: size,
@@ -338,7 +699,20 @@ private enum ShareSummaryTypeBox {
                 baselineOffset: override
             )
         )
-        .frame(height: frameHeight ?? lineHeight, alignment: .center)
+        let boxHeight = frameHeight ?? lineHeight
+        if allowInkOverflow {
+            // topLeading: layout slot stays left under logo; taller paint may
+            // extend below only. `.leading` alone still vertically centers.
+            Color.clear
+                .frame(maxWidth: .infinity, minHeight: boxHeight, maxHeight: boxHeight, alignment: .topLeading)
+                .overlay(alignment: .topLeading) {
+                    label
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+        } else {
+            label.frame(height: boxHeight, alignment: .center)
+        }
     }
 }
 
@@ -421,9 +795,49 @@ private struct ShareSummaryWeatherCard: View {
 
 // MARK: - Info card
 
+/// Android `SummaryInfoCard` shadow: glass → SHADOW2 only; grey → SHADOW1+SHADOW2.
+/// Tokens mirror `ShareSummaryTokens.CARD_SHADOW*` (Compose blur ≈ SwiftUI radius×2).
+private struct SummaryInfoCardShadowModifier: ViewModifier {
+    let scale: CGFloat
+    let glass: Bool
+
+    private let shadow1Alpha: CGFloat = 0.10
+    private let shadow1Blur: CGFloat = 32
+    private let shadow1Dy: CGFloat = 12
+    private let shadow2Alpha: CGFloat = 0.06
+    private let shadow2Blur: CGFloat = 3
+    private let shadow2Dy: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        if glass {
+            // JW Android: skip large 32pt ambient — gray band over map attribution.
+            content
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow2Alpha),
+                    radius: shadow2Blur * scale / 2,
+                    y: shadow2Dy * scale
+                )
+        } else {
+            content
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow1Alpha),
+                    radius: shadow1Blur * scale / 2,
+                    y: shadow1Dy * scale
+                )
+                .shadow(
+                    color: Color(ShareSummaryTokens.inkUIColor).opacity(shadow2Alpha),
+                    radius: shadow2Blur * scale / 2,
+                    y: shadow2Dy * scale
+                )
+        }
+    }
+}
+
 private struct SummaryInfoCard: View {
     let record: SavedHikingSession
     let scale: CGFloat
+    /// Pre-baked liquid-glass plate for Simple Color; nil → opaque white (Simple Grey).
+    var glassBackdrop: UIImage? = nil
 
     private var elevationSamples: [HikingElevationChartSample] {
         if let stored = record.session.elevationProfile, stored.count >= 2 {
@@ -476,12 +890,23 @@ private struct SummaryInfoCard: View {
         .padding(.bottom, ShareSummaryTokens.cardPaddingBottom * scale)
         .frame(height: ShareSummaryTokens.cardHeight * scale, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color.white,
-            in: RoundedRectangle(cornerRadius: ShareSummaryTokens.cardRadius * scale, style: .continuous)
-        )
-        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.10), radius: 16 * scale, y: 12 * scale)
-        .shadow(color: Color(ShareSummaryTokens.inkUIColor).opacity(0.06), radius: 1.5 * scale, y: 1 * scale)
+        .background {
+            let shape = RoundedRectangle(
+                cornerRadius: ShareSummaryTokens.cardRadius * scale,
+                style: .continuous
+            )
+            if let glassBackdrop {
+                Image(uiImage: glassBackdrop)
+                    .resizable()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipShape(shape)
+            } else {
+                Color.white.clipShape(shape)
+            }
+        }
+        // Android SummaryInfoCard (JW): skip large CARD_SHADOW1 on glass — gray band over map.
+        // Simple Grey keeps both shadows; Simple Color keeps only tight SHADOW2.
+        .modifier(SummaryInfoCardShadowModifier(scale: scale, glass: glassBackdrop != nil))
     }
 
     private var heroRow: some View {
@@ -609,12 +1034,15 @@ private struct SummaryInfoCard: View {
 
     private var legendRow: some View {
         HStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 0.5 * scale, style: .continuous)
-                .fill(Color(ShareSummaryTokens.chartElevUIColor))
-                .frame(
-                    width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
-                    height: ShareSummaryTokens.graphLegendElevHeight * scale
-                )
+            // Bake #FF8D28 via UIColor so ImageRenderer/glass cannot grey the swatch.
+            Image(uiImage: ShareSummaryElevLegendSwatch.image(
+                width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                height: max(ShareSummaryTokens.graphLegendElevHeight * scale, 2 * scale)
+            ))
+            .frame(
+                width: ShareSummaryTokens.graphLegendSwatchWidth * scale,
+                height: max(ShareSummaryTokens.graphLegendElevHeight * scale, 2 * scale)
+            )
             ShareSummaryTypeBox.text(
                 "고도",
                 size: ShareSummaryTokens.legendSize * scale,
@@ -837,8 +1265,9 @@ private struct SummaryInfoCard: View {
 
     private func timeLabel(_ parts: ScheduleDateParts?) -> String {
         guard let parts else { return "—" }
+        // JW: Korean order 「오후 7:37」 (period then h:mm), matching Android DateText.time.
         if let period = parts.periodText, !period.isEmpty {
-            return "\(parts.timeText) \(period)"
+            return "\(period) \(parts.timeText)"
         }
         return parts.timeText
     }

@@ -26,6 +26,8 @@ struct GeneralSettingsView: View {
     @ObservedObject private var appUpdateStatus = AppUpdateStatusObserver.shared
     @State private var shareMapOptions = HikingShareExportPreferences.mapOptions
     @State private var imageSaveStyle = HikingRecordImageSavePreferences.style
+    /// Pager viewed page — section footer follows this (not only saved selection).
+    @State private var viewedImageSaveStyle = HikingRecordImageSavePreferences.style
     @State private var showsSummitMarkers = HikingMapDisplayPreferences.showsSummitMarkers
     @State private var isKmVoiceGuidanceEnabled = KmVoiceGuidancePreferences.isEnabled
     @State private var isHeartRateFeatureEnabled = HeartRatePreferences.isFeatureEnabled
@@ -213,26 +215,41 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // #64: 세그먼트 → 목록형(메뉴). 라벨 「이미지 저장 방식」 유지.
-                imageSaveStylePicker
+                // v15: image-as-card; title TL; dots below (v13); no card shadow;
+                // footer follows VIEWED page (swipe), not only saved preference.
+                ImageSaveStylePager(
+                    selection: $imageSaveStyle,
+                    viewedPage: $viewedImageSaveStyle
+                )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } header: {
                 Text("이미지 저장 방식")
             } footer: {
-                Text(imageSaveStyle.footer)
+                Text(viewedImageSaveStyle.footer)
             }
-            .id("imageSaveStyle")
+            // Scroll so section header stays under nav (not buried / not 신체 정보).
+            .id("imageSaveStyleSection")
 
             Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
                 Toggle("시간 표시", isOn: $shareMapOptions.showsTimeMarkers)
                 Toggle("날씨 표시", isOn: $shareMapOptions.showsWeatherLabel)
-                Toggle("사진 위치 표시", isOn: $shareMapOptions.showsPhotoMarkers)
-                Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
+                // JW: 사진 위치 / 고정 썸네일은 저장·공유에서 플래그로 항상 off — 옵션 목록 숨김.
+                // 코드·UserDefaults는 유지. 상세 지도는 HikingRecordRouteMapView 별개.
+                if HikingShareExportPreferences.isSharePhotoMarkersEnabled {
+                    Toggle("사진 위치 표시", isOn: $shareMapOptions.showsPhotoMarkers)
+                }
+                if HikingShareExportPreferences.isSharePinnedThumbnailsEnabled {
+                    Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
+                }
             } header: {
                 Text("저장 · 공유 지도")
             } footer: {
                 Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 거리 라벨, 시간 표시는 그 지점까지 걸린 시간, 날씨 표시는 기록 상세 지도와 저장 이미지의 날씨 라벨입니다.")
             }
+            .id("shareMapExportSection")
 
             if FlythroughCapabilities.isFeatureEnabled {
                 flythroughSettingsSection
@@ -284,7 +301,7 @@ struct GeneralSettingsView: View {
             guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
                 withAnimation(.easeInOut(duration: 0.25)) {
-                    proxy.scrollTo("imageSaveStyle", anchor: .center)
+                    proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.02))
                 }
             }
         }
@@ -292,27 +309,28 @@ struct GeneralSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var imageSaveStylePicker: some View {
-        let picker = Picker("이미지 저장 방식", selection: $imageSaveStyle) {
-            ForEach(HikingRecordImageSaveStyle.allCases) { style in
-                Text(style.label).tag(style)
-            }
-        }
-#if DEBUG
-        if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
-            // 스크린샷: 옵션 목록이 보이도록 navigationLink.
-            picker.pickerStyle(.navigationLink)
-        } else {
-            picker
-        }
-#else
-        picker
-#endif
-    }
 
     private var formWithPresentations: some View {
-        settingsForm
+        ScrollViewReader { proxy in
+            settingsForm
+                .onAppear {
+#if DEBUG
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(450))
+                        if AppStoreScreenshotMode.current?.scrollsToShareMapExport == true {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo("shareMapExportSection", anchor: .top)
+                            }
+                        } else if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
+                            // Keep 「이미지 저장 방식」 under nav; hide 신체 정보 above.
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                proxy.scrollTo("imageSaveStyleSection", anchor: UnitPoint(x: 0.5, y: 0.02))
+                            }
+                        }
+                    }
+#endif
+                }
+        }
         .navigationTitle("일반설정")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -426,6 +444,7 @@ struct GeneralSettingsView: View {
         imageSaveStylePreferences.syncFromStorage()
         shareMapOptions = shareExportPreferences.mapOptions
         imageSaveStyle = imageSaveStylePreferences.style
+        viewedImageSaveStyle = imageSaveStylePreferences.style
         showsSummitMarkers = mapDisplayPreferences.showsSummitMarkers
         kmVoiceGuidancePreferences.syncFromStorage()
         isKmVoiceGuidanceEnabled = kmVoiceGuidancePreferences.isEnabled

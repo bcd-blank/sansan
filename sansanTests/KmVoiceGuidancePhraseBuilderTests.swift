@@ -66,21 +66,21 @@ final class KmVoiceGuidancePhraseBuilderTests: XCTestCase {
     func testRecordingStartAndEndPhrases() {
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.recordingStartPhrase,
-            "기록을 시작합니다"
+            "산산 기록을 시작합니다."
         )
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.recordingEndPhrase(
                 distanceMeters: 1_250,
                 totalSeconds: 12 * 60 + 34
             ),
-            "기록을 종료합니다. 총 거리 1.25킬로미터, 시간 12분 34초입니다."
+            "산산 기록을 종료합니다. 총 거리 1.25킬로미터, 시간 12분 34초입니다."
         )
         XCTAssertEqual(
             KmVoiceGuidancePhraseBuilder.recordingEndPhrase(
                 distanceMeters: 850,
                 totalSeconds: 3_912
             ),
-            "기록을 종료합니다. 총 거리 850미터, 시간 1시간 5분 12초입니다."
+            "산산 기록을 종료합니다. 총 거리 850미터, 시간 1시간 5분 12초입니다."
         )
     }
 

@@ -2,7 +2,7 @@
   "id": "share.summary",
   "confirmed": "2026-11-16",
   "variant": "A",
-  "reviewFixes": "ship: color.hr=#FF383C; attribution.halo=#F0F0F0 (map.paper) blur 1–2pt; chart elev#FF8D28/HR#FF383C both 1pt fill15%",
+  "reviewFixes": "ship: color.hr=#FF383C; map.paper/road/label ×0.9 (#D8D8D8/#E4E4E4/#8B8B8E); attribution.halo=map.paper blur 1–2pt; chart elev#FF8D28/HR#FF383C both 1pt fill15%",
   "canvas": {
     "widthPt": 430,
     "aspect": "16/9",
@@ -16,13 +16,14 @@
     "ink2": "#6E6E73",
     "ink3": "#8A8A8E",
     "mapText": "#636366",
-    "mapLabel": "#9A9A9E",
+    "mapLabel": "#8B8B8E",
     "hairline": "#E5E5EA",
     "track": "#D1D1D6",
     "hr": "#FF383C",
     "surface": "#FFFFFF",
-    "mapPaper": "#F0F0F0",
-    "mapRoad": "#FDFDFD"
+    "mapPaper": "#E6E2E0",
+    "mapRoad": "#EEEBE9",
+    "mapWater": "#D9D3D0"
   },
   "header": {
     "top": 24,

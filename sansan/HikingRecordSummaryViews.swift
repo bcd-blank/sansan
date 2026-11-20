@@ -32,8 +32,8 @@ enum HikingRecordCardLayout {
     static let cardGridSpacing: CGFloat = ChromeSizes.Detail.cardGridSpacing
     /// 기록 상세 스크롤 화면 지도 높이 상한 (뷰포트 대비).
     static let detailMapMaxViewportFraction: CGFloat = ChromeSizes.Detail.MapCard.maxViewportFraction
-    /// ImageRenderer 높이 산정 여유 (차트 x축·푸터 잘림 방지).
-    static let exportContentHeightBuffer: CGFloat = 36
+    /// ImageRenderer 높이 산정 여유. v7: 0 — Android wrap-content에 맞춤 (하단 empty buffer 제거).
+    static let exportContentHeightBuffer: CGFloat = 0
     /// 공유·저장 카드 상단 제목 — 본문 한 줄 높이.
     static let exportTitlePrimarySize: CGFloat = ChromeSizes.Detail.TitleCard.titlePrimarySize
     static let exportTitleSecondarySize: CGFloat = ChromeSizes.Detail.TitleCard.titleSecondarySize
@@ -87,12 +87,10 @@ enum HikingRecordCardLayout {
     static let elevationChartSectionSpacing: CGFloat = 10
 
     /// 기록 상세 `HikingRecordDetailView`·저장 이미지 공통 지도 높이.
+    /// Uses fixed `ChromeSizes.Detail.MapCard.height` SoT (374.4pt @393); aspect formula kept only as derivation note.
     static func detailMapHeight(contentWidth: CGFloat, viewportHeight: CGFloat) -> CGFloat {
         guard contentWidth > 0, viewportHeight > 0 else { return 0 }
-        return min(
-            contentWidth * ChromeSizes.Detail.MapCard.widthOverHeightInverse,
-            viewportHeight * detailMapMaxViewportFraction
-        )
+        return ChromeSizes.Detail.MapCard.height
     }
 
     static func estimatedTitleHeaderHeight(

@@ -209,12 +209,16 @@ nonisolated struct HikingSessionData: Codable, Hashable, Sendable {
         if reconciled > totalDistance {
             totalDistance = reconciled
         }
-        applyDisplayCache(
-            HikingSessionDisplayCacheBuilder.build(
-                points: points,
-                heartRateSamples: heartRateSamples
+        // Keep a pre-built cache (e.g. UITest lightweight seed) — avoid re-running
+        // elevation smoothing on the main actor during seed storms.
+        if !hasPersistedDisplayCache {
+            applyDisplayCache(
+                HikingSessionDisplayCacheBuilder.build(
+                    points: points,
+                    heartRateSamples: heartRateSamples
+                )
             )
-        )
+        }
     }
 
     /// 동일 세션의 두 스냅샷을 ID 기준으로 합집합 병합합니다 — 부분 전송 후 전체 전송이

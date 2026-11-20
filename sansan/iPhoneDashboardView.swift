@@ -68,8 +68,13 @@ struct iPhoneDashboardView: View {
                     let env = ProcessInfo.processInfo.environment
                     let skipLocationPrompt = env["SANSAN_LAYOUT_PREVIEW"] != nil
                         || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+                        || AppStoreScreenshotMode.current?.opensGeneralSettings == true
                     if !skipLocationPrompt {
                         WorkoutManager.shared.prepareDashboardMapLocation()
+                    }
+                    if AppStoreScreenshotMode.current?.opensGeneralSettings == true {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        showGeneralSettings = true
                     }
 #else
                     WorkoutManager.shared.prepareDashboardMapLocation()
@@ -306,6 +311,8 @@ private struct DashboardLiveSessionPane: View {
 
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var isMapReady = false
+    /// First Main visit only — avoid Map recreate / onAppear re-init on 모음→메인 return.
+    @State private var didConfigureLiveMap = false
     @State private var cachedRouteSegments: [[CLLocationCoordinate2D]] = []
     @State private var cachedCurrentPoint: HikingPoint? = nil
     @State private var dashboardElevationGain = "0"
@@ -355,11 +362,15 @@ private struct DashboardLiveSessionPane: View {
         }
         .onAppear {
             heartRatePreferences.syncFromStorage()
-            rebuildRouteCache()
-            updateMapCamera()
-            if !isMapReady {
-                Task { @MainActor in
-                    isMapReady = true
+            if !didConfigureLiveMap {
+                didConfigureLiveMap = true
+                rebuildRouteCache()
+                updateMapCamera()
+                isMapReady = true
+            } else {
+                // 메인↔모음 return: keep MapView/tiles; refresh GPS only.
+                if !shouldSkipLocationPromptForScreenshots {
+                    WorkoutManager.shared.prepareDashboardMapLocation()
                 }
             }
         }
@@ -388,7 +399,11 @@ private struct DashboardLiveSessionPane: View {
     private var shouldSkipLocationPromptForScreenshots: Bool {
 #if DEBUG
         let env = ProcessInfo.processInfo.environment
-        return env["SANSAN_LAYOUT_PREVIEW"] != nil || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+        let args = ProcessInfo.processInfo.arguments
+        return env["SANSAN_LAYOUT_PREVIEW"] != nil
+            || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+            || args.contains("-UITestSkipLocationAuth")
+            || AppStoreScreenshotMode.current != nil
 #else
         false
 #endif
@@ -466,7 +481,8 @@ private struct DashboardLiveSessionPane: View {
                         }
                     }
                 }
-                .id("\(livePhotoMapRevision)-\(routeFollow.followedRecordID?.uuidString ?? "none")")
+                // No `.id(...)` — photo/followed-route changes update annotations in place.
+                // Recreating Map forced tile/style reload on 메인↔모음 and live photo churn.
                 // Follows app appearance (system/light/dark). Share/summary captures force light separately.
                 .mapStyle(.standard(elevation: .flat))
                 .mapControls {
@@ -533,10 +549,6 @@ private struct DashboardLiveSessionPane: View {
 
     private var livePhotoMarkerPlacements: [TrailPhotoMapMarkerPlacement] {
         TrailPhotoMapAnnotationBuilder.markerPlacements(for: workout.sessionData.photos)
-    }
-
-    private var livePhotoMapRevision: String {
-        workout.sessionData.photos.map(\.id.uuidString).joined(separator: ",")
     }
 
     private var statsGrid: some View {

@@ -79,8 +79,24 @@
     },
     "scale": {
       "formula": "min(1, containerWidth / requiredWidth)",
-      "scales": ["sideInset", "outerHeight", "tabItemMinWidth", "tabCapsuleInset", "selectionInset", "circleGap", "clusterGap", "startButton.width", "startButton.height", "startButton.labelSize", "tabLabel"],
-      "doesNotScale": ["bottomInset", "scrollEndBuffer", "minTouch"]
+      "scales": [
+        "sideInset",
+        "outerHeight",
+        "tabItemMinWidth",
+        "tabCapsuleInset",
+        "selectionInset",
+        "circleGap",
+        "clusterGap",
+        "startButton.width",
+        "startButton.height",
+        "startButton.labelSize",
+        "tabLabel"
+      ],
+      "doesNotScale": [
+        "bottomInset",
+        "scrollEndBuffer",
+        "minTouch"
+      ]
     },
     "detail": {
       "usesSameBottomInset": true,
@@ -101,7 +117,9 @@
     "topButtons": {
       "trailingEllipsis": "system toolbar (ellipsis.circle)",
       "minTouch": 44,
-      "font": "body.medium"
+      "font": "body.medium",
+      "visibleDiameter": 44,
+      "notes": "Touch target stays minTouch (44 iOS / 48 Android). Visible liquid-glass circle diameter matches iPhone toolbar control (~44pt at logical width 393)."
     },
     "titleCard": {
       "cornerRadius": 14,
@@ -122,16 +140,26 @@
     },
     "mapCard": {
       "aspectWidthOverHeight": 0.75,
-      "aspectNotes": "height = min(contentWidth * 4/3, viewportHeight * 0.48)",
+      "aspectNotes": "Derived at logicalWidth 393 / referenceContentWidth 377 / referenceViewportHeight 780: min(contentWidth*4/3, viewportHeight*0.48)=374.4. Both platforms MUST use `height` as fixed pt/dp; do not recompute from aspect at runtime.",
       "maxViewportFraction": 0.48,
-      "cornerRadius": 14
+      "cornerRadius": 14,
+      "height": 374.4,
+      "aspect": "fixedHeight"
     },
     "dataCards": {
       "ref": "dataCard",
       "gridSpacing": 8
     },
     "referenceContentWidth": 377,
-    "referenceViewportHeight": 780
+    "referenceViewportHeight": 780,
+    "layoutAnchors": {
+      "logicalWidth": 393,
+      "referenceViewportHeight": 780,
+      "statusBarHandling": "Navigation bar sits below safe-area top inset; toolbar control center Y = safeTop + navBarHeight/2. Title card top Y = safeTop + navBarHeight + detail.topPadding (content under inline nav).",
+      "topCircularButtonCenterY": null,
+      "titleCardTopY": null,
+      "notes": "Fill centerY/titleCardTopY from iPhone measure @393 (or scale 1:1 from measured device); Android mirrors same numbers as dp from content top of window including status-bar offset convention above."
+    }
   },
   "collection": {
     "horizontalPadding": 20,

@@ -95,6 +95,8 @@ struct HikingRecordShareCardView: View {
     var preservesCapturedLogo: Bool = false
     /// 산행 중 스냅샷이면 일정 카드에 "현재" 라벨을 씁니다.
     var isInProgressSnapshot: Bool = false
+    /// When nil, falls back to `HikingShareExportPreferences.mapOptions.showsWeatherLabel`.
+    var showsWeatherLabel: Bool? = nil
 
     static let legacyExportWidth: CGFloat = 1080
     static let nineBySixteenHeight: CGFloat = 1920
@@ -126,14 +128,21 @@ struct HikingRecordShareCardView: View {
         HikingRecordCardLayout.mapCornerRadius.recordScaled(layoutScale)
     }
 
-    /// 경로 PNG 실제 종횡비 그대로 — 저장 설정대로 캡처된 경로를 크롭/왜곡 없이 1:1 표시.
+    /// 경로 PNG 실제 종횡비 (레거시 contentSized / nineBySixteen).
     private var routeImageAspect: CGFloat {
         routeImage.size.height / max(routeImage.size.width, 1)
     }
 
-    /// 지도 프레임 높이 = 콘텐츠 너비 × 경로 PNG 종횡비. `scaledToFit`과 함께 크롭 없음.
+    /// 지도 프레임 높이. fullScreen Data Card는 Android `RecordDataCardExport`와 동일
+    /// `detailMapHeight(377)` 슬롯 + Crop fill (v7 좌표 ≤2%).
     fileprivate var mapHeight: CGFloat {
-        contentWidth * routeImageAspect
+        if format == .fullScreen {
+            let formula = HikingRouteImageLayout.detailMapHeight(
+                forWidth: HikingRecordCardLayout.referenceContentWidth
+            )
+            return contentWidth * (formula / HikingRecordCardLayout.referenceContentWidth)
+        }
+        return contentWidth * routeImageAspect
     }
 
     private var brandTitleFontSize: CGFloat {
@@ -237,12 +246,14 @@ struct HikingRecordShareCardView: View {
         ) {
             Image(uiImage: routeImage)
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
                 .frame(width: contentWidth, height: mapHeight)
+                .clipped()
         }
         .frame(width: contentWidth, height: mapHeight)
         .overlay(alignment: HikingMapDisplayPreferences.weatherLabelOnLeading ? .topLeading : .topTrailing) {
-            if HikingShareExportPreferences.mapOptions.showsWeatherLabel, let weather = record.weather {
+            if showsWeatherLabel ?? HikingShareExportPreferences.mapOptions.showsWeatherLabel,
+               let weather = record.weather {
                 HikingRecordMapWeatherOverlay(weather: weather, layoutScale: layoutScale)
                     .padding(10 * layoutScale)
             }
@@ -263,14 +274,16 @@ enum HikingRecordShareComposer {
         routeImage: UIImage,
         format: HikingRecordShareExportFormat = .contentSized,
         preservesCapturedLogo: Bool = false,
-        isInProgressSnapshot: Bool = false
+        isInProgressSnapshot: Bool = false,
+        showsWeatherLabel: Bool? = nil
     ) -> UIImage? {
         let card = HikingRecordShareCardView(
             record: record,
             routeImage: routeImage,
             format: format,
             preservesCapturedLogo: preservesCapturedLogo,
-            isInProgressSnapshot: isInProgressSnapshot
+            isInProgressSnapshot: isInProgressSnapshot,
+            showsWeatherLabel: showsWeatherLabel
         )
 
         guard let image = renderCardBitmap(card) else {
@@ -278,11 +291,63 @@ enum HikingRecordShareComposer {
         }
 
         switch format {
-        case .contentSized, .fullScreen:
+        case .contentSized:
             return image
+        case .fullScreen:
+            // v7: drop ImageRenderer height overshoot empty (Android wrap-content).
+            return trimTrailingGroupedBackground(image) ?? image
         case .nineBySixteen:
             return fitInsideNineBySixteen(image) ?? image
         }
+    }
+
+    /// Crops uniform `systemGroupedBackground` rows under the last ink, keeping ~10pt pad.
+    private static func trimTrailingGroupedBackground(_ image: UIImage) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let width = cg.width
+        let height = cg.height
+        guard width > 0, height > 8 else { return image }
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Light-mode grouped bg ≈ (242,242,247); match with slack.
+        func isPageBg(_ y: Int) -> Bool {
+            var sumR = 0, sumG = 0, sumB = 0, n = 0
+            let step = max(width / 32, 1)
+            var x = 0
+            while x < width {
+                let i = (y * width + x) * 4
+                sumR += Int(pixels[i]); sumG += Int(pixels[i + 1]); sumB += Int(pixels[i + 2])
+                n += 1
+                x += step
+            }
+            guard n > 0 else { return true }
+            let r = sumR / n, g = sumG / n, b = sumB / n
+            return abs(r - 242) <= 6 && abs(g - 242) <= 6 && abs(b - 247) <= 8
+        }
+
+        var lastContent = height - 1
+        while lastContent > 0, isPageBg(lastContent) {
+            lastContent -= 1
+        }
+        // Match Android wrap trailing under GPS footer (~14pt); not the old 36pt buffer.
+        let padPx = max(Int((14 * image.scale).rounded()), 1)
+        let newHeight = min(height, lastContent + 1 + padPx)
+        guard newHeight > 8, newHeight < height else { return image }
+        guard let cropped = cg.cropping(to: CGRect(x: 0, y: 0, width: width, height: newHeight)) else {
+            return image
+        }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
     }
 
     private static func renderCardBitmap(_ card: HikingRecordShareCardView) -> UIImage? {

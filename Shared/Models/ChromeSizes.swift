@@ -101,6 +101,8 @@ enum ChromeSizes {
 
         enum TopButtons {
             static let minTouch: CGFloat = 44
+            /// Visible liquid-glass circle (matches minTouch on iPhone toolbar).
+            static let visibleDiameter: CGFloat = 44
         }
 
         enum TitleCard {
@@ -116,8 +118,10 @@ enum ChromeSizes {
         }
 
         enum MapCard {
-            /// height = min(contentWidth * widthOverHeightInverse, viewport * maxViewportFraction)
-            /// widthOverHeightInverse = 4/3 → aspect width/height = 0.75
+            /// Fixed height SoT @ logicalWidth 393 (Android mirrors as dp).
+            /// Derived: min(377×4/3, 780×0.48) = 374.4 — do not recompute at runtime.
+            static let height: CGFloat = 374.4
+            /// Historical aspect helper (width/height inverse = 4/3). Kept for notes only.
             static let widthOverHeightInverse: CGFloat = 4.0 / 3.0
             static let maxViewportFraction: CGFloat = 0.48
             static let cornerRadius: CGFloat = 14
