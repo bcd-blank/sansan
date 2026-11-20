@@ -162,15 +162,26 @@ nonisolated enum ChromeSizes {
     nonisolated enum ImageSavePreview {
         static let cardAspectWidth: CGFloat = 314
         static let cardAspectHeight: CGFloat = 510
-        static let pageCorner: CGFloat = 24
+        /// Gallery thumb corner (smaller than former full-bleed 24).
+        static let pageCorner: CGFloat = 16
         /// Flat uniform dim over preview (NOT gradient). Under title + check.
         static let dimOpacity: CGFloat = 0.2
-        static let titleSize: CGFloat = 17
-        static let titleTop: CGFloat = 12
-        static let titleLeading: CGFloat = 12
-        static let selectedChipTop: CGFloat = 12
-        static let selectedChipTrailing: CGFloat = 12
+        /// Gallery title — scaled down from full-bleed 17 for ~42% width thumbs.
+        static let titleSize: CGFloat = 13
+        static let titleTop: CGFloat = 8
+        static let titleLeading: CGFloat = 8
+        static let selectedBadgeTop: CGFloat = 8
+        static let selectedBadgeTrailing: CGFloat = 8
+        static let selectedBadgeDiameter: CGFloat = 22
+        static let selectedBadgeCheckSize: CGFloat = 11
+        static let selectedBorderWidth: CGFloat = 2.5
+        static let showsPageDots: Bool = false
         static let dotsTopGap: CGFloat = 22
+        /// Card width as fraction of gallery content width (40–45%).
+        static let cardWidthFraction: CGFloat = 0.42
+        static let gap: CGFloat = 12
+        static let leadingInset: CGFloat = 16
+        static let trailingInset: CGFloat = 16
         /// Reference bitmap width for cropTopPx values.
         static let referenceBitmapWidth: CGFloat = 1206
 

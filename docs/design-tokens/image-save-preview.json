@@ -1,18 +1,30 @@
 {
   "id": "imageSave.preview",
   "sourceOfTruth": "iPhone",
-  "revision": "v21-jw-flat-dim-width-fit-crop",
+  "revision": "v22-jw-gallery-thumbs",
   "unit": {
     "ios": "pt",
     "android": "dp",
-    "mapping": "1:1 at same logical width; crop px are at reference bitmap width 1206 (@3× of 402pt card width scale — use ratios vs src width)"
+    "mapping": "1:1 at same logical width; crop px at reference bitmap width 1206"
+  },
+  "gallery": {
+    "cardWidthFractionOfContent": 0.42,
+    "cardWidthFractionRange": [0.4, 0.45],
+    "gap": 12,
+    "leadingInset": 16,
+    "trailingInset": 16,
+    "showsPageDots": false,
+    "scrollSnap": "viewAlignedGentle",
+    "notes": "Horizontal gallery: ~42% content width so two cards fully visible + third peeking. Gap 12. Leading 16; scroll may bleed to screen edge. Free scroll with gentle view-aligned snap."
   },
   "card": {
     "aspectWidth": 314,
     "aspectHeight": 510,
     "aspect": "314:510",
-    "cornerRadius": 24,
-    "notes": "Three option cards share this aspect/height. Equal height SoT."
+    "cornerRadius": 16,
+    "selectedBorderWidth": 2.5,
+    "selectedBorderColor": "#34d17a",
+    "notes": "Equal aspect thumbs. Selected border optional accent (green). Corner 16 for small gallery cards (was 24 full-bleed)."
   },
   "fillThenCrop": {
     "policy": "fitWidthPreserveAspectThenCropHeight",
@@ -46,24 +58,30 @@
     "opacityRange": [0.15, 0.25],
     "style": "flatUniform",
     "notGradient": true,
-    "notes": "Uniform black dim over whole preview. Map/cards stay readable on liberty/SG/dark. Dim sits UNDER option title text and UNDER selected check badge."
+    "notes": "Uniform black dim over whole thumb. Under title text and under selected check."
   },
   "optionTitle": {
-    "fontSize": 17,
+    "fontSize": 13,
     "fontWeight": "semibold",
     "color": "#FFFFFF",
-    "top": 12,
-    "leading": 12,
+    "top": 8,
+    "leading": 8,
     "capsule": false,
-    "notes": "White text only — no dark capsule behind name."
+    "notes": "v22 gallery: 13pt (was 17 full-bleed) for readability on ~42% width thumbs. White text only — no capsule."
   },
-  "selectedChip": {
-    "unchanged": true,
-    "top": 12,
-    "trailing": 12,
-    "notes": "「선택 완료」 Morph chip unchanged; drawn above dim."
+  "selectedBadge": {
+    "style": "checkCircle",
+    "diameter": 22,
+    "checkIconSize": 11,
+    "top": 8,
+    "trailing": 8,
+    "fill": "#34d17a",
+    "onFill": "#04140a",
+    "notes": "Gallery uses compact check circle (not full 「선택 완료」 chip — too wide on small thumbs). Only on selected card. Drawn above dim."
   },
   "pageDots": {
-    "topGap": 22
+    "enabled": false,
+    "topGap": 22,
+    "notes": "Removed for gallery — dots redundant with peeking third card + free scroll."
   }
 }

@@ -215,8 +215,8 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                // v15: image-as-card; title TL; dots below (v13); no card shadow;
-                // footer follows VIEWED page (swipe), not only saved preference.
+                // v22: horizontal gallery thumbs (~42% width); no page dots;
+                // footer follows VIEWED page (scroll/tap), check badge follows selection.
                 ImageSaveStylePager(
                     selection: $imageSaveStyle,
                     viewedPage: $viewedImageSaveStyle
