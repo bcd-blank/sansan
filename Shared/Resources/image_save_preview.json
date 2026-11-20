@@ -1,0 +1,69 @@
+{
+  "id": "imageSave.preview",
+  "sourceOfTruth": "iPhone",
+  "revision": "v21-jw-flat-dim-width-fit-crop",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1 at same logical width; crop px are at reference bitmap width 1206 (@3× of 402pt card width scale — use ratios vs src width)"
+  },
+  "card": {
+    "aspectWidth": 314,
+    "aspectHeight": 510,
+    "aspect": "314:510",
+    "cornerRadius": 24,
+    "notes": "Three option cards share this aspect/height. Equal height SoT."
+  },
+  "fillThenCrop": {
+    "policy": "fitWidthPreserveAspectThenCropHeight",
+    "noStretch": true,
+    "notes": "Scale save image so width == card width (keep native aspect). Crop height to card. Do NOT scale-Y independently."
+  },
+  "referenceBitmapWidth": 1206,
+  "crop": {
+    "dataCard": {
+      "source": "hangjunaru Data Card save (native ~1206×3074)",
+      "cropTopPxAt1206": 601,
+      "cropHeightPxAt1206": 1959,
+      "description": "Title card cut off above frame; map + 6 data cards visible; elevation card top slightly visible (~100px)."
+    },
+    "simpleGrey": {
+      "source": "hangjunaru Simple Grey save (native ~1206×2144)",
+      "cropTopPxAt1206": 80,
+      "cropHeightPxAt1206": 1959,
+      "description": "Same fill-width then crop; slight top trim + bottom clip; no stretch."
+    },
+    "simpleColor": {
+      "source": "hangjunaru Simple Color save (native ~1206×2144)",
+      "cropTopPxAt1206": 80,
+      "cropHeightPxAt1206": 1959,
+      "description": "Same fill-width then crop as Simple Grey; no stretch."
+    }
+  },
+  "dimOverlay": {
+    "color": "#000000",
+    "opacity": 0.2,
+    "opacityRange": [0.15, 0.25],
+    "style": "flatUniform",
+    "notGradient": true,
+    "notes": "Uniform black dim over whole preview. Map/cards stay readable on liberty/SG/dark. Dim sits UNDER option title text and UNDER selected check badge."
+  },
+  "optionTitle": {
+    "fontSize": 17,
+    "fontWeight": "semibold",
+    "color": "#FFFFFF",
+    "top": 12,
+    "leading": 12,
+    "capsule": false,
+    "notes": "White text only — no dark capsule behind name."
+  },
+  "selectedChip": {
+    "unchanged": true,
+    "top": 12,
+    "trailing": 12,
+    "notes": "「선택 완료」 Morph chip unchanged; drawn above dim."
+  },
+  "pageDots": {
+    "topGap": 22
+  }
+}

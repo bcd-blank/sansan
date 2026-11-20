@@ -155,4 +155,30 @@ nonisolated enum ChromeSizes {
         static let headerFadeExtension: CGFloat = 72
         static let headerSolidPortion: CGFloat = 0.1
     }
+
+    // MARK: - Image-save settings preview (pager thumbs)
+    // Mirror of docs/design-tokens/image-save-preview.json
+
+    nonisolated enum ImageSavePreview {
+        static let cardAspectWidth: CGFloat = 314
+        static let cardAspectHeight: CGFloat = 510
+        static let pageCorner: CGFloat = 24
+        /// Flat uniform dim over preview (NOT gradient). Under title + check.
+        static let dimOpacity: CGFloat = 0.2
+        static let titleSize: CGFloat = 17
+        static let titleTop: CGFloat = 12
+        static let titleLeading: CGFloat = 12
+        static let selectedChipTop: CGFloat = 12
+        static let selectedChipTrailing: CGFloat = 12
+        static let dotsTopGap: CGFloat = 22
+        /// Reference bitmap width for cropTopPx values.
+        static let referenceBitmapWidth: CGFloat = 1206
+
+        /// Crop top (px @ 1206-wide native save) after width-fit. No Y stretch.
+        enum CropTopPxAt1206 {
+            static let dataCard: CGFloat = 601
+            static let simpleGrey: CGFloat = 80
+            static let simpleColor: CGFloat = 80
+        }
+    }
 }

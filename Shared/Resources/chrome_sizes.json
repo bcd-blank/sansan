@@ -188,5 +188,18 @@
   "androidPlaceholders": {
     "status": "fill when Android sibling lands; leave null until mirrored",
     "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
+  },
+  "imageSavePreview": {
+    "ref": "docs/design-tokens/image-save-preview.json",
+    "bundle": "image_save_preview.json",
+    "revision": "v21-jw-flat-dim-width-fit-crop",
+    "cardAspectWidth": 314,
+    "cardAspectHeight": 510,
+    "dimOpacity": 0.2,
+    "cropTopPxAt1206": {
+      "dataCard": 601,
+      "simpleGrey": 80,
+      "simpleColor": 80
+    }
   }
 }

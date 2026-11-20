@@ -4,12 +4,11 @@
 //
 //  Settings: horizontal pages + bottom pill-spring dots (light-mode tokens).
 //  Swipe/dots change VIEWED page only — selection is preference storage.
-//  v20a JW: shared card 314∶510. SG/SC v18h (+32, omit_fill).
-//  DC full-width Y-only scale (no H scale-up) — side gutters like v18,
-//  map+2 rows fill height. Page-dot 22pt. Morph unchanged. Preview only.
-//  NO card shadow/bg. Dots BELOW preview. Title TL + Morph TR; thumbs
-//  pre-framed per crop table (Android copies same numbers). 「선택 완료」
-//  saved-only; footer follows VIEWED. Preview thumbs only — save untouched.
+//  v21 JW: equal cards 314∶510. Fit-width then crop (native aspect, no stretch).
+//  DC: title cut off; map+6 data cards; elev top slight. SG/SC same rule.
+//  Flat dim (black @20%) — NO gradient, NO title capsule. Check above dim.
+//  Tokens: docs/design-tokens/image-save-preview.json (Android 1:1).
+//  Preview thumbs only — save/export untouched.
 //
 
 #if os(iOS)
@@ -17,8 +16,7 @@
 import SwiftUI
 import UIKit
 
-/// Light-mode pagination tokens from docs/image-save-style-pager/pagination-dots-reference.html
-/// (do NOT use black-stage dark tokens). Shared sizes with Android ImageSaveStylePagerTokens.
+/// Shared with Android ImageSaveStylePagerTokens / image-save-preview.json.
 private enum ImageSaveStylePagerTokens {
     static let fill3 = Color(red: 23 / 255, green: 24 / 255, blue: 26 / 255).opacity(0.12)
     static let inverse = Color(red: 14 / 255, green: 15 / 255, blue: 17 / 255)
@@ -26,25 +24,22 @@ private enum ImageSaveStylePagerTokens {
     /// Morph Select / green chip (`--green`, `--on-green`) — 「선택 완료」 SoT.
     static let selectGreen = Color(red: 52 / 255, green: 209 / 255, blue: 122 / 255) // #34d17a
     static let onGreen = Color(red: 4 / 255, green: 20 / 255, blue: 10 / 255) // #04140a
-    static let titlePill = Color.black.opacity(0.56)
 
     static let dotSize: CGFloat = 8
     static let pillWidth: CGFloat = 20
     static let gap: CGFloat = 14
-    /// Settings preview framing — shared crop SoT with Android (v20a).
-    /// Aspect **314∶510**; at list width ≈ 370pt → card height ≈ **601pt**.
-    static let cardAspectWidth: CGFloat = 314
-    static let cardAspectHeight: CGFloat = 510
-    static let pageCorner: CGFloat = 24
-    /// Overlaid on preview (Pagination Dots slide caption: 16 / 14).
-    static let titleSize: CGFloat = 17
-    /// Title top-leading mirrors chip top-trailing (same Y + inset).
-    static let titleTop: CGFloat = 12
-    static let titleLeading: CGFloat = 12
-    static let selectedChipTop: CGFloat = 12
-    static let selectedChipTrailing: CGFloat = 12
-    /// Dots below card — iPhone page-dot gap SoT (v18). Android must match 22pt.
-    static let dotsTopGap: CGFloat = 22
+
+    static let cardAspectWidth: CGFloat = ChromeSizes.ImageSavePreview.cardAspectWidth
+    static let cardAspectHeight: CGFloat = ChromeSizes.ImageSavePreview.cardAspectHeight
+    static let pageCorner: CGFloat = ChromeSizes.ImageSavePreview.pageCorner
+    static let dimOpacity: CGFloat = ChromeSizes.ImageSavePreview.dimOpacity
+    static let titleSize: CGFloat = ChromeSizes.ImageSavePreview.titleSize
+    static let titleTop: CGFloat = ChromeSizes.ImageSavePreview.titleTop
+    static let titleLeading: CGFloat = ChromeSizes.ImageSavePreview.titleLeading
+    static let selectedChipTop: CGFloat = ChromeSizes.ImageSavePreview.selectedChipTop
+    static let selectedChipTrailing: CGFloat = ChromeSizes.ImageSavePreview.selectedChipTrailing
+    static let dotsTopGap: CGFloat = ChromeSizes.ImageSavePreview.dotsTopGap
+
     static let springLead = (stiffness: 520.0, damping: 34.0)
     static let springTrail = (stiffness: 140.0, damping: 18.0)
     static let springPage = (stiffness: 170.0, damping: 22.0)
@@ -78,7 +73,7 @@ struct ImageSaveStylePager: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: 0) {
                             ForEach(styles) { style in
-                                pageImage(for: style)
+                                pageImage(for: style, in: geo.size)
                                     .frame(width: geo.size.width, height: geo.size.height)
                                     .clipped()
                                     .id(style)
@@ -95,6 +90,11 @@ struct ImageSaveStylePager: View {
                     .scrollPosition(id: viewedPageScrollID)
                 }
 
+                // Flat uniform dim (JW: no gradient). Under title + check.
+                Color.black.opacity(ImageSaveStylePagerTokens.dimOpacity)
+                    .allowsHitTesting(false)
+
+                // Title + check above dim.
                 cardOverlays
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
@@ -106,7 +106,6 @@ struct ImageSaveStylePager: View {
             .frame(maxWidth: .infinity)
             .compositingGroup()
             .clipShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
-            // v15: no card shadow — pale strip was the shadow/bg layer.
             .contentShape(RoundedRectangle(cornerRadius: ImageSaveStylePagerTokens.pageCorner, style: .continuous))
             .onTapGesture {
                 selection = viewedPage
@@ -114,7 +113,6 @@ struct ImageSaveStylePager: View {
             .accessibilityLabel("이미지 저장 방식")
             .accessibilityIdentifier("imageSaveStylePager")
 
-            // Dots BELOW preview (v13) — not on-card.
             PillSpringDots(
                 count: styles.count,
                 selectedIndex: viewedIndex,
@@ -135,7 +133,6 @@ struct ImageSaveStylePager: View {
         }
 #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStylePage)) { note in
-            // Capture helper: change VIEWED page only (does not write preference).
             guard let raw = note.userInfo?["index"] as? Int,
                   styles.indices.contains(raw) else { return }
             withAnimation(
@@ -148,7 +145,6 @@ struct ImageSaveStylePager: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .uiTestSaveStyleSelect)) { note in
-            // Capture helper: write SAVED selection (drives 「선택 완료」 chip).
             guard let raw = note.userInfo?["index"] as? Int,
                   styles.indices.contains(raw) else { return }
             selection = styles[raw]
@@ -156,7 +152,6 @@ struct ImageSaveStylePager: View {
 #endif
     }
 
-    /// ScrollPosition id binding — optional so programmatic page jumps stay in sync.
     private var viewedPageScrollID: Binding<HikingRecordImageSaveStyle?> {
         Binding(
             get: { viewedPage },
@@ -175,41 +170,24 @@ struct ImageSaveStylePager: View {
     }
 
     private var cardOverlays: some View {
-        ZStack {
-            // Light top scrim only — title is top-leading; avoid heavy bottom wash.
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.30), location: 0),
-                    .init(color: .clear, location: 0.28),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            VStack {
-                HStack(alignment: .top) {
-                    // Top-leading dark pill — same Y/inset as Morph chip.
-                    Text(viewedPage.label)
-                        .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(ImageSaveStylePagerTokens.titlePill)
-                        )
-                        .accessibilityIdentifier("imageSaveStyleTitle")
-                        .padding(.leading, ImageSaveStylePagerTokens.titleLeading)
-                        .padding(.top, ImageSaveStylePagerTokens.titleTop)
-                    Spacer(minLength: 0)
-                    if showsCheckOnViewedPage {
-                        selectedCompleteChip
-                            .padding(.top, ImageSaveStylePagerTokens.selectedChipTop)
-                            .padding(.trailing, ImageSaveStylePagerTokens.selectedChipTrailing)
-                    }
-                }
+        VStack {
+            HStack(alignment: .top) {
+                // White text only — no dark capsule (v21 JW).
+                Text(viewedPage.label)
+                    .font(.system(size: ImageSaveStylePagerTokens.titleSize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+                    .accessibilityIdentifier("imageSaveStyleTitle")
+                    .padding(.leading, ImageSaveStylePagerTokens.titleLeading)
+                    .padding(.top, ImageSaveStylePagerTokens.titleTop)
                 Spacer(minLength: 0)
+                if showsCheckOnViewedPage {
+                    selectedCompleteChip
+                        .padding(.top, ImageSaveStylePagerTokens.selectedChipTop)
+                        .padding(.trailing, ImageSaveStylePagerTokens.selectedChipTrailing)
+                }
             }
+            Spacer(minLength: 0)
         }
     }
 
@@ -231,21 +209,28 @@ struct ImageSaveStylePager: View {
         .accessibilityIdentifier("imageSaveStyleSelectedBadge")
     }
 
+    /// Fit width (native aspect) then crop height into the equal card. No stretch.
     @ViewBuilder
-    private func pageImage(for style: HikingRecordImageSaveStyle) -> some View {
+    private func pageImage(for style: HikingRecordImageSaveStyle, in size: CGSize) -> some View {
         if let image = ImageSaveStylePreviewImages.image(for: style) {
-            // Resources are pre-framed 314∶510 per shared crop SoT (see v20 CROP_SOT).
-            // Fit (not Fill) so matching-aspect thumbs are not re-cropped at runtime.
+            let fittedHeight = size.width * (image.size.height / max(image.size.width, 1))
+            let cropTopPx = ImageSaveStylePreviewImages.cropTopPx(for: style)
+            // Thumbs are pre-cropped @1206×1959 (= card aspect). Runtime still uses
+            // width-fit + top-aligned clip so Android can mirror the same rule on
+            // full native saves using cropTopPxAt1206 tokens.
+            let scale = size.width / max(image.size.width, 1)
+            let cropTop = cropTopPx * scale
             Image(uiImage: image)
                 .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .interpolation(.high)
+                .frame(width: size.width, height: fittedHeight)
+                .offset(y: -cropTop)
+                .frame(width: size.width, height: size.height, alignment: .top)
                 .clipped()
         } else {
             ImageSaveStylePagerTokens.surface
         }
     }
-
 }
 
 /// Offscreen export / snapshot helper (real sample thumb).
@@ -274,7 +259,6 @@ enum ImageSaveStylePreviewImages {
         case .summary: name = "simple-grey"
         case .simpleColor: name = "simple-color"
         }
-        // Xcode may flatten Resources/image-save-style-previews/*.png to the bundle root.
         let candidates: [URL?] = [
             Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "image-save-style-previews"),
             Bundle.main.url(forResource: name, withExtension: "png"),
@@ -285,6 +269,23 @@ enum ImageSaveStylePreviewImages {
             }
         }
         return UIImage(named: "ImageSavePreview-\(name)")
+    }
+
+    /// Crop top in source px when bitmap width == referenceBitmapWidth (1206).
+    /// Pre-baked thumbs already apply this crop → return 0 at runtime for those.
+    /// Android applying the rule to full native saves must use ChromeSizes values.
+    static func cropTopPx(for style: HikingRecordImageSaveStyle) -> CGFloat {
+        // Bundle thumbs are already cropped to 314∶510; no further runtime offset.
+        _ = style
+        return 0
+    }
+
+    static func documentedCropTopPx(for style: HikingRecordImageSaveStyle) -> CGFloat {
+        switch style {
+        case .card: ChromeSizes.ImageSavePreview.CropTopPxAt1206.dataCard
+        case .summary: ChromeSizes.ImageSavePreview.CropTopPxAt1206.simpleGrey
+        case .simpleColor: ChromeSizes.ImageSavePreview.CropTopPxAt1206.simpleColor
+        }
     }
 }
 
@@ -369,7 +370,6 @@ private struct PillSpringDots: View {
             }
             return
         }
-        // Lead / trail springs (reference HTML).
         let lead = ImageSaveStylePagerTokens.springLead
         let trail = ImageSaveStylePagerTokens.springTrail
         withAnimation(.interpolatingSpring(stiffness: lead.stiffness, damping: lead.damping)) {
