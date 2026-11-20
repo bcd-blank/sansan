@@ -39,6 +39,10 @@ nonisolated enum ChromeSizes {
             static let paddingTrailing: CGFloat = 10
             static let paddingVertical: CGFloat = 6
             static let rowSpacing: CGFloat = 10
+            /// iPhone 17 ref safe-area top (status / Dynamic Island). Overlay align uses title top, not 0.
+            static let safeAreaTopInsetRefIPhone17: CGFloat = 59
+            /// Brand title top Y from screen top @ iPhone 17 ref (measured; see chrome-sizes main.overlayAlign).
+            static let titleTopYAtIPhone17Ref: CGFloat = 84
         }
     }
 

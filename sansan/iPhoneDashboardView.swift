@@ -413,10 +413,19 @@ private struct DashboardLiveSessionPane: View {
 #endif
     }
 
+    /// Layout-preview only. Size-parity / UITestSkip keep the real Map (pre-authorize location).
+    private var shouldUseMapPlaceholderForScreenshots: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.environment["SANSAN_LAYOUT_PREVIEW"] != nil
+#else
+        false
+#endif
+    }
+
     private var hikingMap: some View {
         Group {
-            if shouldSkipLocationPromptForScreenshots {
-                // 스크린샷/레이아웃 프리뷰 — MapKit 위치 팝업이 크롬을 가리지 않도록 지도 대신 플레이스홀더.
+            if shouldUseMapPlaceholderForScreenshots {
+                // LAYOUT_PREVIEW only — MapKit 위치 팝업 회피용. 일반 스크린샷은 실지도.
                 RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
                     .overlay {

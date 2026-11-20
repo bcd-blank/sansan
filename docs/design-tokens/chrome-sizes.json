@@ -30,6 +30,15 @@
       "paddingVertical": 6,
       "rowSpacing": 10
     },
+    "overlayAlign": {
+      "rule": "titleTopY",
+      "notes": "iOS↔Android size-parity overlays MUST align by brand/title row top Y, not screen top (status-bar / cutout heights differ). Crop or letterbox so the sansan brand title tops coincide, then compare chrome below.",
+      "safeAreaTopInsetRefIPhone17": 59,
+      "titleTopYFromScreenTop": "safeAreaTopInset + headerBand.paddingVertical + max(0, (avatar - brandTitleSize) / 2)  (approx; prefer measured)",
+      "titleTopYAtIPhone17Ref": 84,
+      "titleTopYMeasuredPxAt3x": 253,
+      "measuredOn": "iPhone 17 (DarkMode-iPhone17) 1206×2622 @3x; brand「sansan」ink top ≈84pt from screen top. Apply 1:1 as dp on Android at same logical width."
+    },
     "sectionSpacing": 16
   },
   "dataCard": {
@@ -155,16 +164,21 @@
     "layoutAnchors": {
       "logicalWidth": 393,
       "referenceViewportHeight": 780,
+      "overlayAlign": "titleTopY",
       "statusBarHandling": "Inline nav sits below safe-area top inset (~59pt on iPhone 17). Toolbar ellipsis.circle center Y = safeTop + navBarHeight/2. Title card top = safeTop + navBarHeight + detail.topPadding (6).",
       "topCircularButtonCenterY": 80.8,
       "titleCardTopY": 122.3,
-      "notes": "Android mirrors topCircularButtonCenterY / titleCardTopY / mapCard.height as dp from window top with same status-bar+nav convention.",
+      "notes": "Overlays align on titleCardTopY (record title row), NOT screen top. Android mirrors topCircularButtonCenterY / titleCardTopY / mapCard.height as dp with the same status-bar+nav convention.",
       "measuredOn": "iPhone 17 (DarkMode-iPhone17) logical 402×874 @3x; Y anchors are screen-top pt (status-bar inclusive) and apply 1:1 at 393 SoT",
       "mapCardHeightMeasured": 374.4
     }
   },
   "collection": {
     "horizontalPadding": 20,
+    "overlayAlign": {
+      "rule": "titleTopY",
+      "notes": "Align overlays on navigationTitle「경로 모음」 / large-title baseline or list header top — not screen top."
+    },
     "tabBar": {
       "verticalPadding": 8,
       "capsuleHeight": 64,
@@ -192,7 +206,7 @@
   "imageSavePreview": {
     "ref": "docs/design-tokens/image-save-preview.json",
     "bundle": "image_save_preview.json",
-    "revision": "v21-jw-flat-dim-width-fit-crop",
+    "revision": "v22-jw-gallery-thumbs",
     "cardAspectWidth": 314,
     "cardAspectHeight": 510,
     "dimOpacity": 0.2,
