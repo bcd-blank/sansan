@@ -102,6 +102,7 @@ struct GeneralSettingsView: View {
     }
 
     private var settingsForm: some View {
+        ScrollViewReader { proxy in
         Form {
             Section {
                 ProfileSettingsCard(
@@ -213,16 +214,13 @@ struct GeneralSettingsView: View {
 
             Section {
                 // #64: 세그먼트 → 목록형(메뉴). 라벨 「이미지 저장 방식」 유지.
-                Picker("이미지 저장 방식", selection: $imageSaveStyle) {
-                    ForEach(HikingRecordImageSaveStyle.allCases) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
+                imageSaveStylePicker
             } header: {
                 Text("이미지 저장 방식")
             } footer: {
                 Text(imageSaveStyle.footer)
             }
+            .id("imageSaveStyle")
 
             Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
@@ -281,6 +279,36 @@ struct GeneralSettingsView: View {
                 onRetry: { appUpdateStatus.retry() }
             )
         }
+#if DEBUG
+        .onAppear {
+            guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo("imageSaveStyle", anchor: .center)
+                }
+            }
+        }
+#endif
+        }
+    }
+
+    @ViewBuilder
+    private var imageSaveStylePicker: some View {
+        let picker = Picker("이미지 저장 방식", selection: $imageSaveStyle) {
+            ForEach(HikingRecordImageSaveStyle.allCases) { style in
+                Text(style.label).tag(style)
+            }
+        }
+#if DEBUG
+        if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
+            // 스크린샷: 옵션 목록이 보이도록 navigationLink.
+            picker.pickerStyle(.navigationLink)
+        } else {
+            picker
+        }
+#else
+        picker
+#endif
     }
 
     private var formWithPresentations: some View {

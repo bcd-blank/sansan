@@ -17,6 +17,8 @@ enum AppStoreScreenshotMode: String {
     case kmscDetail = "kmsc-detail"
     case settings
     case detail
+    /// 일반설정 → 「이미지 저장 방식」 섹션(다크 대비 점검).
+    case imageSave = "image-save"
 
     static var current: AppStoreScreenshotMode? {
         ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"].flatMap(AppStoreScreenshotMode.init(rawValue:))
@@ -24,7 +26,7 @@ enum AppStoreScreenshotMode: String {
 
     var opensRecordsTab: Bool {
         switch self {
-        case .dashboard, .settings: false
+        case .dashboard, .settings, .imageSave: false
         case .records, .imported, .kmsc, .kmscDetail, .detail: true
         }
     }
@@ -48,11 +50,15 @@ enum AppStoreScreenshotMode: String {
     }
 
     var opensGeneralSettings: Bool {
-        self == .settings
+        self == .settings || self == .imageSave
     }
 
     var opensFirstRecordDetail: Bool {
         self == .detail
+    }
+
+    var scrollsToImageSaveStyle: Bool {
+        self == .imageSave
     }
 }
 
