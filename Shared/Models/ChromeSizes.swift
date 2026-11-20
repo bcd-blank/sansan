@@ -189,6 +189,15 @@ nonisolated enum ChromeSizes {
         /// Reference bitmap width for cropTopPx values.
         static let referenceBitmapWidth: CGFloat = 1206
 
+        // MARK: Settings layout SoT (JW reject — section title visible + spacing)
+        /// Gap gallery bottom → section footer caption. iPhone SoT (~20pt); Android was ~10.
+        static let galleryToCaptionGap: CGFloat = 20
+        /// Extra list section spacing after image-save before 「저장 · 공유 지도」.
+        static let sectionSpacingToShareMap: CGFloat = 18
+        /// JW side@1024 reference (each half width 1024). Android mirrors same px targets after dens-norm scale.
+        static let galleryCardHeightAtSide1024Px: CGFloat = 295
+        static let galleryTopToShareMapToggleCardAtSide1024Px: CGFloat = 407
+
         /// Crop top (px @ 1206-wide native save) after width-fit. No Y stretch.
         enum CropTopPxAt1206 {
             static let dataCard: CGFloat = 601

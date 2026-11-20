@@ -103,9 +103,20 @@ struct GeneralSettingsView: View {
             }
     }
 
+#if DEBUG
+    /// image-save screenshot: show 「이미지 저장 방식」 as first section so title stays under nav (JW SoT).
+    private var screenshotFocusesImageSaveStyle: Bool {
+        AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true
+            && AppStoreScreenshotMode.current?.keepsSettingsScrollAtTop != true
+    }
+#else
+    private var screenshotFocusesImageSaveStyle: Bool { false }
+#endif
+
     private var settingsForm: some View {
         ScrollViewReader { proxy in
         Form {
+            if !screenshotFocusesImageSaveStyle {
             Section {
                 ProfileSettingsCard(
                     profilePhoto: profilePhoto,
@@ -213,25 +224,33 @@ struct GeneralSettingsView: View {
             } footer: {
                 Text("아이폰 단독 기록의 칼로리 추정에 사용됩니다. Apple Watch로 기록하면 건강 앱 실측 칼로리를 사용합니다.")
             }
+            } // !screenshotFocusesImageSaveStyle
 
             Section {
                 // v22: horizontal gallery thumbs (~42% width); no page dots;
                 // footer follows VIEWED page (scroll/tap), check badge follows selection.
+                // Scroll target = pager (not header): sticky 「이미지 저장 방식」 stays visible under nav.
                 ImageSaveStylePager(
                     selection: $imageSaveStyle,
                     viewedPage: $viewedImageSaveStyle
                 )
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+                    .id("imageSaveStyleSection")
+                    // gallery→caption SoT ≈20pt (JW); bottom inset is the gap before section footer.
+                    .listRowInsets(EdgeInsets(
+                        top: 4,
+                        leading: 0,
+                        bottom: ChromeSizes.ImageSavePreview.galleryToCaptionGap,
+                        trailing: 0
+                    ))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             } header: {
-                // Anchor on the title text so scrollTo(.top) pins 「이미지 저장 방식」 under nav
-                // (Android gallery-at-top SoT). Section .id alone left 신체 정보 peeking.
                 Text("이미지 저장 방식")
-                    .id("imageSaveStyleSection")
             } footer: {
                 Text(viewedImageSaveStyle.footer)
             }
+            // Spacing before 「저장 · 공유 지도」 (JW gallery-top→toggle-card SoT).
+            .listSectionSpacing(ChromeSizes.ImageSavePreview.sectionSpacingToShareMap)
 
             Section {
                 Toggle("구간 표시", isOn: $shareMapOptions.showsDistanceMarkers)
@@ -299,11 +318,11 @@ struct GeneralSettingsView: View {
         }
 #if DEBUG
         .onAppear {
-            // settings-top: leave Y=0. image-save: pin section under nav (Android SoT).
+            // image-save focus already puts 「이미지 저장 방식」 first — do NOT scrollTo (tucks title off).
             guard AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true,
-                  AppStoreScreenshotMode.current?.keepsSettingsScrollAtTop != true else { return }
+                  AppStoreScreenshotMode.current?.keepsSettingsScrollAtTop != true,
+                  !screenshotFocusesImageSaveStyle else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                // .top hides 신체 정보; y:0.02 left it peeking (JW titlebaseline reject).
                 proxy.scrollTo("imageSaveStyleSection", anchor: .top)
             }
         }
@@ -325,9 +344,8 @@ struct GeneralSettingsView: View {
                         if AppStoreScreenshotMode.current?.scrollsToShareMapExport == true {
                             proxy.scrollTo("shareMapExportSection", anchor: .top)
                         } else if AppStoreScreenshotMode.current?.scrollsToImageSaveStyle == true {
-                            // Pin 「이미지 저장 방식」 under nav — match Android gallery-at-top SoT.
-                            proxy.scrollTo("imageSaveStyleSection", anchor: .top)
-                            try? await Task.sleep(for: .milliseconds(200))
+                            // Focus mode already surfaces section title — skip scrollTo.
+                            guard !screenshotFocusesImageSaveStyle else { return }
                             proxy.scrollTo("imageSaveStyleSection", anchor: .top)
                         }
                     }

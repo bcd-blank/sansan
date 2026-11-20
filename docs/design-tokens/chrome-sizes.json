@@ -206,10 +206,15 @@
   "imageSavePreview": {
     "ref": "docs/design-tokens/image-save-preview.json",
     "bundle": "image_save_preview.json",
-    "revision": "v22-jw-gallery-thumbs",
+    "revision": "v23-jw-section-title-spacing",
     "cardAspectWidth": 314,
     "cardAspectHeight": 510,
     "dimOpacity": 0.2,
+    "galleryToCaptionGap": 20,
+    "sectionSpacingToShareMap": 18,
+    "galleryCardHeightAtSide1024Px": 295,
+    "galleryTopToShareMapToggleCardAtSide1024Px": 407,
+    "overlayAlign": "sectionTitleTopY",
     "cropTopPxAt1206": {
       "dataCard": 601,
       "simpleGrey": 80,
