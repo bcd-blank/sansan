@@ -53,8 +53,10 @@ Unit: iPhone **pt** = Android **dp** (1:1 at same logical width). Android column
 | Detail title icon box | `detail.titleCard.iconBox` | 28 | — |
 | Detail title primary size | `detail.titleCard.titlePrimarySize` | 20 | — |
 | Detail memo | `detail.memoCard` | embedded in title card | — |
-| Detail map aspect | `detail.mapCard` | min(w×4/3, vh×0.48) | — |
+| Detail map height | `detail.mapCard.height` | 374.4 | — |
 | Detail map corner radius | `detail.mapCard.cornerRadius` | 14 | — |
+| Detail top button center Y | `detail.layoutAnchors.topCircularButtonCenterY` | 80.8 | — |
+| Detail title card top Y | `detail.layoutAnchors.titleCardTopY` | 122.3 | — |
 | Collection tab bar vertical pad | `collection.tabBar.verticalPadding` | 8 | — |
 | Collection tab capsule height | `collection.tabBar.capsuleHeight` | 64 | — |
 | Collection list thumbnail | `collection.listRow.thumbnail` | 72 | — |

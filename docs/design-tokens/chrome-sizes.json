@@ -155,10 +155,12 @@
     "layoutAnchors": {
       "logicalWidth": 393,
       "referenceViewportHeight": 780,
-      "statusBarHandling": "Navigation bar sits below safe-area top inset; toolbar control center Y = safeTop + navBarHeight/2. Title card top Y = safeTop + navBarHeight + detail.topPadding (content under inline nav).",
-      "topCircularButtonCenterY": null,
-      "titleCardTopY": null,
-      "notes": "Fill centerY/titleCardTopY from iPhone measure @393 (or scale 1:1 from measured device); Android mirrors same numbers as dp from content top of window including status-bar offset convention above."
+      "statusBarHandling": "Inline nav sits below safe-area top inset (~59pt on iPhone 17). Toolbar ellipsis.circle center Y = safeTop + navBarHeight/2. Title card top = safeTop + navBarHeight + detail.topPadding (6).",
+      "topCircularButtonCenterY": 80.8,
+      "titleCardTopY": 122.3,
+      "notes": "Android mirrors topCircularButtonCenterY / titleCardTopY / mapCard.height as dp from window top with same status-bar+nav convention.",
+      "measuredOn": "iPhone 17 (DarkMode-iPhone17) logical 402×874 @3x; Y anchors are screen-top pt (status-bar inclusive) and apply 1:1 at 393 SoT",
+      "mapCardHeightMeasured": 374.4
     }
   },
   "collection": {
