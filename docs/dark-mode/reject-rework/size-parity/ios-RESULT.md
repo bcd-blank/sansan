@@ -11,7 +11,7 @@ cursor:
 | | |
 |---|---|
 | Branch | `cursor/jw-launch-screen-ios-dae0` (push from worktree `cursor/ios-detail-mapheight-c717`) |
-| Tip SHA | `2887ff7191180525c9621214e15125b539a4f3e5` |
+| Tip SHA | `9a83e51798fd92356ccf9293a782d1a84284ce75` |
 | PR | [#18](https://github.com/bcd-blank/sansan/pull/18) |
 | Sim | `DarkMode-iPhone17` (`7FC50A74-AFBF-4DF5-A223-0C8B5CDE2DB5`) logical 402×874 @3x |
 | Seed | `-UITestSeedRecords` A001 (`…a001`, 1.25km) |
