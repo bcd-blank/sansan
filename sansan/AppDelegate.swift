@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ = UIImage(named: "LaunchScreenFull")
         // #73 DEBUG: -UITestSkipHealthAuth / -UITestSeedRecords (release no-op)
         UITestSupport.applyIfNeeded()
+#if DEBUG
+        // SANSAN_HOLD_LAUNCH=1 — keep system LaunchScreen on-screen for sim captures.
+        if ProcessInfo.processInfo.environment["SANSAN_HOLD_LAUNCH"] == "1" {
+            Thread.sleep(forTimeInterval: 4)
+        }
+#endif
         return true
     }
 

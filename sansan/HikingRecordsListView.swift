@@ -737,6 +737,18 @@ struct HikingRecordsListView: View {
         if mode.showsKMSCBrowser {
             showsKMSCBrowser = true
         }
+        if mode.opensFirstRecordDetail {
+            Task { @MainActor in
+                // Seeded records arrive ~1s after launch (-UITestSeedRecords).
+                for _ in 0..<20 {
+                    if let first = store.records.first {
+                        detailRoute = RecordDetailRoute(recordID: first.id)
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+        }
     }
 #endif
 }

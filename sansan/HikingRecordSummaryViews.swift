@@ -589,20 +589,45 @@ struct HikingRecordMapWeatherOverlay: View {
 }
 
 enum WeatherIconPalette {
+    /// Adaptive greys so cloud/rain glyphs stay readable on dark grouped cards.
+    private static var cloudFill: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 0.82, alpha: 1)
+                : UIColor(white: 0.72, alpha: 1)
+        })
+    }
+
+    private static var snowFill: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 0.92, alpha: 1)
+                : UIColor(white: 0.86, alpha: 1)
+        })
+    }
+
+    private static var stormFill: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 0.70, alpha: 1)
+                : UIColor(red: 0.39, green: 0.39, blue: 0.40, alpha: 1)
+        })
+    }
+
     static func primary(for code: Int) -> Color {
         switch code {
         case 0:
             return Color(red: 1, green: 0.62, blue: 0.04)
         case 1, 2, 3, 45, 48:
-            return Color(white: 0.78)
+            return cloudFill
         case 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82:
-            return Color(white: 0.78)
+            return cloudFill
         case 71, 73, 75, 77, 85, 86:
-            return Color(white: 0.86)
+            return snowFill
         case 95, 96, 99:
-            return Color(red: 0.39, green: 0.39, blue: 0.40)
+            return stormFill
         default:
-            return Color(white: 0.78)
+            return cloudFill
         }
     }
 
@@ -615,11 +640,11 @@ enum WeatherIconPalette {
         case 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82:
             return Color(red: 0.35, green: 0.78, blue: 0.98)
         case 71, 73, 75, 77, 85, 86:
-            return Color.white
+            return Color.primary
         case 95, 96, 99:
             return Color(red: 1, green: 0.84, blue: 0.04)
         default:
-            return Color.white
+            return Color.primary
         }
     }
 }

@@ -612,6 +612,7 @@ private struct GlassIconButton: View {
     let accessibilityLabel: String
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     private let iconBox: CGFloat = 22
 
     var body: some View {
@@ -628,7 +629,10 @@ private struct GlassIconButton: View {
                     }
                     .overlay {
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.5)
+                            .strokeBorder(
+                                Color.primary.opacity(colorScheme == .dark ? 0.22 : 0.12),
+                                lineWidth: 0.5
+                            )
                     }
 
                 if isLoading {

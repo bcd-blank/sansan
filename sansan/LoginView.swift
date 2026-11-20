@@ -98,7 +98,7 @@ struct LoginView: View {
             .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(Color(.systemBackground))
     }
 
     private var loginFooterMessage: String {

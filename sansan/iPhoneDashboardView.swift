@@ -52,6 +52,11 @@ struct iPhoneDashboardView: View {
         }
         .onAppear {
             profilePhoto.syncFromStorage()
+#if DEBUG
+            if AppStoreScreenshotMode.current?.opensGeneralSettings == true {
+                showGeneralSettings = true
+            }
+#endif
             if !didPrepareMainScreen {
                 didPrepareMainScreen = true
                 Task { @MainActor in
@@ -277,6 +282,7 @@ private struct DashboardLiveSessionPane: View {
     @ObservedObject private var routeFollow = HikingRouteFollowObserver.shared
     @ObservedObject private var heartRatePreferences = HeartRatePreferencesObserver.shared
     @Environment(\.chromeCapsuleHeight) private var chromeCapsuleHeight
+    @Environment(\.colorScheme) private var colorScheme
 
     private var workout: WorkoutManager {
         _ = displayPulse.pulse
@@ -451,6 +457,8 @@ private struct DashboardLiveSessionPane: View {
                     }
                 }
                 .id("\(livePhotoMapRevision)-\(routeFollow.followedRecordID?.uuidString ?? "none")")
+                // Follows app appearance (system/light/dark). Share/summary captures force light separately.
+                .mapStyle(.standard(elevation: .flat))
                 .mapControls {
                     if workout.canRecordWithCurrentLocationAuthorization {
                         MapUserLocationButton()
@@ -470,7 +478,10 @@ private struct DashboardLiveSessionPane: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                .strokeBorder(
+                    Color.primary.opacity(colorScheme == .dark ? 0.2 : 0.08),
+                    lineWidth: 1
+                )
         )
     }
 

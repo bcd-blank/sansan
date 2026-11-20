@@ -15,6 +15,8 @@ enum AppStoreScreenshotMode: String {
     case imported
     case kmsc
     case kmscDetail = "kmsc-detail"
+    case settings
+    case detail
 
     static var current: AppStoreScreenshotMode? {
         ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"].flatMap(AppStoreScreenshotMode.init(rawValue:))
@@ -22,8 +24,8 @@ enum AppStoreScreenshotMode: String {
 
     var opensRecordsTab: Bool {
         switch self {
-        case .dashboard: false
-        case .records, .imported, .kmsc, .kmscDetail: true
+        case .dashboard, .settings: false
+        case .records, .imported, .kmsc, .kmscDetail, .detail: true
         }
     }
 
@@ -43,6 +45,14 @@ enum AppStoreScreenshotMode: String {
 
     var opensKMSCCourseDetail: Bool {
         self == .kmscDetail
+    }
+
+    var opensGeneralSettings: Bool {
+        self == .settings
+    }
+
+    var opensFirstRecordDetail: Bool {
+        self == .detail
     }
 }
 

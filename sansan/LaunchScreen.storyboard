@@ -8,6 +8,12 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
+        <!--
+            Full-bleed launch art: pin image to all four edges of the root view
+            (not the safe area). Aspect-fill covers SE…Pro Max so storyboard
+            LaunchBackground never peeks as a bottom strip. Background color
+            matches the image bottom band as a safety net only.
+        -->
         <scene sceneID="EHf-IW-A2E">
             <objects>
                 <viewController id="01J-lp-oVM" sceneMemberID="viewController">
@@ -15,7 +21,7 @@
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreenFull" translatesAutoresizingMaskIntoConstraints="NO" id="img-launch">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreenFull" translatesAutoresizingMaskIntoConstraints="NO" id="img-launch">
                                 <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                             </imageView>
                         </subviews>
@@ -25,7 +31,7 @@
                             <constraint firstItem="img-launch" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="launch-top"/>
                             <constraint firstItem="img-launch" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="launch-leading"/>
                             <constraint firstItem="Ze5-6b-2t3" firstAttribute="trailing" secondItem="img-launch" secondAttribute="trailing" id="launch-trailing"/>
-                            <constraint firstItem="img-launch" firstAttribute="height" secondItem="img-launch" secondAttribute="width" multiplier="2556:1179" id="launch-aspect"/>
+                            <constraint firstItem="Ze5-6b-2t3" firstAttribute="bottom" secondItem="img-launch" secondAttribute="bottom" id="launch-bottom"/>
                         </constraints>
                     </view>
                 </viewController>
@@ -37,7 +43,7 @@
     <resources>
         <image name="LaunchScreenFull" width="393" height="852"/>
         <namedColor name="LaunchBackground">
-            <color red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+            <color red="0.490" green="0.541" blue="0.180" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </namedColor>
     </resources>
 </document>
