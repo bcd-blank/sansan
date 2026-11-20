@@ -82,11 +82,11 @@ struct iPhoneDashboardView: View {
 
     private var dashboardSessionPlaceholder: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+            VStack(spacing: ChromeSizes.Main.sectionSpacing) {
+                RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
-                    .frame(minWidth: 1, minHeight: 320)
-                    .frame(height: 320)
+                    .frame(minWidth: 1, minHeight: ChromeSizes.Main.MapCard.height)
+                    .frame(height: ChromeSizes.Main.MapCard.height)
                     .overlay {
                         ProgressView()
                     }
@@ -94,7 +94,7 @@ struct iPhoneDashboardView: View {
                 Color.clear
                     .frame(height: iPhoneBottomChromeLayout.floatingChromeHeight)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, ChromeSizes.Main.horizontalMargin)
         }
         .ignoresSafeArea(edges: .bottom)
         .scrollDisabled(true)
@@ -124,7 +124,7 @@ struct iPhoneDashboardView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("따라가기 해제")
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, ChromeSizes.Main.horizontalMargin)
             .padding(.vertical, 10)
             .background(Self.followedRouteColor.opacity(0.12))
         }
@@ -133,18 +133,25 @@ struct iPhoneDashboardView: View {
     // MARK: - 상단 바
 
     private var dashboardTopBar: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: ChromeSizes.Main.HeaderBand.rowSpacing) {
             if let image = profilePhoto.displayImage {
-                ProfileAvatarView(image: image, diameter: 36)
+                ProfileAvatarView(image: image, diameter: ChromeSizes.Main.HeaderBand.avatar)
             } else if profilePhoto.isLoadingDefaultAvatar {
                 ProgressView()
-                    .frame(width: 36, height: 36)
+                    .frame(
+                        width: ChromeSizes.Main.HeaderBand.avatar,
+                        height: ChromeSizes.Main.HeaderBand.avatar
+                    )
             } else {
-                ProfileAvatarPlaceholderView(diameter: 36)
+                ProfileAvatarPlaceholderView(diameter: ChromeSizes.Main.HeaderBand.avatar)
             }
 
             Text("sansan")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(
+                    size: ChromeSizes.Main.HeaderBand.brandTitleSize,
+                    weight: .bold,
+                    design: .rounded
+                ))
                 .foregroundStyle(.primary)
                 .layoutPriority(1)
 
@@ -157,15 +164,18 @@ struct iPhoneDashboardView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 20, weight: .medium))
-                    .frame(width: 40, height: 40)
+                    .frame(
+                        width: ChromeSizes.Main.HeaderBand.weatherButton,
+                        height: ChromeSizes.Main.HeaderBand.weatherButton
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("일반설정")
         }
-        .padding(.leading, 16)
-        .padding(.trailing, 10)
-        .padding(.vertical, 6)
+        .padding(.leading, ChromeSizes.Main.HeaderBand.paddingLeading)
+        .padding(.trailing, ChromeSizes.Main.HeaderBand.paddingTrailing)
+        .padding(.vertical, ChromeSizes.Main.HeaderBand.paddingVertical)
         .background(Color(.systemGroupedBackground))
     }
 
@@ -303,7 +313,7 @@ private struct DashboardLiveSessionPane: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: ChromeSizes.Main.sectionSpacing) {
                 hikingMap
                 statsGrid
                 DashboardElevationProfileCard(elevationGainText: $dashboardElevationGain)
@@ -318,7 +328,7 @@ private struct DashboardLiveSessionPane: View {
                             + iPhoneBottomChromeLayout.scrollEndBuffer
                     )
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, ChromeSizes.Main.horizontalMargin)
         }
         .ignoresSafeArea(edges: .bottom)
         .scrollEdgeEffectStyle(.soft, for: .bottom)
@@ -388,7 +398,7 @@ private struct DashboardLiveSessionPane: View {
         Group {
             if shouldSkipLocationPromptForScreenshots {
                 // 스크린샷/레이아웃 프리뷰 — MapKit 위치 팝업이 크롬을 가리지 않도록 지도 대신 플레이스홀더.
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
                     .overlay {
                         Image(systemName: "map")
@@ -466,18 +476,18 @@ private struct DashboardLiveSessionPane: View {
                     MapCompass()
                 }
             } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
                     .overlay {
                         ProgressView()
                     }
             }
         }
-        .frame(minWidth: 1, minHeight: 320)
-        .frame(height: 320)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(minWidth: 1, minHeight: ChromeSizes.Main.MapCard.height)
+        .frame(height: ChromeSizes.Main.MapCard.height)
+        .clipShape(RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: ChromeSizes.Main.MapCard.cornerRadius, style: .continuous)
                 .strokeBorder(
                     Color.primary.opacity(colorScheme == .dark ? 0.2 : 0.08),
                     lineWidth: 1
@@ -530,8 +540,11 @@ private struct DashboardLiveSessionPane: View {
     }
 
     private var statsGrid: some View {
-        VStack(spacing: 12) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        VStack(spacing: ChromeSizes.Main.cardGap) {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                spacing: ChromeSizes.Main.cardGap
+            ) {
                 StatCard(
                     title: "소요 시간",
                     value: formattedElapsedTime,
@@ -554,7 +567,10 @@ private struct DashboardLiveSessionPane: View {
                     tint: .orange
                 )
             }
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: ChromeSizes.Main.cardGap
+            ) {
                 StatCard(
                     title: "걸음수",
                     value: formattedStepCount,
@@ -692,10 +708,10 @@ private struct StatCard: View {
         let pad = HikingRecordCardLayout.cardPadding.recordScaled(layoutScale)
         let rowGap = HikingRecordCardLayout.cardRowSpacing.recordScaled(layoutScale)
         let iconBox = HikingRecordCardLayout.compactIconBox.recordScaled(layoutScale)
-        let iconRadius = 6.recordScaled(layoutScale)
+        let iconRadius = ChromeSizes.DataCard.iconCornerRadius.recordScaled(layoutScale)
 
         VStack(alignment: .leading, spacing: rowGap) {
-            HStack(spacing: 5.recordScaled(layoutScale)) {
+            HStack(spacing: ChromeSizes.DataCard.iconLabelGap.recordScaled(layoutScale)) {
                 RoundedRectangle(cornerRadius: iconRadius, style: .continuous)
                     .fill(tint.opacity(0.12))
                     .frame(width: iconBox, height: iconBox)
@@ -717,7 +733,10 @@ private struct StatCard: View {
                     .lineLimit(1)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 3.recordScaled(layoutScale)) {
+            HStack(
+                alignment: .firstTextBaseline,
+                spacing: ChromeSizes.DataCard.valueUnitGap.recordScaled(layoutScale)
+            ) {
                 Spacer(minLength: 0)
 
                 Text(value)

@@ -14,37 +14,38 @@ import UIKit
 // MARK: - 레이아웃 스케일 (상세 화면 ↔ 공유 이미지 일치)
 
 enum HikingRecordCardLayout {
-    static let referenceContentWidth: CGFloat = 377
+    /// ← `ChromeSizes` / docs/design-tokens/chrome-sizes.json (iPhone SoT)
+    static let referenceContentWidth: CGFloat = ChromeSizes.Detail.referenceContentWidth
     static var referenceScreenWidth: CGFloat { referenceContentWidth + detailContentWidthInset }
-    static let referenceViewportHeight: CGFloat = 780
+    static let referenceViewportHeight: CGFloat = ChromeSizes.Detail.referenceViewportHeight
 
-    static let detailHorizontalPadding: CGFloat = 8
-    static let detailContentWidthInset: CGFloat = 16
-    static let detailTopPadding: CGFloat = 6
+    static let detailHorizontalPadding: CGFloat = ChromeSizes.Detail.horizontalPadding
+    static let detailContentWidthInset: CGFloat = ChromeSizes.Detail.contentWidthInset
+    static let detailTopPadding: CGFloat = ChromeSizes.Detail.topPadding
     /// 공유·저장 이미지 상단 `sansan` — 콘텐츠 너비 대비 글자 크기.
     static let exportBrandTitleFontRatio: CGFloat = 0.0468
     /// `[sansan]` 위 여백(기준 화면 너비 pt). 상태바 안전 영역은 캡처에서 제외합니다.
     static let exportBrandTitleTopPadding: CGFloat = 8
-    static let detailBottomPadding: CGFloat = 10
-    static let detailSectionSpacing: CGFloat = 10
+    static let detailBottomPadding: CGFloat = ChromeSizes.Detail.bottomPadding
+    static let detailSectionSpacing: CGFloat = ChromeSizes.Detail.sectionSpacing
     /// 시작/종료·시간/거리/상승 등 가로 나란한 카드 사이 간격.
-    static let cardGridSpacing: CGFloat = 8
+    static let cardGridSpacing: CGFloat = ChromeSizes.Detail.cardGridSpacing
     /// 기록 상세 스크롤 화면 지도 높이 상한 (뷰포트 대비).
-    static let detailMapMaxViewportFraction: CGFloat = 0.48
+    static let detailMapMaxViewportFraction: CGFloat = ChromeSizes.Detail.MapCard.maxViewportFraction
     /// ImageRenderer 높이 산정 여유 (차트 x축·푸터 잘림 방지).
     static let exportContentHeightBuffer: CGFloat = 36
     /// 공유·저장 카드 상단 제목 — 본문 한 줄 높이.
-    static let exportTitlePrimarySize: CGFloat = 20
-    static let exportTitleSecondarySize: CGFloat = 12
+    static let exportTitlePrimarySize: CGFloat = ChromeSizes.Detail.TitleCard.titlePrimarySize
+    static let exportTitleSecondarySize: CGFloat = ChromeSizes.Detail.TitleCard.titleSecondarySize
     static let exportTitleIconBox: CGFloat = 34
     static let exportTitleIconSymbol: CGFloat = 16
-    static let detailTitleIconBox: CGFloat = 28
-    static let detailTitleIconSymbol: CGFloat = 13
-    static let exportTitleIconSpacing: CGFloat = 10
+    static let detailTitleIconBox: CGFloat = ChromeSizes.Detail.TitleCard.iconBox
+    static let detailTitleIconSymbol: CGFloat = ChromeSizes.Detail.TitleCard.iconSymbol
+    static let exportTitleIconSpacing: CGFloat = ChromeSizes.Detail.TitleCard.iconSpacing
     static let exportTitleRowSpacing: CGFloat = 6
-    static let detailTitleRowSpacing: CGFloat = 3
+    static let detailTitleRowSpacing: CGFloat = ChromeSizes.Detail.TitleCard.titleRowSpacing
     /// 기록 상세 타이틀 카드 프로필 — 콘텐츠 높이 대비 축소 비율.
-    static let detailTitleProfileAvatarScale: CGFloat = 0.88
+    static let detailTitleProfileAvatarScale: CGFloat = ChromeSizes.Detail.TitleCard.profileAvatarScale
     static let exportTitleMetaLeadingInset: CGFloat = exportTitleIconBox + exportTitleIconSpacing
     static let detailTitleMetaLeadingInset: CGFloat = detailTitleIconBox + exportTitleIconSpacing
     static let weatherTimelineIconSize: CGFloat = 20
@@ -58,19 +59,19 @@ enum HikingRecordCardLayout {
     }
     /// 사용자 지정 이름이 없을 때 공유·저장 카드 제목.
     static let exportDefaultRouteTitle = "[저장된 경로]"
-    static let mapCornerRadius: CGFloat = 14
+    static let mapCornerRadius: CGFloat = ChromeSizes.Detail.MapCard.cornerRadius
     static let exportOuterCornerRadius: CGFloat = 24
 
-    static let cardCornerRadius: CGFloat = 14
-    static let cardPadding: CGFloat = 11
-    static let cardMinHeight: CGFloat = 78
-    static let cardRowSpacing: CGFloat = 6
-    static let cardLabelSize: CGFloat = 10
-    static let cardPrimarySize: CGFloat = 22
-    static let cardSecondarySize: CGFloat = 11
+    static let cardCornerRadius: CGFloat = ChromeSizes.DataCard.cornerRadius
+    static let cardPadding: CGFloat = ChromeSizes.DataCard.innerPadding
+    static let cardMinHeight: CGFloat = ChromeSizes.DataCard.minHeight
+    static let cardRowSpacing: CGFloat = ChromeSizes.DataCard.rowSpacing
+    static let cardLabelSize: CGFloat = ChromeSizes.DataCard.Font.label
+    static let cardPrimarySize: CGFloat = ChromeSizes.DataCard.Font.value
+    static let cardSecondarySize: CGFloat = ChromeSizes.DataCard.Font.unit
     /// 고도·심박 프로필 카드 헤더의 최고 고도·평균 심박 표시.
     static let cardProfileMetricValueSize: CGFloat = 13
-    static let cardSuffixSize: CGFloat = 11
+    static let cardSuffixSize: CGFloat = ChromeSizes.DataCard.Font.unit
     /// grouped 배경 위의 카드. 다크 모드에서 `systemBackground`는 페이지와 같아져 윤곽이 사라집니다.
     static var groupedCardFill: Color {
         Color(.secondarySystemGroupedBackground)
@@ -79,8 +80,8 @@ enum HikingRecordCardLayout {
     static func groupedCardStroke(for colorScheme: ColorScheme) -> Color {
         Color.primary.opacity(colorScheme == .dark ? 0.2 : 0.08)
     }
-    static let compactIconBox: CGFloat = 22
-    static let compactIconSymbol: CGFloat = 11
+    static let compactIconBox: CGFloat = ChromeSizes.DataCard.iconBox
+    static let compactIconSymbol: CGFloat = ChromeSizes.DataCard.iconSymbol
     static let elevationChartHeight: CGFloat = 164
     /// `HikingElevationProfileCard` VStack spacing.
     static let elevationChartSectionSpacing: CGFloat = 10
@@ -89,7 +90,7 @@ enum HikingRecordCardLayout {
     static func detailMapHeight(contentWidth: CGFloat, viewportHeight: CGFloat) -> CGFloat {
         guard contentWidth > 0, viewportHeight > 0 else { return 0 }
         return min(
-            contentWidth * 4 / 3,
+            contentWidth * ChromeSizes.Detail.MapCard.widthOverHeightInverse,
             viewportHeight * detailMapMaxViewportFraction
         )
     }
@@ -699,7 +700,7 @@ private struct RecordSummaryMetricCard: View {
         let rowGap = HikingRecordCardLayout.cardRowSpacing.recordScaled(layoutScale)
 
         VStack(alignment: .leading, spacing: rowGap) {
-            HStack(spacing: 5.recordScaled(layoutScale)) {
+            HStack(spacing: ChromeSizes.DataCard.iconLabelGap.recordScaled(layoutScale)) {
                 cardIcon
 
                 Text(label)
@@ -711,7 +712,10 @@ private struct RecordSummaryMetricCard: View {
                     .lineLimit(1)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 3.recordScaled(layoutScale)) {
+            HStack(
+                alignment: .firstTextBaseline,
+                spacing: ChromeSizes.DataCard.valueUnitGap.recordScaled(layoutScale)
+            ) {
                 Spacer(minLength: 0)
 
                 Text(primaryText)
@@ -779,7 +783,10 @@ private struct RecordScheduleMetricCard: View {
         let headerHeight = HikingRecordCardLayout.compactIconBox.recordScaled(layoutScale)
 
         VStack(alignment: .leading, spacing: rowGap) {
-            HStack(alignment: .center, spacing: 5.recordScaled(layoutScale)) {
+            HStack(
+                alignment: .center,
+                spacing: ChromeSizes.DataCard.iconLabelGap.recordScaled(layoutScale)
+            ) {
                 RecordSummaryCardIcon(icon: icon, tint: tint, layoutScale: layoutScale)
 
                 Text(label)
@@ -805,7 +812,10 @@ private struct RecordScheduleMetricCard: View {
             }
             .frame(height: headerHeight, alignment: .center)
 
-            HStack(alignment: .firstTextBaseline, spacing: 3.recordScaled(layoutScale)) {
+            HStack(
+                alignment: .firstTextBaseline,
+                spacing: ChromeSizes.DataCard.valueUnitGap.recordScaled(layoutScale)
+            ) {
                 Spacer(minLength: 0)
 
                 Text(parts.timeText)
@@ -848,7 +858,7 @@ private struct RecordSummaryCardIcon: View {
 
     var body: some View {
         let box = HikingRecordCardLayout.compactIconBox.recordScaled(layoutScale)
-        let radius = 6.recordScaled(layoutScale)
+        let radius = ChromeSizes.DataCard.iconCornerRadius.recordScaled(layoutScale)
 
         RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(tint.opacity(0.12))

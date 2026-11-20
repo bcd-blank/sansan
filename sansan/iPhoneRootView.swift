@@ -28,21 +28,21 @@ private enum iPhoneMainTab: Int, CaseIterable, Hashable {
 
 /// 하단 글래스 크롬 — 9·15차: 모든 폭 한 줄, 시각 ×scale, 터치 ≥44 유지.
 enum iPhoneBottomChromeLayout {
-    /// A 기준 필요 폭(좌우 20 포함): 40+148.667+192+12.
-    static let requiredWidth: CGFloat = 392.6666666667
-    static let baseOuter: CGFloat = 64
-    static let baseSide: CGFloat = 20
-    static let baseTabItem: CGFloat = 72
-    static let baseTabInset: CGFloat = 8
-    static let baseSelectionInset: CGFloat = 6
-    static let baseCircleGap: CGFloat = 4
-    static let baseClusterGap: CGFloat = 8
-    static let baseStartWidth: CGFloat = 127
-    static let tabFontMin: CGFloat = 10
-    static let minTouch: CGFloat = 44
+    /// A 기준 필요 폭(좌우 20 포함): 40+148.667+192+12. ← `ChromeSizes.BottomChrome`
+    static let requiredWidth: CGFloat = ChromeSizes.BottomChrome.requiredWidth
+    static let baseOuter: CGFloat = ChromeSizes.BottomChrome.outerHeight
+    static let baseSide: CGFloat = ChromeSizes.BottomChrome.sideInset
+    static let baseTabItem: CGFloat = ChromeSizes.BottomChrome.tabItemMinWidth
+    static let baseTabInset: CGFloat = ChromeSizes.BottomChrome.tabCapsuleInset
+    static let baseSelectionInset: CGFloat = ChromeSizes.BottomChrome.selectionInset
+    static let baseCircleGap: CGFloat = ChromeSizes.BottomChrome.circleGap
+    static let baseClusterGap: CGFloat = ChromeSizes.BottomChrome.clusterGap
+    static let baseStartWidth: CGFloat = ChromeSizes.BottomChrome.StartButton.width
+    static let tabFontMin: CGFloat = ChromeSizes.BottomChrome.tabLabelMin
+    static let minTouch: CGFloat = ChromeSizes.BottomChrome.minTouchIOS
     /// 화면 맨 아래에서 탭까지의 여백 — scale 미적용.
-    static let chromeBottomInset: CGFloat = 26
-    static let scrollEndBuffer: CGFloat = 16
+    static let chromeBottomInset: CGFloat = ChromeSizes.BottomChrome.bottomInset
+    static let scrollEndBuffer: CGFloat = ChromeSizes.BottomChrome.scrollEndBuffer
     static let workoutStackSpacing: CGFloat = 10
 
     static func scale(forWidth width: CGFloat) -> CGFloat {
@@ -104,7 +104,7 @@ enum iPhoneBottomChromeLayout {
     }
 
     static func startLabelSize(forWidth width: CGFloat) -> CGFloat {
-        15 * scale(forWidth: width)
+        ChromeSizes.BottomChrome.StartButton.labelSize * scale(forWidth: width)
     }
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
@@ -132,11 +132,11 @@ enum iPhoneBottomChromeLayout {
 
     /// 모음 리스트 하단 여백 — 하단 크롬 높이만큼만 확보.
     static var recordsListScrollBottomClearance: CGFloat {
-        floatingChromeHeight + 4
+        floatingChromeHeight + ChromeSizes.BottomChrome.collectionListScrollExtra
     }
 
     /// 모음 화면 상단 플로팅 탭 캡슐(내 경로/불러온 경로) 세로 패딩.
-    static let recordsTabBarVerticalPadding: CGFloat = 8
+    static let recordsTabBarVerticalPadding: CGFloat = ChromeSizes.Collection.TabBar.verticalPadding
 
     static func tabContentHeight(forCapsuleHeight capsuleHeight: CGFloat) -> CGFloat {
         capsuleHeight - tabCapsuleInset * 2
@@ -145,11 +145,11 @@ enum iPhoneBottomChromeLayout {
     /// 메인/모음 탭 최소 터치 높이(HIG ≥44). 캡슐 시각 높이(`chromeControlHeight`)는 바꾸지 않습니다.
     static let tabHitMinHeight: CGFloat = 44
     /// 탭 캡슐 아래/위로 이어지는 그라데이션 페이드 추가 높이.
-    static let recordsTabHeaderFadeExtension: CGFloat = 72
+    static let recordsTabHeaderFadeExtension: CGFloat = ChromeSizes.Collection.headerFadeExtension
     /// 페이드 끝단 불투명 구간 비율(0~1). 0.1 = 끝 10%는 바탕색 고정.
-    static let recordsTabHeaderSolidPortion: CGFloat = 0.1
+    static let recordsTabHeaderSolidPortion: CGFloat = ChromeSizes.Collection.headerSolidPortion
     /// inline 내비게이션 타이틀 바 콘텐츠 높이.
-    static let inlineNavigationBarHeight: CGFloat = 44
+    static let inlineNavigationBarHeight: CGFloat = ChromeSizes.Detail.TopButtons.minTouch
 
     /// 하단 메인/모음 크롬 그라데이션 페이드 전체 높이.
     static var bottomChromeFadeHeight: CGFloat {
