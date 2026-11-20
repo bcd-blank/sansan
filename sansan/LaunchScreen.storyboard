@@ -8,10 +8,16 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <scenes>
+        <!--
+            Full-bleed launch art: pin image to all four edges of the root view
+            (not the safe area). Aspect-fill covers SE…Pro Max so storyboard
+            LaunchBackground never peeks as a bottom strip. Background color
+            matches the image bottom band as a safety net only.
+        -->
         <scene sceneID="EHf-IW-A2E">
             <objects>
                 <viewController id="01J-lp-oVM" sceneMemberID="viewController">
-                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                    <view key="view" clipsSubviews="YES" contentMode="scaleToFill" id="Ze5-6b-2t3">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
@@ -20,7 +26,7 @@
                             </imageView>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="Bcu-3y-f86"/>
-                        <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                        <color key="backgroundColor" name="LaunchBackground"/>
                         <constraints>
                             <constraint firstItem="img-launch" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="launch-top"/>
                             <constraint firstItem="img-launch" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="launch-leading"/>
@@ -36,5 +42,8 @@
     </scenes>
     <resources>
         <image name="LaunchScreenFull" width="393" height="852"/>
+        <namedColor name="LaunchBackground">
+            <color red="0.490" green="0.541" blue="0.180" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
     </resources>
 </document>

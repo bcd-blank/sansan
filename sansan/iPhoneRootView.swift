@@ -28,21 +28,21 @@ private enum iPhoneMainTab: Int, CaseIterable, Hashable {
 
 /// 하단 글래스 크롬 — 9·15차: 모든 폭 한 줄, 시각 ×scale, 터치 ≥44 유지.
 enum iPhoneBottomChromeLayout {
-    /// A 기준 필요 폭(좌우 20 포함): 40+148.667+192+12.
-    static let requiredWidth: CGFloat = 392.6666666667
-    static let baseOuter: CGFloat = 64
-    static let baseSide: CGFloat = 20
-    static let baseTabItem: CGFloat = 72
-    static let baseTabInset: CGFloat = 8
-    static let baseSelectionInset: CGFloat = 6
-    static let baseCircleGap: CGFloat = 4
-    static let baseClusterGap: CGFloat = 8
-    static let baseStartWidth: CGFloat = 127
-    static let tabFontMin: CGFloat = 10
-    static let minTouch: CGFloat = 44
+    /// A 기준 필요 폭(좌우 20 포함): 40+148.667+192+12. ← `ChromeSizes.BottomChrome`
+    static let requiredWidth: CGFloat = ChromeSizes.BottomChrome.requiredWidth
+    static let baseOuter: CGFloat = ChromeSizes.BottomChrome.outerHeight
+    static let baseSide: CGFloat = ChromeSizes.BottomChrome.sideInset
+    static let baseTabItem: CGFloat = ChromeSizes.BottomChrome.tabItemMinWidth
+    static let baseTabInset: CGFloat = ChromeSizes.BottomChrome.tabCapsuleInset
+    static let baseSelectionInset: CGFloat = ChromeSizes.BottomChrome.selectionInset
+    static let baseCircleGap: CGFloat = ChromeSizes.BottomChrome.circleGap
+    static let baseClusterGap: CGFloat = ChromeSizes.BottomChrome.clusterGap
+    static let baseStartWidth: CGFloat = ChromeSizes.BottomChrome.StartButton.width
+    static let tabFontMin: CGFloat = ChromeSizes.BottomChrome.tabLabelMin
+    static let minTouch: CGFloat = ChromeSizes.BottomChrome.minTouchIOS
     /// 화면 맨 아래에서 탭까지의 여백 — scale 미적용.
-    static let chromeBottomInset: CGFloat = 26
-    static let scrollEndBuffer: CGFloat = 16
+    static let chromeBottomInset: CGFloat = ChromeSizes.BottomChrome.bottomInset
+    static let scrollEndBuffer: CGFloat = ChromeSizes.BottomChrome.scrollEndBuffer
     static let workoutStackSpacing: CGFloat = 10
 
     static func scale(forWidth width: CGFloat) -> CGFloat {
@@ -103,8 +103,15 @@ enum iPhoneBottomChromeLayout {
         max(tabFontMin, tabFontMin * scale(forWidth: width))
     }
 
+    /// 탭 아이콘 pointSize (글자 제거 후 16→20). 좁은 폭은 chrome.scale 적용.
+    static let baseTabIcon: CGFloat = 20
+
+    static func tabIconSize(forWidth width: CGFloat) -> CGFloat {
+        baseTabIcon * scale(forWidth: width)
+    }
+
     static func startLabelSize(forWidth width: CGFloat) -> CGFloat {
-        15 * scale(forWidth: width)
+        ChromeSizes.BottomChrome.StartButton.labelSize * scale(forWidth: width)
     }
 
     static var tabRowHeight: CGFloat { chromeControlHeight }
@@ -132,11 +139,11 @@ enum iPhoneBottomChromeLayout {
 
     /// 모음 리스트 하단 여백 — 하단 크롬 높이만큼만 확보.
     static var recordsListScrollBottomClearance: CGFloat {
-        floatingChromeHeight + 4
+        floatingChromeHeight + ChromeSizes.BottomChrome.collectionListScrollExtra
     }
 
     /// 모음 화면 상단 플로팅 탭 캡슐(내 경로/불러온 경로) 세로 패딩.
-    static let recordsTabBarVerticalPadding: CGFloat = 8
+    static let recordsTabBarVerticalPadding: CGFloat = ChromeSizes.Collection.TabBar.verticalPadding
 
     static func tabContentHeight(forCapsuleHeight capsuleHeight: CGFloat) -> CGFloat {
         capsuleHeight - tabCapsuleInset * 2
@@ -145,11 +152,11 @@ enum iPhoneBottomChromeLayout {
     /// 메인/모음 탭 최소 터치 높이(HIG ≥44). 캡슐 시각 높이(`chromeControlHeight`)는 바꾸지 않습니다.
     static let tabHitMinHeight: CGFloat = 44
     /// 탭 캡슐 아래/위로 이어지는 그라데이션 페이드 추가 높이.
-    static let recordsTabHeaderFadeExtension: CGFloat = 72
+    static let recordsTabHeaderFadeExtension: CGFloat = ChromeSizes.Collection.headerFadeExtension
     /// 페이드 끝단 불투명 구간 비율(0~1). 0.1 = 끝 10%는 바탕색 고정.
-    static let recordsTabHeaderSolidPortion: CGFloat = 0.1
+    static let recordsTabHeaderSolidPortion: CGFloat = ChromeSizes.Collection.headerSolidPortion
     /// inline 내비게이션 타이틀 바 콘텐츠 높이.
-    static let inlineNavigationBarHeight: CGFloat = 44
+    static let inlineNavigationBarHeight: CGFloat = ChromeSizes.Detail.TopButtons.minTouch
 
     /// 하단 메인/모음 크롬 그라데이션 페이드 전체 높이.
     static var bottomChromeFadeHeight: CGFloat {
@@ -209,6 +216,7 @@ struct iPhoneRootView: View {
     @State private var photoCaptureFailed = false
     @State private var locationPermissionAlert: LocationPermissionAlert?
     @State private var pendingStartWorkout = false
+    /// 기록 전·중 공통 크롬 높이(64×scale). start 버튼 glass 실측 preference로 줄이지 않습니다.
     @State private var chromeCapsuleHeight = iPhoneBottomChromeLayout.chromeControlHeight
     /// 첫 프레임에서 모음 리스트·썸네일까지 만들지 않아 메인 지도·버튼이 먼저 살아나게 합니다.
     @State private var isRecordsTabPrepared = false
@@ -225,15 +233,16 @@ struct iPhoneRootView: View {
     var body: some View {
         mainTabStack
             .onPreferenceChange(ChromeCapsuleHeightPreferenceKey.self) { height in
-                if height > 0 {
-                    chromeCapsuleHeight = height
-                }
+                // width 기준 controlHeight만 수용 (시작 버튼 glass 실측·기록 중 축소 차단).
+                guard height > 0 else { return }
+                chromeCapsuleHeight = height
             }
 #if DEBUG
             .onAppear {
                 applyAppStoreScreenshotModeIfNeeded()
                 exportLayoutPreviewCardIfNeeded()
                 WorkoutManager.shared.presentLayoutPreviewSummaryIfNeeded()
+                runTabSwitchBenchIfNeeded()
             }
 #endif
             .environment(\.chromeCapsuleHeight, chromeCapsuleHeight)
@@ -326,6 +335,13 @@ struct iPhoneRootView: View {
                 }
             }
             .onChange(of: selectedTab) { _, tab in
+#if DEBUG
+                let t0 = CFAbsoluteTimeGetCurrent()
+                DispatchQueue.main.async {
+                    let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+                    print(String(format: "[tab-switch] →%@ settle=%.1fms (Map kept alive; no recreate)", tab.title, ms))
+                }
+#endif
                 if tab == .records {
                     isRecordsTabPrepared = true
                     WorkoutManager.shared.cancelStartCountdown()
@@ -477,10 +493,10 @@ private struct iPhoneBottomChrome: View {
         HStack(alignment: .center, spacing: iPhoneBottomChromeLayout.chromeItemSpacing(forWidth: chromeWidth)) {
             iPhoneMainTabBar(
                 selection: $selection,
-                capsuleHeight: max(capsuleHeight, controlHeight),
+                // 기록 전·중 동일: 항상 width 기준 controlHeight (통일안 64×scale).
+                capsuleHeight: controlHeight,
                 tabItemMinWidth: iPhoneBottomChromeLayout.tabItemMinWidth(forWidth: chromeWidth),
-                tabLabelSize: iPhoneBottomChromeLayout.tabLabelSize(forWidth: chromeWidth),
-                tabIconSize: 16 * chromeScale,
+                tabIconSize: iPhoneBottomChromeLayout.tabIconSize(forWidth: chromeWidth),
                 tabCapsuleInset: iPhoneBottomChromeLayout.tabCapsuleInset(forWidth: chromeWidth),
                 selectionInset: iPhoneBottomChromeLayout.selectionInset(forWidth: chromeWidth)
             )
@@ -502,12 +518,15 @@ private struct iPhoneBottomChrome: View {
         .allowsHitTesting(!showMoreActions)
         .accessibilityHidden(showMoreActions)
         .background {
-            // padding 뒤 부착 → proxy.width ≈ 화면/컨테이너 논리 폭 (좌우 16pt 포함).
+            // padding 뒤 부착 → proxy.width ≈ 화면/컨테이너 논리 폭.
             GeometryReader { proxy in
+                let width = proxy.size.width
+                let height = iPhoneBottomChromeLayout.chromeControlHeight(forWidth: width)
                 Color.clear
-                    .onAppear { chromeWidth = proxy.size.width }
-                    .onChange(of: proxy.size.width) { _, width in
-                        chromeWidth = width
+                    .preference(key: ChromeCapsuleHeightPreferenceKey.self, value: height)
+                    .onAppear { chromeWidth = width }
+                    .onChange(of: proxy.size.width) { _, newWidth in
+                        chromeWidth = newWidth
                     }
             }
         }
@@ -619,14 +638,6 @@ private struct iPhoneBottomChrome: View {
         .tint(isStartCountdownActive ? .orange : .green)
         .buttonBorderShape(.capsule)
         .allowsHitTesting(!isStartCountdownActive)
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ChromeCapsuleHeightPreferenceKey.self,
-                    value: proxy.size.height
-                )
-            }
-        }
         .accessibilityLabel(title)
     }
 
@@ -672,11 +683,13 @@ private struct iPhoneMainTabBar: View {
     @Binding var selection: iPhoneMainTab
     var capsuleHeight: CGFloat
     var tabItemMinWidth: CGFloat = iPhoneBottomChromeLayout.tabItemMinWidth
-    var tabLabelSize: CGFloat = 10
-    var tabIconSize: CGFloat = 16
+    var tabIconSize: CGFloat = iPhoneBottomChromeLayout.baseTabIcon
     var tabCapsuleInset: CGFloat = iPhoneBottomChromeLayout.tabCapsuleInset
     var selectionInset: CGFloat = iPhoneBottomChromeLayout.selectionInset
     @Namespace private var selectionNamespace
+
+    /// 선택 파랑 — 시안·기존 캡처 #0088FF 유지.
+    private static let selectedTabBlue = Color(red: 0, green: 136 / 255, blue: 1)
 
     private var tabContentHeight: CGFloat {
         iPhoneBottomChromeLayout.tabContentHeight(forCapsuleHeight: capsuleHeight)
@@ -711,21 +724,14 @@ private struct iPhoneMainTabBar: View {
                 selection = tab
             }
         } label: {
-            VStack(spacing: 2 * (tabIconSize / 16)) {
-                Image(systemName: tab.systemImage)
-                    .font(.system(size: tabIconSize, weight: isSelected ? .semibold : .medium))
-                    .symbolVariant(isSelected ? .fill : .none)
-
-                Text(tab.title)
-                    .font(.system(size: tabLabelSize, weight: isSelected ? .semibold : .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
-            // 아이콘·글자 묶음 시각 크기는 그대로 두고, 히트만 44pt 이상으로 키웁니다.
-            .frame(minWidth: tabItemMinWidth, minHeight: tabContentHeight)
-            .frame(minWidth: tabItemMinWidth, minHeight: iPhoneBottomChromeLayout.tabHitMinHeight)
-            .contentShape(Rectangle())
+            // 글자 제거 — 아이콘만, 캡슐 세로 중심에 맞춤 (시안 tab.icon.size 20).
+            Image(systemName: tab.systemImage)
+                .font(.system(size: tabIconSize, weight: isSelected ? .semibold : .medium))
+                .symbolVariant(isSelected ? .fill : .none)
+                .foregroundStyle(isSelected ? Self.selectedTabBlue : Color.primary)
+                .frame(minWidth: tabItemMinWidth, minHeight: tabContentHeight)
+                .frame(minWidth: tabItemMinWidth, minHeight: iPhoneBottomChromeLayout.tabHitMinHeight)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // 선택 하이라이트를 버튼 자체에 붙여 아이콘과 중심이 항상 일치하도록 합니다.
@@ -738,6 +744,7 @@ private struct iPhoneMainTabBar: View {
             }
         }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // VoiceOver 이름만 유지. Large Content Viewer는 붙이지 않음(JW: 길게 눌러도 이름 비표시).
         .accessibilityLabel(tab.title)
     }
 }
@@ -842,6 +849,41 @@ private extension iPhoneRootView {
         guard let mode = AppStoreScreenshotMode.current, mode.opensRecordsTab else { return }
         isRecordsTabPrepared = true
         selectedTab = .records
+    }
+
+    /// `-UITestTabSwitchBench` — 10× 메인↔모음; Map kept alive; write ms table to Documents.
+    func runTabSwitchBenchIfNeeded() {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-UITestTabSwitchBench") else { return }
+        Task { @MainActor in
+            // Let dashboard Map finish first paint.
+            try? await Task.sleep(for: .seconds(3))
+            var lines: [String] = ["round,to_records_ms,to_dashboard_ms"]
+            var totalRecords: Double = 0
+            var totalDashboard: Double = 0
+            for round in 1...10 {
+                let t0 = CFAbsoluteTimeGetCurrent()
+                isRecordsTabPrepared = true
+                selectedTab = .records
+                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(50))
+                let toRecords = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+                let t1 = CFAbsoluteTimeGetCurrent()
+                selectedTab = .dashboard
+                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(50))
+                let toDashboard = (CFAbsoluteTimeGetCurrent() - t1) * 1000
+                totalRecords += toRecords
+                totalDashboard += toDashboard
+                lines.append(String(format: "%d,%.1f,%.1f", round, toRecords, toDashboard))
+                print(String(format: "[tab-switch-bench] round=%d →모음=%.1fms →메인=%.1fms", round, toRecords, toDashboard))
+            }
+            lines.append(String(format: "avg,%.1f,%.1f", totalRecords / 10, totalDashboard / 10))
+            let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let url = dir.appendingPathComponent("tab-switch-bench.csv")
+            try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+            print("[tab-switch-bench] wrote \(url.path)")
+        }
     }
 
     /// `SANSAN_LAYOUT_PREVIEW=cardExport` — 극단 폭 점검용 fullScreen 카드 PNG를 Documents에 저장.

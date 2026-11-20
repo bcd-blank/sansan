@@ -251,12 +251,15 @@ final class HikingRecordExportCoordinator: ObservableObject {
         guard shareImage == nil, saveImage == nil else { return }
         guard !isExportCapturing, !isPrewarmingExportImage, !isMenuBusy else { return }
 
-        for _ in 0..<30 {
-            if !isBackgroundWorkCurrent(token) || Task.isCancelled { return }
-            if LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil {
-                break
+        let usesOffscreenSummary = HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer
+        if !usesOffscreenSummary {
+            for _ in 0..<30 {
+                if !isBackgroundWorkCurrent(token) || Task.isCancelled { return }
+                if LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil {
+                    break
+                }
+                try? await Task.sleep(for: .milliseconds(100))
             }
-            try? await Task.sleep(for: .milliseconds(100))
         }
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else { return }
@@ -315,15 +318,24 @@ final class HikingRecordExportCoordinator: ObservableObject {
         }
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else { return nil }
-        guard LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil else { return nil }
+
+        // Summary styles are fully offscreen (MKMapSnapshotter + ImageRenderer). Do not wait on
+        // the live detail map or toggle chromeHidden — that was expanding the on-screen gray map.
+        let usesOffscreenSummary = HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer
+        if !usesOffscreenSummary {
+            guard LiveRouteMapSnapshotRegistry.shared.context(for: recordID) != nil else { return nil }
+        }
 
         if showsProgress {
             progressOverlayMessage = nil
-            isExportCapturing = true
+            // Card-style still may live-capture; summary must not flip isExportCapturing chrome.
+            if !usesOffscreenSummary {
+                isExportCapturing = true
+            }
         }
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else {
-            if showsProgress { isExportCapturing = false }
+            if showsProgress, !usesOffscreenSummary { isExportCapturing = false }
             return nil
         }
 
@@ -340,11 +352,11 @@ final class HikingRecordExportCoordinator: ObservableObject {
         )
 
         guard isBackgroundWorkCurrent(token), !Task.isCancelled else {
-            if showsProgress { isExportCapturing = false }
+            if showsProgress, !usesOffscreenSummary { isExportCapturing = false }
             return nil
         }
 
-        if showsProgress {
+        if showsProgress, !usesOffscreenSummary {
             isExportCapturing = false
         }
         shareImage = image
