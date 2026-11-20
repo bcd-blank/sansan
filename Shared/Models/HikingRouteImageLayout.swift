@@ -6,7 +6,9 @@
 import CoreGraphics
 
 /// 기록 상세 지도·경로 PNG 스냅샷 공통 비율 (상세 화면과 동일한 고정 높이 SoT).
-enum HikingRouteImageLayout {
+/// `nonisolated`: pure constants/calcs — Shared is compiled both with and without
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor` depending on target.
+nonisolated enum HikingRouteImageLayout {
     static let referenceContentWidth: CGFloat = ChromeSizes.Detail.referenceContentWidth
     static let referenceViewportHeight: CGFloat = ChromeSizes.Detail.referenceViewportHeight
     static let detailMapMaxViewportFraction: CGFloat = ChromeSizes.Detail.MapCard.maxViewportFraction

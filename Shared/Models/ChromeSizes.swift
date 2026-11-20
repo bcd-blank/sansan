@@ -11,7 +11,9 @@ import CoreGraphics
 import Foundation
 
 /// Shared chrome / card / bottom-bar sizes. Source of truth: iPhone.
-enum ChromeSizes {
+/// `nonisolated`: pure design tokens — safe across targets that differ on
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION` (MainActor vs none).
+nonisolated enum ChromeSizes {
     static let id = "chrome.sizes"
     static let referenceLogicalWidth: CGFloat = 393
 
