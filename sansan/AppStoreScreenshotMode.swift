@@ -7,7 +7,9 @@
 
 #if os(iOS) && DEBUG
 
+import CoreLocation
 import Foundation
+import MapKit
 
 enum AppStoreScreenshotMode: String {
     case dashboard
@@ -114,10 +116,28 @@ enum UITestMapCaptureHooks {
     enum Action {
         case fit
         case zoomIn
+        /// 가마지천 SoT crops — fixed camera so Android can match the same point.
+        case zoomRouteStraight
+        case zoomRouteCurve
+        case zoomRouteCross
     }
 
     static let fitName = "com.jw.sansan.uitest.mapFit" as CFString
     static let zoomInName = "com.jw.sansan.uitest.mapZoomIn" as CFString
+    static let zoomStraightName = "com.jw.sansan.uitest.mapZoomRouteStraight" as CFString
+    static let zoomCurveName = "com.jw.sansan.uitest.mapZoomRouteCurve" as CFString
+    static let zoomCrossName = "com.jw.sansan.uitest.mapZoomRouteCross" as CFString
+
+    /// 가마지천 a415 — dens-norm crop cameras (RESULT-route-casing).
+    enum GamajiRouteCasingPose {
+        static let span = MKCoordinateSpan(latitudeDelta: 0.00115, longitudeDelta: 0.00115)
+        /// Long near-colinear stretch center (fixture idx ~207).
+        static let straight = CLLocationCoordinate2D(latitude: 37.64311855, longitude: 126.63755373)
+        /// Sharpest turn ~86.6° (fixture idx 285).
+        static let curve = CLLocationCoordinate2D(latitude: 37.64010938, longitude: 126.64202434)
+        /// True self-cross (edges 59×139, loop ~617m).
+        static let cross = CLLocationCoordinate2D(latitude: 37.64648737, longitude: 126.63456760)
+    }
 
     private static var installed = false
 
@@ -130,6 +150,15 @@ enum UITestMapCaptureHooks {
         )
         CFNotificationCenterAddObserver(
             center, nil, uiTestMapZoomInNotify, zoomInName, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestMapZoomStraightNotify, zoomStraightName, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestMapZoomCurveNotify, zoomCurveName, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestMapZoomCrossNotify, zoomCrossName, nil, .deliverImmediately
         )
         UITestSaveStyleCaptureHooks.installIfNeeded()
     }
@@ -188,6 +217,18 @@ private let uiTestMapFitNotify: CFNotificationCallback = { _, _, _, _, _ in
 
 private let uiTestMapZoomInNotify: CFNotificationCallback = { _, _, _, _, _ in
     uiTestMapPostAction("zoomIn")
+}
+
+private let uiTestMapZoomStraightNotify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestMapPostAction("zoomRouteStraight")
+}
+
+private let uiTestMapZoomCurveNotify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestMapPostAction("zoomRouteCurve")
+}
+
+private let uiTestMapZoomCrossNotify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestMapPostAction("zoomRouteCross")
 }
 
 private func uiTestSaveStylePostPage(_ index: Int) {

@@ -262,6 +262,12 @@ struct HikingRecordRouteMapView: View {
                     applyUITestMapCaptureAction(.fit)
                 case "zoomIn":
                     applyUITestMapCaptureAction(.zoomIn)
+                case "zoomRouteStraight":
+                    applyUITestMapCaptureAction(.zoomRouteStraight)
+                case "zoomRouteCurve":
+                    applyUITestMapCaptureAction(.zoomRouteCurve)
+                case "zoomRouteCross":
+                    applyUITestMapCaptureAction(.zoomRouteCross)
                 default:
                     break
                 }
@@ -287,6 +293,27 @@ struct HikingRecordRouteMapView: View {
             let center = routeCoordinates[centerIndex]
             let span = MKCoordinateSpan(latitudeDelta: 0.0028, longitudeDelta: 0.0028)
             mapPosition = .region(MKCoordinateRegion(center: center, span: span))
+        case .zoomRouteStraight:
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.straight,
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+                )
+            )
+        case .zoomRouteCurve:
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve,
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+                )
+            )
+        case .zoomRouteCross:
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.cross,
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+                )
+            )
         }
     }
 #endif
