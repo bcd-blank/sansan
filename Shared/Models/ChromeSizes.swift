@@ -160,6 +160,29 @@ nonisolated enum ChromeSizes {
         static let headerSolidPortion: CGFloat = 0.1
     }
 
+    // MARK: - Settings Form insetGrouped chrome (v26 — shared; Android 1:1)
+    // Mirror of docs/design-tokens/chrome-sizes.json → settingsGrouped
+
+    nonisolated enum SettingsGrouped {
+        static let cornerRadius: CGFloat = 10
+        static let horizontalInset: CGFloat = 20
+
+        enum Dark {
+            /// Form page / between-sections background (#1C1C1E).
+            static let pageBackgroundRGB: (r: Int, g: Int, b: Int) = (28, 28, 30)
+            /// Inset grouped list card fill (#2C2C2E). Android MUST NOT use darker #1C1C1E.
+            static let cardFillRGB: (r: Int, g: Int, b: Int) = (44, 44, 46)
+            /// No border — elevation is fill vs page only.
+            static let cardStrokeWidth: CGFloat = 0
+        }
+
+        enum Light {
+            static let pageBackgroundRGB: (r: Int, g: Int, b: Int) = (242, 242, 247)
+            static let cardFillRGB: (r: Int, g: Int, b: Int) = (255, 255, 255)
+            static let cardStrokeWidth: CGFloat = 0
+        }
+    }
+
     // MARK: - Image-save settings preview (pager thumbs)
     // Mirror of docs/design-tokens/image-save-preview.json
 

@@ -203,6 +203,29 @@
     "status": "fill when Android sibling lands; leave null until mirrored",
     "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
   },
+  "settingsGrouped": {
+    "revision": "v26-jw-settings-dark-card-sot",
+    "source": "iPhone Form insetGrouped (DarkMode-iPhone17 dens-norm)",
+    "cornerRadius": 10,
+    "horizontalInset": 20,
+    "dark": {
+      "pageBackground": "#1C1C1E",
+      "pageBackgroundRGB": [28, 28, 30],
+      "cardFill": "#2C2C2E",
+      "cardFillRGB": [44, 44, 46],
+      "cardStroke": "none",
+      "cardStrokeWidth": 0,
+      "notes": "v26: Android MUST use cardFill #2C2C2E with stroke=none. Do not ship darker #1C1C1E card fill or hairline/outline stroke — iOS elevates by fill vs page only."
+    },
+    "light": {
+      "pageBackground": "#F2F2F7",
+      "pageBackgroundRGB": [242, 242, 247],
+      "cardFill": "#FFFFFF",
+      "cardFillRGB": [255, 255, 255],
+      "cardStroke": "none",
+      "cardStrokeWidth": 0
+    }
+  },
   "imageSavePreview": {
     "ref": "docs/design-tokens/image-save-preview.json",
     "bundle": "image_save_preview.json",
