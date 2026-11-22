@@ -203,6 +203,41 @@
     "status": "fill when Android sibling lands; leave null until mirrored",
     "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
   },
+  "mapUserLocation": {
+    "revision": "v27-jw-heading-indicator-sot",
+    "source": "iPhone MapKit UserAnnotation (DarkMode-iPhone17 dens-norm 1pt=3px)",
+    "notes": "System blue-dot + heading wedge. Android MUST mirror 1:1 as dp. Cone is a filled sector under the dot; not a stroked triangle.",
+    "dot": {
+      "fill": "#0088FF",
+      "fillRGB": [0, 136, 255],
+      "fillDiameter": 14,
+      "stroke": "#FFFFFF",
+      "strokeRGB": [255, 255, 255],
+      "strokeWidth": 3,
+      "outerDiameter": 20
+    },
+    "headingBeam": {
+      "shape": "circularSector",
+      "apertureAngleDegrees": 90,
+      "halfAngleDegrees": 45,
+      "lengthRadius": 48,
+      "fill": "#0088FF",
+      "fillRGB": [0, 136, 255],
+      "opacityNear": 0.35,
+      "opacityFar": 0,
+      "opacityGradient": "radialFromPuckCenter",
+      "stroke": "none",
+      "strokeWidth": 0,
+      "zOrder": "underDot",
+      "visibleWhen": "headingAvailable"
+    },
+    "behavior": {
+      "northUp": "mapBearing=0; cone rotates on screen with device heading (points toward heading vs north)",
+      "rotateHeadingUp": "MapUserLocationButton follow-with-heading: map rotates so heading is screen-up; cone points toward top of screen",
+      "hiddenWhen": "heading unavailable / no magnetometer course",
+      "accuracyHalo": "separate soft full circle — not the heading wedge"
+    }
+  },
   "settingsGrouped": {
     "revision": "v26-jw-settings-dark-card-sot",
     "source": "iPhone Form insetGrouped (DarkMode-iPhone17 dens-norm)",

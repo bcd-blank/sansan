@@ -160,6 +160,32 @@ nonisolated enum ChromeSizes {
         static let headerSolidPortion: CGFloat = 0.1
     }
 
+    // MARK: - Map user-location puck + heading beam (v27 — shared; Android 1:1)
+    // Mirror of docs/design-tokens/chrome-sizes.json → mapUserLocation
+    // Source: MapKit UserAnnotation (system). Values are iPhone pt SoT.
+
+    nonisolated enum MapUserLocation {
+        enum Dot {
+            static let fillRGB: (r: Int, g: Int, b: Int) = (0, 136, 255)
+            static let fillDiameter: CGFloat = 14
+            static let strokeRGB: (r: Int, g: Int, b: Int) = (255, 255, 255)
+            static let strokeWidth: CGFloat = 3
+            static let outerDiameter: CGFloat = 20
+        }
+
+        enum HeadingBeam {
+            /// Filled circular sector (wedge), not a stroked triangle.
+            static let apertureAngleDegrees: CGFloat = 90
+            static let halfAngleDegrees: CGFloat = 45
+            /// Radius from puck center to fade-out tip.
+            static let lengthRadius: CGFloat = 48
+            static let fillRGB: (r: Int, g: Int, b: Int) = (0, 136, 255)
+            /// Opacity at beam near puck → tip.
+            static let opacityNear: CGFloat = 0.35
+            static let opacityFar: CGFloat = 0
+        }
+    }
+
     // MARK: - Settings Form insetGrouped chrome (v26 — shared; Android 1:1)
     // Mirror of docs/design-tokens/chrome-sizes.json → settingsGrouped
 
