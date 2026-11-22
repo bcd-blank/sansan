@@ -1,7 +1,7 @@
 {
   "id": "imageSave.preview",
   "sourceOfTruth": "iPhone",
-  "revision": "v23-jw-section-title-spacing",
+  "revision": "v24-jw-settings-gap-sot",
   "unit": {
     "ios": "pt",
     "android": "dp",
@@ -24,26 +24,37 @@
     "cornerRadius": 16,
     "selectedBorderWidth": 2.5,
     "selectedBorderColor": "#34d17a",
-    "notes": "Equal aspect thumbs. Selected border optional accent (green). Corner 16 for small gallery cards (was 24 full-bleed)."
+    "notes": "Equal aspect thumbs. Height = width × (510/314) from content×cardWidthFraction. Selected border optional accent (green). Corner 16."
   },
   "settingsLayout": {
     "overlayAlign": "sectionTitleTopY",
     "sectionTitle": "이미지 저장 방식",
+    "sotPt": {
+      "galleryCardHeight": 236,
+      "galleryToCaptionGap": 20,
+      "sectionSpacingToShareMap": 18,
+      "sectionTitleToShareMapToggleTop": 410,
+      "galleryTopToShareMapToggleTop": 370,
+      "notes": "Shared iPhone SoT (pt=dp). Android MUST mirror these — do not ship shorter caption/section gaps. galleryCardHeight is measured dens-norm expected from aspect×fraction; gaps are layout tokens (listRowInsets.bottom / listSectionSpacing)."
+    },
     "galleryToCaptionGap": 20,
     "sectionSpacingToShareMap": 18,
+    "galleryCardHeight": 236,
+    "sectionTitleToShareMapToggleTop": 410,
+    "galleryTopToShareMapToggleTop": 370,
     "jwSideAt1024Px": {
-      "galleryCardHeight": { "ios": 295, "android": 288 },
-      "galleryToCaptionGap": { "ios": 20, "android": 10 },
-      "galleryTopToShareMapToggleCard": { "ios": 407, "android": 395 },
-      "notes": "JW reject metrics on titlebaseline side@1024 (each half width 1024). iPhone column is SoT; Android mirrors 1:1 after dens-norm. Caption gap lock = 20pt (not Android's 10)."
+      "galleryCardHeight": 295,
+      "galleryToCaptionGap": 20,
+      "galleryTopToShareMapToggleCard": 407,
+      "notes": "Legacy JW reject table (side half @1024). Binding SoT is sotPt above, not the old Android-short column."
     },
     "screenshotScroll": {
       "mode": "image-save",
       "keepsSectionTitleVisible": true,
       "debugHideSectionsAbove": true,
-      "notes": "DEBUG image-save mode hides sections above so 「이미지 저장 방식」 is first under nav (sticky scrollTo tucked the title off). settings-top keeps full form at Y=0."
+      "notes": "DEBUG image-save mode hides sections above so 「이미지 저장 방식」 is first under nav. settings-top keeps full form at Y=0."
     },
-    "notes": "Lock gallery card size (aspect+fraction), gallery→caption gap 20pt, and section spacing before 「저장 · 공유 지도」."
+    "notes": "v24: single shared SoT for gallery height + caption gap + section spacing + title→toggle. No per-screen hardcoding."
   },
   "fillThenCrop": {
     "policy": "fitWidthPreserveAspectThenCropHeight",
