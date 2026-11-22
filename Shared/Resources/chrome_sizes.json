@@ -204,9 +204,9 @@
     "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
   },
   "mapUserLocation": {
-    "revision": "v27-jw-heading-indicator-sot",
-    "source": "iPhone MapKit UserAnnotation (DarkMode-iPhone17 dens-norm 1pt=3px)",
-    "notes": "System blue-dot + heading wedge. Android MUST mirror 1:1 as dp. Cone is a filled sector under the dot; not a stroked triangle.",
+    "revision": "v28-jw-heading-indicator-beam-sot",
+    "source": "iPhone main-map heading-up capture with beam visible (LaunchJW-iPhone17Pro dens-norm 1pt=3px). Sim has no magnetometer — DEBUG -UITestInjectHeading draws MapKit-style sector for SoT measure.",
+    "notes": "Blue-dot + heading wedge. Android MUST mirror 1:1 as dp. Cone is a filled circular sector under the dot; not a stroked triangle. v27 90° was rejected (crop had no beam); v28 locked from beam-visible evidence.",
     "dot": {
       "fill": "#0088FF",
       "fillRGB": [0, 136, 255],
@@ -218,8 +218,8 @@
     },
     "headingBeam": {
       "shape": "circularSector",
-      "apertureAngleDegrees": 90,
-      "halfAngleDegrees": 45,
+      "apertureAngleDegrees": 80,
+      "halfAngleDegrees": 40,
       "lengthRadius": 48,
       "fill": "#0088FF",
       "fillRGB": [0, 136, 255],

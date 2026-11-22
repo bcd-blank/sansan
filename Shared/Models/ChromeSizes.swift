@@ -160,9 +160,9 @@ nonisolated enum ChromeSizes {
         static let headerSolidPortion: CGFloat = 0.1
     }
 
-    // MARK: - Map user-location puck + heading beam (v27 — shared; Android 1:1)
+    // MARK: - Map user-location puck + heading beam (v28 — shared; Android 1:1)
     // Mirror of docs/design-tokens/chrome-sizes.json → mapUserLocation
-    // Source: MapKit UserAnnotation (system). Values are iPhone pt SoT.
+    // Source: beam-visible main-map capture (dens-norm 1pt=3px). Values are iPhone pt SoT.
 
     nonisolated enum MapUserLocation {
         enum Dot {
@@ -175,8 +175,8 @@ nonisolated enum ChromeSizes {
 
         enum HeadingBeam {
             /// Filled circular sector (wedge), not a stroked triangle.
-            static let apertureAngleDegrees: CGFloat = 90
-            static let halfAngleDegrees: CGFloat = 45
+            static let apertureAngleDegrees: CGFloat = 80
+            static let halfAngleDegrees: CGFloat = 40
             /// Radius from puck center to fade-out tip.
             static let lengthRadius: CGFloat = 48
             static let fillRGB: (r: Int, g: Int, b: Int) = (0, 136, 255)

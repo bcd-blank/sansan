@@ -47,8 +47,6 @@ struct HikingRecordRouteMapView: View {
     @State private var labelLayoutDebounceTask: Task<Void, Never>?
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
-    /// Self-cross overlays — computed off-main; sync body must not O(n²) on GPS.
-    @State private var routeCrossOverlays: [[CLLocationCoordinate2D]] = []
 #if DEBUG
     @State private var detailOpenStartedAt: CFAbsoluteTime?
 #endif
@@ -426,18 +424,11 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
-    private func refreshRouteCrossOverlays(using coordinates: [CLLocationCoordinate2D]) {
-        Task.detached(priority: .utility) {
-            let overlays = RouteSelfCrossing.coordinateHits(in: coordinates).map(\.overlayCoordinates)
-            await MainActor.run {
-                routeCrossOverlays = overlays
-            }
-        }
-    }
-
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        // Continuous white casing + green fill (no chunk join seams).
+        // One continuous geometry × two layers (JW): white casing UNDER green fill.
+        // No per-segment overlays — round casing caps on short bridges looked dashed.
+        // Casing uses stroke color alpha via a single continuous path (no stacked beads).
         MapPolyline(coordinates: routeCoordinates)
             .stroke(
                 Color.white.opacity(0.9),
@@ -448,19 +439,6 @@ struct HikingRecordRouteMapView: View {
                 Color(red: 0.12, green: 0.72, blue: 0.45),
                 style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
             )
-        // True-cross only: later suffix white→green so later casing cuts earlier green.
-        ForEach(Array(routeCrossOverlays.enumerated()), id: \.offset) { _, overlay in
-            MapPolyline(coordinates: overlay)
-                .stroke(
-                    Color.white.opacity(0.9),
-                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-                )
-            MapPolyline(coordinates: overlay)
-                .stroke(
-                    Color(red: 0.12, green: 0.72, blue: 0.45),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-                )
-        }
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
@@ -703,7 +681,6 @@ struct HikingRecordRouteMapView: View {
         kilometerArrivalLabels = arrivalLabels(for: record)
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
-        refreshRouteCrossOverlays(using: routeCoordinates)
         fitRouteInView(animated: false)
 #if DEBUG
         logDetailOpenReady(stage: "prepared")
@@ -768,7 +745,6 @@ struct HikingRecordRouteMapView: View {
             ? (record.session.nearbySummits ?? [])
             : []
         isRouteDisplayReady = true
-        refreshRouteCrossOverlays(using: routeCoordinates)
         return true
     }
 

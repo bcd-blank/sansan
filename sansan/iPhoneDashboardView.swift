@@ -436,9 +436,23 @@ private struct DashboardLiveSessionPane: View {
             } else if isMapReady {
                 Map(position: $mapPosition, interactionModes: .all) {
                     // 권한 전에는 UserAnnotation을 올리지 않아 MapKit 시스템 위치 팝업을 피합니다.
+#if DEBUG
+                    if UITestHeadingInject.isEnabled {
+                        // Simulator has no magnetometer — fixed Annotation + MapKit-style beam for SoT.
+                        Annotation("", coordinate: UITestHeadingInject.captureCoordinate) {
+                            MapKitHeadingPuckInjectView()
+                        }
+                    } else if workout.canRecordWithCurrentLocationAuthorization,
+                              AppStoreScreenshotMode.current == nil,
+                              !ProcessInfo.processInfo.arguments.contains("-UITestSkipLocationAuth") {
+                        // UserAnnotation can raise the system location alert on Simulator.
+                        UserAnnotation()
+                    }
+#else
                     if workout.canRecordWithCurrentLocationAuthorization {
                         UserAnnotation()
                     }
+#endif
 
                     if followedRouteCoordinates.count >= 2 {
                         MapPolyline(coordinates: followedRouteCoordinates)
@@ -499,9 +513,20 @@ private struct DashboardLiveSessionPane: View {
                 // Follows app appearance (system/light/dark). Share/summary captures force light separately.
                 .mapStyle(.standard(elevation: .flat))
                 .mapControls {
+#if DEBUG
+                    // MapUserLocationButton can raise the system location alert even when
+                    // UITest skip flags fake authorized — hide during screenshot/inject.
+                    if workout.canRecordWithCurrentLocationAuthorization,
+                       !UITestHeadingInject.isEnabled,
+                       AppStoreScreenshotMode.current == nil,
+                       !ProcessInfo.processInfo.arguments.contains("-UITestSkipLocationAuth") {
+                        MapUserLocationButton()
+                    }
+#else
                     if workout.canRecordWithCurrentLocationAuthorization {
                         MapUserLocationButton()
                     }
+#endif
                     MapCompass()
                 }
             } else {
@@ -652,6 +677,18 @@ private struct DashboardLiveSessionPane: View {
     }
 
     private func updateMapCamera() {
+#if DEBUG
+        if UITestHeadingInject.isEnabled {
+            // Keep puck centered for heading SoT capture (ignore route fit).
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestHeadingInject.captureCoordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                )
+            )
+            return
+        }
+#endif
         var fitCoordinates = followedRouteCoordinates
         for segment in cachedRouteSegments {
             fitCoordinates.append(contentsOf: segment)

@@ -262,6 +262,13 @@ final class WorkoutManager: NSObject, ObservableObject {
         loadPersistedDismissedSessionID()
         configureLocationManager()
         authorizationStatus = locationManager.authorizationStatus
+#if DEBUG && os(iOS)
+        // Screenshot / UITest: never raise the system location alert over chrome.
+        // simctl privacy grant can lag behind CLLocationManager — treat as authorized.
+        if Self.shouldSkipLocationPromptForUITest {
+            authorizationStatus = .authorizedWhenInUse
+        }
+#endif
         configureKmVoiceGuidanceHooks()
 #if os(watchOS)
         configureWatchConnectivity()
@@ -771,17 +778,26 @@ final class WorkoutManager: NSObject, ObservableObject {
         authorizationStatus == .denied || authorizationStatus == .restricted
     }
 
+#if DEBUG && os(iOS)
+    /// Layout / screenshot / inject-heading captures must not raise the system location alert.
+    static var shouldSkipLocationPromptForUITest: Bool {
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        return env["SANSAN_LAYOUT_PREVIEW"] != nil
+            || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
+            || args.contains("-UITestSkipLocationAuth")
+            || args.contains("-UITestSkipHealthAuth")
+            || args.contains("-UITestInjectHeading")
+            || AppStoreScreenshotMode.current != nil
+    }
+#endif
+
     /// 최초 위치 권한 — 사용 중 허용만 요청합니다. 안내는 UI에서 먼저 표시합니다.
     func requestWhenInUseLocationAuthorization() {
         guard authorizationStatus == .notDetermined else { return }
-#if DEBUG
-        // 레이아웃/스크린샷 촬영에서 시스템 위치 팝업이 크롬을 가리지 않도록 요청을 건너뜁니다.
-        let env = ProcessInfo.processInfo.environment
-        let args = ProcessInfo.processInfo.arguments
-        if env["SANSAN_LAYOUT_PREVIEW"] != nil
-            || env["SANSAN_SKIP_LOCATION_PROMPT"] == "1"
-            || args.contains("-UITestSkipLocationAuth")
-            || args.contains("-UITestSkipHealthAuth") {
+#if DEBUG && os(iOS)
+        if Self.shouldSkipLocationPromptForUITest {
+            authorizationStatus = .authorizedWhenInUse
             return
         }
 #endif
@@ -850,6 +866,14 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     /// 메인 지도 — 권한 요청(최초 1회) 및 대기 중 위치 갱신을 시작합니다.
     func prepareDashboardMapLocation() {
+#if DEBUG && os(iOS)
+        if Self.shouldSkipLocationPromptForUITest {
+            // Fake authorized for UI chrome; do NOT start CLLocationManager —
+            // starting updates / MapUserLocationButton can still raise the system alert.
+            authorizationStatus = .authorizedWhenInUse
+            return
+        }
+#endif
         authorizationStatus = locationManager.authorizationStatus
         guard sessionData.state == .idle else { return }
 
@@ -3907,6 +3931,12 @@ final class WorkoutManager: NSObject, ObservableObject {
 extension WorkoutManager: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
+#if DEBUG && os(iOS)
+            if Self.shouldSkipLocationPromptForUITest {
+                authorizationStatus = .authorizedWhenInUse
+                return
+            }
+#endif
             authorizationStatus = manager.authorizationStatus
 #if os(iOS)
             handleAuthorizationStatusChange()

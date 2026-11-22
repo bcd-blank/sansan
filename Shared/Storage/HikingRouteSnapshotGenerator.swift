@@ -807,17 +807,24 @@ enum HikingRouteSnapshotGenerator {
                 cgContext.restoreGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
             } else {
-                // Android 6a62d1e: one continuous Path stroke. White AA-off (AA vs map =
-                // gray halo); green AA-on. SRC_OVER — never .copy.
+                // Android 6a62d1e: one continuous Path stroke. SRC_OVER — never .copy.
+                // JW: opacity<1 as layer alpha (setAlpha) so self-crossings don't darken.
                 cgContext.saveGState()
                 cgContext.setShadow(offset: .zero, blur: 0, color: nil)
                 cgContext.setBlendMode(.normal)
-                // Continuous dual rails: AA-on white + green over one path (single stroke each).
                 cgContext.setShouldAntialias(true)
                 cgContext.setAllowsAntialiasing(true)
                 path.lineWidth = casingWidth
-                white.setStroke()
+                var whiteAlpha: CGFloat = 1
+                white.getRed(nil, green: nil, blue: nil, alpha: &whiteAlpha)
+                if whiteAlpha < 0.999 {
+                    cgContext.setAlpha(whiteAlpha)
+                    UIColor.white.setStroke()
+                } else {
+                    white.setStroke()
+                }
                 path.stroke()
+                cgContext.setAlpha(1)
                 path.lineWidth = fillWidth
                 green.setStroke()
                 path.stroke()
@@ -926,64 +933,9 @@ enum HikingRouteSnapshotGenerator {
         full.lineCapStyle = .round
         full.lineJoinStyle = .round
         strokeWhiteThenGreen(full, withShadow: shadow)
-
-        // Bridge: Android shareRoutePointsAround → pathFromPoints → single drawPath.
-        // One UIBezierPath.stroke per layer — never stroke segment-by-segment (조각 레일).
-        for hit in hits {
-            let whitePts = Self.simplifiedBridgePoints(
-                RouteSelfCrossing.overlayPoints(
-                    drawPoints: bridgeSource,
-                    hit: hit,
-                    backPad: whiteHalf,
-                    forwardPad: whiteHalf
-                ),
-                epsilon: max(0.7 * contentScale, 0.5)
-            )
-            let greenPts = Self.simplifiedBridgePoints(
-                RouteSelfCrossing.overlayPoints(
-                    drawPoints: bridgeSource,
-                    hit: hit,
-                    backPad: greenHalf,
-                    forwardPad: greenHalf
-                ),
-                epsilon: max(0.7 * contentScale, 0.5)
-            )
-            guard whitePts.count >= 2, greenPts.count >= 2 else { continue }
-
-            func strokeBridge(_ pts: [CGPoint], width: CGFloat, color: UIColor, cap: CGLineCap, antialias: Bool) {
-                let path = Self.continuousStrokePath(pts)
-                path.lineWidth = width
-                path.lineCapStyle = cap
-                path.lineJoinStyle = .round
-                cgContext.saveGState()
-                cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-                cgContext.setBlendMode(.normal)
-                cgContext.setShouldAntialias(antialias)
-                cgContext.setAllowsAntialiasing(antialias)
-                color.setStroke()
-                path.stroke() // single continuous stroke
-                cgContext.restoreGState()
-            }
-
-            // One continuous path each: white butt then longer green round (Android order).
-            // AA-on so bridge rails stay continuous with the base (no 톱니 at joins).
-            strokeBridge(whitePts, width: bridgeCasing, color: white, cap: .butt, antialias: true)
-            strokeBridge(greenPts, width: bridgeFill, color: green, cap: .round, antialias: true)
-
-            cgContext.setShadow(offset: .zero, blur: 0, color: nil)
-
-            #if DEBUG
-            var polyLen: CGFloat = 0
-            for i in 0..<(whitePts.count - 1) {
-                polyLen += hypot(whitePts[i + 1].x - whitePts[i].x, whitePts[i + 1].y - whitePts[i].y)
-            }
-            NSLog(
-                "[km-label] bridge at (%.1f,%.1f) pts=%d len=%.1f half=%.1f/%.1f w=%.2f/%.2f",
-                hit.point.x, hit.point.y, whitePts.count, polyLen,
-                whiteHalf, greenHalf, bridgeCasing, bridgeFill
-            )
-            #endif
-        }
+        // JW: continuous dual-layer only — no short-bridge overlays (round casing caps
+        // on per-hit polylines looked dashed). Cross hit logs kept above for diagnostics.
+        _ = (hits, bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
     }
 
     /// Single continuous stroke path: Catmull-Rom → cubics (no polyline join teeth).
