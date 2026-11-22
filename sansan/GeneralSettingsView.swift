@@ -267,7 +267,7 @@ struct GeneralSettingsView: View {
                     Toggle("고정 사진 썸네일", isOn: $shareMapOptions.showsPinnedThumbnails)
                 }
             } header: {
-                Text("저장 · 공유 지도")
+                Text("저장 · 공유 지도 표시")
             } footer: {
                 Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 거리 라벨, 시간 표시는 그 지점까지 걸린 시간, 날씨 표시는 기록 상세 지도와 저장 이미지의 날씨 라벨입니다.")
             }
