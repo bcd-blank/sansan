@@ -206,7 +206,7 @@
   "imageSavePreview": {
     "ref": "docs/design-tokens/image-save-preview.json",
     "bundle": "image_save_preview.json",
-    "revision": "v24-jw-settings-gap-sot",
+    "revision": "v25-jw-settings-footer-sot",
     "cardAspectWidth": 314,
     "cardAspectHeight": 510,
     "dimOpacity": 0.2,
@@ -218,6 +218,11 @@
     "galleryCardHeightAtSide1024Px": 295,
     "galleryTopToShareMapToggleCardAtSide1024Px": 407,
     "overlayAlign": "sectionTitleTopY",
+    "sectionFooterFontSize": 13,
+    "sectionFooterLineHeight": 18,
+    "sectionFooterTracking": 0,
+    "sectionFooterHorizontalPadding": 32,
+    "sectionFooterMaxTextWidth": 338,
     "cropTopPxAt1206": {
       "dataCard": 601,
       "simpleGrey": 80,

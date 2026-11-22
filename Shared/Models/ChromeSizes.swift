@@ -204,6 +204,18 @@ nonisolated enum ChromeSizes {
         static let galleryCardHeightAtSide1024Px: CGFloat = 295
         static let galleryTopToShareMapToggleCardAtSide1024Px: CGFloat = 407
 
+        // MARK: Section footer typography SoT (v25 — Form footnote; Android 1:1 dp)
+        /// Footnote size (UIFont.preferredFont .footnote @ default content size).
+        static let sectionFooterFontSize: CGFloat = 13
+        /// Footnote line height (pt); Android use exact dp lineHeight.
+        static let sectionFooterLineHeight: CGFloat = 18
+        /// Letter-spacing / tracking (pt). Form default = 0.
+        static let sectionFooterTracking: CGFloat = 0
+        /// Leading+trailing inset from screen edge to footer ink (measured dens-norm ≈32).
+        static let sectionFooterHorizontalPadding: CGFloat = 32
+        /// Wrap width at 402-pt logical width: 402 − 2×32.
+        static let sectionFooterMaxTextWidth: CGFloat = 338
+
         /// Crop top (px @ 1206-wide native save) after width-fit. No Y stretch.
         enum CropTopPxAt1206 {
             static let dataCard: CGFloat = 601

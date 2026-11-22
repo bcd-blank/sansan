@@ -247,7 +247,11 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("이미지 저장 방식")
             } footer: {
+                // v25 footer SoT: fontSize 13 / tracking 0; lineHeight 18 is Android paragraph token
+                // (Form footnote already lands ~18). Horizontal padding ~32 is Form layout SoT.
                 Text(viewedImageSaveStyle.footer)
+                    .font(.system(size: ChromeSizes.ImageSavePreview.sectionFooterFontSize))
+                    .tracking(ChromeSizes.ImageSavePreview.sectionFooterTracking)
             }
             // Spacing before 「저장 · 공유 지도」 (JW gallery-top→toggle-card SoT).
             .listSectionSpacing(ChromeSizes.ImageSavePreview.sectionSpacingToShareMap)
@@ -268,6 +272,8 @@ struct GeneralSettingsView: View {
                 Text("저장 · 공유 지도")
             } footer: {
                 Text("공유·저장 이미지에 표시할 항목을 선택합니다. 구간 표시는 1km 거리 라벨, 시간 표시는 그 지점까지 걸린 시간, 날씨 표시는 기록 상세 지도와 저장 이미지의 날씨 라벨입니다.")
+                    .font(.system(size: ChromeSizes.ImageSavePreview.sectionFooterFontSize))
+                    .tracking(ChromeSizes.ImageSavePreview.sectionFooterTracking)
             }
             .id("shareMapExportSection")
 

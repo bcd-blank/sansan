@@ -1,7 +1,7 @@
 {
   "id": "imageSave.preview",
   "sourceOfTruth": "iPhone",
-  "revision": "v24-jw-settings-gap-sot",
+  "revision": "v25-jw-settings-footer-sot",
   "unit": {
     "ios": "pt",
     "android": "dp",
@@ -54,7 +54,20 @@
       "debugHideSectionsAbove": true,
       "notes": "DEBUG image-save mode hides sections above so 「이미지 저장 방식」 is first under nav. settings-top keeps full form at Y=0."
     },
-    "notes": "v24: single shared SoT for gallery height + caption gap + section spacing + title→toggle. No per-screen hardcoding."
+    "sectionFooter": {
+      "fontSize": 13,
+      "lineHeight": 18,
+      "tracking": 0,
+      "horizontalPadding": 32,
+      "maxTextWidth": 338,
+      "wrapReference": {
+        "style": "card",
+        "line1EndsWith": "기록으로",
+        "line2": "저장합니다."
+      },
+      "notes": "v25: Form footnote SoT for image-save + share-map section footers. Measured dens-norm lead≈32pt (not 20). Android MUST mirror padding/fontSize/tracking/lineHeight so caption wraps after 「기록으로」 (not mid 「저장합니다」). maxTextWidth = 402 − 2×32."
+    },
+    "notes": "v24 gaps + v25 sectionFooter typography. Shared iPhone SoT; Android 1:1 dp."
   },
   "fillThenCrop": {
     "policy": "fitWidthPreserveAspectThenCropHeight",
