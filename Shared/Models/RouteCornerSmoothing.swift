@@ -5,13 +5,20 @@ import MapKit
 
 /// Render-only sharp-corner fillets (JW). Stored GPS / distance unchanged.
 /// Tokens: `docs/design-tokens/route-corner-smooth.json` (== `route_corner_smooth.json`).
+///
+/// Uses a true circular-arc fillet (not quadratic-through-apex). Quadratic T1→apex→T2
+/// hugs the tip on mid-sharp elbows (~42° / short legs) and stays visually pointed;
+/// the circular cut removes the tip under the same 40% along cap.
 enum RouteCornerSmoothing {
-    static let minTurnDegrees: CGFloat = 60
-    static let filletRadiusPt: CGFloat = 4
-    static let maxFilletAlongPt: CGFloat = 10
-    static let arcSamples: Int = 5
-    /// Map / MKMapPoint path when screen pt scale is unknown.
-    static let filletRadiusMeters: CLLocationDistance = 2.5
+    /// v2 JW: 30° so mid-sharp GPS elbows (e.g. curve3 ~42°) fillet.
+    static let minTurnDegrees: CGFloat = 30
+    static let filletRadiusPt: CGFloat = 12
+    static let maxFilletAlongPt: CGFloat = 28
+    /// Cap fillet cut length to this fraction of each adjacent segment.
+    static let maxAlongSegmentFraction: CGFloat = 0.4
+    static let arcSamples: Int = 6
+    /// Map path — raised from 2.5m so meter cap does not crush pt-scale fillets.
+    static let filletRadiusMeters: CLLocationDistance = 8
 
     /// Disable via `-SANSAN_ROUTE_CORNER_SHARP` for before captures.
     static var isEnabled: Bool {
@@ -27,11 +34,13 @@ enum RouteCornerSmoothing {
         radius: CGFloat = filletRadiusPt,
         maxAlong: CGFloat = maxFilletAlongPt,
         minTurnDegrees: CGFloat = minTurnDegrees,
-        samples: Int = arcSamples
+        samples: Int = arcSamples,
+        segmentFraction: CGFloat = maxAlongSegmentFraction
     ) -> [CGPoint] {
         guard isEnabled, points.count >= 3 else { return points }
         var out: [CGPoint] = [points[0]]
         let last = points.count - 1
+        let frac = max(0.05, min(0.49, segmentFraction))
         for i in 1..<last {
             let a = points[i - 1]
             let b = points[i]
@@ -55,26 +64,50 @@ enum RouteCornerSmoothing {
             }
             let half = turn / 2
             let tanHalf = CGFloat(tan(Double(half)))
-            guard tanHalf > 1e-4 else {
+            let sinHalf = CGFloat(sin(Double(half)))
+            guard tanHalf > 1e-4, sinHalf > 1e-4 else {
                 out.append(b)
                 continue
             }
-            let along = min(radius / tanHalf, maxAlong, abLen * 0.45, bcLen * 0.45)
+            // Primary cap: segment fraction (JW 40%); maxAlong is a soft ceiling in pt/map units.
+            let along = min(radius / tanHalf, maxAlong, abLen * frac, bcLen * frac)
             guard along > 0.35 else {
                 out.append(b)
                 continue
             }
+            // Effective radius after along caps (keeps G1 with circular arc).
+            let r = along * tanHalf
             let t1 = CGPoint(x: b.x - abux * along, y: b.y - abuy * along)
             let t2 = CGPoint(x: b.x + bcux * along, y: b.y + bcuy * along)
-            // Drop previous duplicate if t1 ≈ last out.
             if let prev = out.last, hypot(prev.x - t1.x, prev.y - t1.y) < 0.2 {
                 out.removeLast()
             }
             out.append(t1)
+
+            // Left-of-travel normal sign from AB×BC (screen / map y-down ok — consistent).
+            let cross = abux * bcuy - abuy * bcux
+            let sign: CGFloat = cross >= 0 ? 1 : -1
+            let n1x = -abuy * sign, n1y = abux * sign
+            let center = CGPoint(x: t1.x + n1x * r, y: t1.y + n1y * r)
+
+            let a0 = atan2(t1.y - center.y, t1.x - center.x)
+            let a1 = atan2(t2.y - center.y, t2.x - center.x)
+            // Sweep the short arc matching the turn (≤π).
+            var delta = a1 - a0
+            if sign > 0 {
+                // Left turn → CCW sweep
+                while delta <= 0 { delta += 2 * .pi }
+                while delta > .pi + 1e-3 { delta -= 2 * .pi }
+            } else {
+                // Right turn → CW sweep
+                while delta >= 0 { delta -= 2 * .pi }
+                while delta < -(.pi + 1e-3) { delta += 2 * .pi }
+            }
             let n = max(2, samples)
             for s in 1..<n {
                 let t = CGFloat(s) / CGFloat(n)
-                out.append(quadratic(t1, b, t2, t: t))
+                let ang = a0 + delta * t
+                out.append(CGPoint(x: center.x + cos(ang) * r, y: center.y + sin(ang) * r))
             }
             out.append(t2)
         }
@@ -95,25 +128,20 @@ enum RouteCornerSmoothing {
         let metersPerMapPoint = MKMetersPerMapPointAtLatitude(midLat)
         guard metersPerMapPoint > 1e-12 else { return coordinates }
         let radius = CGFloat(radiusMeters / metersPerMapPoint)
-        let maxAlong = CGFloat(max(radiusMeters * 2.5, 6) / metersPerMapPoint)
+        // Soft ceiling in map-points: enough that 40% segment usually wins over a tiny meter cap.
+        let maxAlongMeters = max(radiusMeters * 2.0, Double(maxFilletAlongPt))
+        let maxAlong = CGFloat(maxAlongMeters / metersPerMapPoint)
         let raw = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
         let smoothed = smoothPoints(
             raw,
             radius: radius,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
-            samples: samples
+            samples: samples,
+            segmentFraction: maxAlongSegmentFraction
         )
         return smoothed.map {
             MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
         }
-    }
-
-    private static func quadratic(_ p0: CGPoint, _ p1: CGPoint, _ p2: CGPoint, t: CGFloat) -> CGPoint {
-        let u = 1 - t
-        return CGPoint(
-            x: u * u * p0.x + 2 * u * t * p1.x + t * t * p2.x,
-            y: u * u * p0.y + 2 * u * t * p1.y + t * t * p2.y
-        )
     }
 }
