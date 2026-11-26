@@ -10,7 +10,7 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(RouteCornerSmoothing.alongPt(mapWidth: 400, mapHeight: 200), 2.0, accuracy: 1e-9)
     }
 
-    func testSharpCornerGetsBezierSamples() {
+    func testResampleMovingAverageRoundsCornerAndKeepsEnds() {
         let points: [CGPoint] = [
             CGPoint(x: 0, y: 0),
             CGPoint(x: 40, y: 0),
@@ -18,61 +18,29 @@ final class RouteCornerSmoothingTests: XCTestCase {
         ]
         let smoothed = RouteCornerSmoothing.smoothPoints(points, maxAlong: 8)
         XCTAssertGreaterThan(smoothed.count, points.count)
+        XCTAssertEqual(smoothed.first!.x, 0, accuracy: 1e-6)
+        XCTAssertEqual(smoothed.first!.y, 0, accuracy: 1e-6)
+        XCTAssertEqual(smoothed.last!.x, 40, accuracy: 1e-6)
+        XCTAssertEqual(smoothed.last!.y, 40, accuracy: 1e-6)
+        // Apex (40,0) must be pulled inward by the ±t_m window.
+        XCTAssertFalse(smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.5 })
+    }
+
+    func testColinearStaysOnLine() {
+        let points: [CGPoint] = (0..<8).map { CGPoint(x: CGFloat($0) * 10, y: 0) }
+        let smoothed = RouteCornerSmoothing.smoothPoints(points, maxAlong: 4)
         XCTAssertEqual(smoothed.first, points.first)
         XCTAssertEqual(smoothed.last, points.last)
-        XCTAssertFalse(smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.05 })
+        for p in smoothed {
+            XCTAssertEqual(p.y, 0, accuracy: 1e-6)
+        }
     }
 
-    func testEveryInteriorBendGetsFilletIncludingShallow() {
-        // ~15° bend must still fillet (30° gate removed).
-        let points: [CGPoint] = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 50, y: 0),
-            CGPoint(x: 100, y: 13)
-        ]
-        let tip = points[1]
-        let smoothed = RouteCornerSmoothing.smoothPoints(points, maxAlong: 10)
-        XCTAssertFalse(smoothed.contains { hypot($0.x - tip.x, $0.y - tip.y) < 0.2 })
-        XCTAssertGreaterThan(smoothed.count, points.count)
-    }
-
-    func testColinearUnchanged() {
-        let points: [CGPoint] = (0..<8).map { CGPoint(x: CGFloat($0) * 10, y: 0) }
-        XCTAssertEqual(RouteCornerSmoothing.smoothPoints(points, maxAlong: 4).count, points.count)
-    }
-
-    /// Tipzoom ~(237,62) upper ~50° bend (idx 231) must fillet under fit L.
-    func testUpperBendNearCurve3IsFilleted() {
+    func testGamajiSmoothDiffersFromRawAtFitL() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
         }
-        XCTAssertGreaterThanOrEqual(coords.count, 233)
-        let apex = coords[231]
-        let region = HikingMapRegion.fitting(
-            coordinates: coords,
-            viewSize: CGSize(width: 390, height: 420)
-        )
-        let smoothed = RouteCornerSmoothing.smoothCoordinates(
-            coords,
-            fittingRegion: region,
-            mapWidth: 390,
-            mapHeight: 420
-        )
-        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-        let minCut = smoothed.map {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.02, "idx 231 must be cut")
-    }
-
-    func testGamajiCurve3TipCutAtFitL() {
-        let fixture = UITestMountainPathFixtures.gamajicheon
-        let coords: [CLLocationCoordinate2D] = fixture.points.map {
-            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
-        }
-        let apex = coords[232]
-        XCTAssertEqual(apex.latitude, 37.64200773, accuracy: 1e-7)
         let region = HikingMapRegion.fitting(
             coordinates: coords,
             viewSize: CGSize(width: 390, height: 420)
@@ -83,46 +51,48 @@ final class RouteCornerSmoothingTests: XCTestCase {
             boundsWidth: 390
         )
         let L = RouteCornerSmoothing.alongPt(mapWidth: 390, mapHeight: 420)
-        XCTAssertEqual(L, 3.9, accuracy: 1e-9)
         let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
-        XCTAssertGreaterThan(tM, 0)
+        XCTAssertGreaterThan(tM, 5) // fit ≈ 15m class
         let smoothed = RouteCornerSmoothing.smoothCoordinates(
             coords,
             metersPerPoint: mpp,
             alongPt: L
         )
-        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-        let minCut = smoothed.map {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.02)
         XCTAssertEqual(smoothed.first!.latitude, coords.first!.latitude, accuracy: 1e-9)
         XCTAssertEqual(smoothed.last!.latitude, coords.last!.latitude, accuracy: 1e-9)
-        XCTAssertGreaterThan(smoothed.count, coords.count)
+        XCTAssertNotEqual(smoothed.count, coords.count)
+        // Mid interior of raw must move after MA.
+        let mid = coords[coords.count / 2]
+        let midLoc = CLLocation(latitude: mid.latitude, longitude: mid.longitude)
+        let nearest = smoothed.map {
+            midLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+        }.min() ?? 0
+        // Resampled path still tracks route; check a sharp apex moves.
+        let apex = coords[232]
+        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
+        let apexCut = smoothed.map {
+            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+        }.min() ?? 0
+        XCTAssertGreaterThan(apexCut, 0.5, "MA must pull sharp tip inward")
+        XCTAssertLessThan(nearest, 30)
     }
 
-    func testGamajiFilletThenStretchLocal() {
+    func testStretchOnSmoothedKeepsLayers() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
         }
-        let apex = coords[232]
-        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
         let region = HikingMapRegion.fitting(
             coordinates: coords,
             viewSize: CGSize(width: 390, height: 420)
         )
-        let filleted = RouteCornerSmoothing.smoothCoordinates(
+        let smoothed = RouteCornerSmoothing.smoothCoordinates(
             coords,
             fittingRegion: region,
             mapWidth: 390,
             mapHeight: 420
         )
-        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
-        let all = (stretches.isEmpty ? [filleted] : stretches).flatMap { $0 }
-        let minCut = all.map {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.02)
+        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: smoothed)
+        XCTAssertFalse(stretches.isEmpty || stretches.allSatisfy { $0.count < 2 })
     }
 }

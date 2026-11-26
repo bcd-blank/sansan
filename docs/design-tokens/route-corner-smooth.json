@@ -1,20 +1,10 @@
 {
   "id": "route.cornerSmooth",
-  "sourceOfTruth": "iPhone",
-  "unit": {
-    "ios": "pt",
-    "android": "dp",
-    "mapping": "1:1; L=0.01\u00d7min(mapW,mapH); t_m=L\u00d7metersPerPoint"
-  },
-  "revision": "v2i-L-1pct-all-verts-bezier16",
-  "notes": "L=1% of shorter map side (390\u21923.9pt). Every interior vertex (skip angle\u22480 only). t=min(t_m, seg\u00d70.45); A\u2192P\u2192B quadratic Bezier control=P, 16 samples. Fit-open + idle zoom \u0394\u22650.5.",
-  "alongFractionOfMinSide": 0.01,
-  "maxAlongSegmentFraction": 0.45,
-  "arcSamples": 16,
-  "colinearEpsilonDegrees": 0.5,
-  "method": "quadraticBezier",
-  "methodNotes": "A=P\u2212t\u00b7prevDir, B=P+t\u00b7nextDir. No \u226530\u00b0 gate.",
+  "revision": "v2j-resample-ma9",
   "mapMinSideFraction": 0.01,
-  "minTurnDegrees": 0,
-  "zoomRecalcDelta": 0.5
+  "resampleStepFractionOfTm": 0.25,
+  "movingAverageWindow": 9,
+  "method": "uniformResampleMovingAverage",
+  "zoomRecalcDelta": 0.5,
+  "notes": "t_m=0.01×min(mapW,mapH)×mpp. Resample h=t_m/4. MA window=2·t_m/h+1=9 uniform; ends shrink symmetrically; start/end fixed. Render-only — never distance/GPS. stretch-split on smoothed."
 }

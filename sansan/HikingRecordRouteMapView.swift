@@ -523,7 +523,7 @@ struct HikingRecordRouteMapView: View {
         )
         filletMetersPerPoint = mpp
         lastFilletZoomLevel = zoom
-        // Continuous dual-rail first (raw — never fillet on MainActor; all-vert Bezier is heavy).
+        // Continuous dual-rail first (raw — never smooth on MainActor).
         if cachedRouteRailLayers.isEmpty {
             cachedRouteRailLayers = [
                 RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
@@ -531,15 +531,15 @@ struct HikingRecordRouteMapView: View {
             ]
         }
         Task(priority: .userInitiated) {
-            // Fillet the full path first (all-vert Bezier). Stretch cuts from RAW only —
-            // hits on densified fillet is O(n²) catastrophic; map cut verts onto filleted.
-            let filleted = RouteCornerSmoothing.smoothCoordinates(coords, metersPerPoint: mpp, alongPt: L)
+            // Resample+MA smooth. Stretch cut indices from RAW (O(n²) on densified
+            // tipzoom resample is catastrophic); slice smoothed so drawn verts are MA.
+            let smoothed = RouteCornerSmoothing.smoothCoordinates(coords, metersPerPoint: mpp, alongPt: L)
             let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
             let list: [[CLLocationCoordinate2D]]
             if rawStretches.count <= 1 {
-                list = [filleted]
+                list = [smoothed]
             } else {
-                list = Self.sliceFilleted(filleted, byRawStretches: rawStretches)
+                list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
             }
             var layers: [RouteRailLayer] = []
             layers.reserveCapacity(max(list.count, 1) * 2)
@@ -549,8 +549,8 @@ struct HikingRecordRouteMapView: View {
             }
             if layers.isEmpty {
                 layers = [
-                    RouteRailLayer(id: "c0", coordinates: filleted, isCasing: true),
-                    RouteRailLayer(id: "f0", coordinates: filleted, isCasing: false)
+                    RouteRailLayer(id: "c0", coordinates: smoothed, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: smoothed, isCasing: false)
                 ]
             }
             await MainActor.run {
@@ -575,22 +575,7 @@ struct HikingRecordRouteMapView: View {
                 let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
-                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
-                for c in filleted {
-                    let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
-                    if d <= 40 {
-                        dump += String(format: "fillet,%.6f,%.6f,%.2f\n", c.latitude, c.longitude, d)
-                    }
-                }
-                for layer in layers where !layer.isCasing {
-                    dump += "layer,\(layer.id)\n"
-                    for c in layer.coordinates {
-                        let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
-                        if d <= 40 {
-                            dump += String(format: "pt,%.6f,%.6f,%.2f\n", c.latitude, c.longitude, d)
-                        }
-                    }
-                }
+                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(smoothed.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=resampleMA args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
                 if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                     try? dump.write(
                         to: dir.appendingPathComponent("corner-smooth-debug.txt"),
@@ -603,17 +588,17 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
-    /// Map raw stretch endpoints onto the densified fillet polyline (geo-nearest).
-    private static func sliceFilleted(
-        _ filleted: [CLLocationCoordinate2D],
+    /// Map raw stretch endpoints onto the smoothed polyline (geo-nearest).
+    private static func sliceSmoothed(
+        _ smoothed: [CLLocationCoordinate2D],
         byRawStretches rawStretches: [[CLLocationCoordinate2D]]
     ) -> [[CLLocationCoordinate2D]] {
-        guard filleted.count >= 2, !rawStretches.isEmpty else { return [filleted] }
+        guard smoothed.count >= 2, !rawStretches.isEmpty else { return [smoothed] }
         func nearestIndex(to coord: CLLocationCoordinate2D) -> Int {
             let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
             var best = 0
             var bestD = Double.greatestFiniteMagnitude
-            for (i, c) in filleted.enumerated() {
+            for (i, c) in smoothed.enumerated() {
                 let d = loc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
                 if d < bestD {
                     bestD = d
@@ -629,10 +614,10 @@ struct HikingRecordRouteMapView: View {
             var i1 = nearestIndex(to: last)
             if i1 < i0 { swap(&i0, &i1) }
             if i1 > i0 {
-                out.append(Array(filleted[i0...i1]))
+                out.append(Array(smoothed[i0...i1]))
             }
         }
-        return out.isEmpty ? [filleted] : out
+        return out.isEmpty ? [smoothed] : out
     }
 
     @MapContentBuilder

@@ -3,23 +3,18 @@ import CoreLocation
 import Foundation
 import MapKit
 
-/// Render-only corner fillets. Stored GPS / distance unchanged.
+/// Render-only path smoothing. Stored GPS / distance must never use this array.
 /// Tokens: `docs/design-tokens/route-corner-smooth.json`.
 ///
-/// Spec (JW final, both OS):
-/// - L = 0.01 × min(mapW, mapH) pt (e.g. 390 → 3.9pt).
-/// - t_m = L × metersPerPoint(camera, lat).
-/// - Every interior P(i) (skip only angle≈0): t=min(t_m, prev×0.45, next×0.45);
-///   A=P−t·prevDir, B=P+t·nextDir; A→P→B quadratic Bezier (control=P), 16 samples.
-/// - Outside verts/segments unchanged → stretch-split + casing/fill 9/5/0.9 round.
+/// Spec (JW replace — no per-vert Bezier):
+/// 1. Input = screen draw verts. t_m = 0.01×min(mapW,mapH)×mpp (fit ≈ 15m).
+/// 2. Uniform resample by cumulative distance, step h = t_m/4 (linear).
+/// 3. Moving average over ±t_m window (W = 2·t_m/h+1 = 9, uniform). Ends shrink
+///    symmetrically; start/end fixed.
+/// 4. Callers stretch-split the smoothed path; casing/fill 9/5/0.9 round.
 enum RouteCornerSmoothing {
     static let alongFractionOfMinSide: CGFloat = 0.01
-    static let maxAlongSegmentFraction: CGFloat = 0.45
-    static let arcSamples: Int = 16
-    /// Near-colinear skip (degrees). Not a “min turn” gate — only ≈0.
-    static let colinearEpsilonDegrees: CGFloat = 0.5
     /// Canvas/pt fallback when no map size is known.
-    static let filletRadiusPt: CGFloat = 4
     static let maxFilletAlongPt: CGFloat = 4
 
     static var isEnabled: Bool {
@@ -60,43 +55,25 @@ enum RouteCornerSmoothing {
         log2(360.0 / max(longitudeDelta, 1e-12))
     }
 
-    private struct FilletPlan {
-        let apexIndex: Int
-        let apex: CGPoint
-        let t1: CGPoint
-        let t2: CGPoint
-        let along: CGFloat
-    }
-
-    /// Pt-space path (canvas / snapshot). `maxAlong` already in the same unit as `points`.
+    /// Pt-space path (canvas / snapshot). `maxAlong` = t_m in the same unit as `points`.
     static func smoothPoints(
         _ points: [CGPoint],
-        radius: CGFloat = filletRadiusPt,
-        maxAlong: CGFloat = maxFilletAlongPt,
-        minTurnDegrees: CGFloat = colinearEpsilonDegrees,
-        samples: Int = arcSamples,
-        segmentFraction: CGFloat = maxAlongSegmentFraction
+        maxAlong: CGFloat
     ) -> [CGPoint] {
-        guard isEnabled, points.count >= 3 else { return points }
-        _ = radius
-        let frac = max(0.05, min(0.49, segmentFraction))
-        return planAndEmit(
-            points: points,
-            maxAlong: maxAlong,
-            minTurnDegrees: minTurnDegrees,
-            frac: frac,
-            samples: samples
-        )
+        guard isEnabled, points.count >= 2, maxAlong > 1e-9 else { return points }
+        let h = maxAlong / 4
+        guard h > 1e-12 else { return points }
+        let resampled = resampleUniform(points, step: h)
+        return movingAverage(resampled, halfWindow: 4)
     }
 
     /// Map path — pass camera `metersPerPoint` and screen `alongPt` (= L).
     static func smoothCoordinates(
         _ coordinates: [CLLocationCoordinate2D],
         metersPerPoint: CLLocationDistance,
-        alongPt: CGFloat,
-        samples: Int = arcSamples
+        alongPt: CGFloat
     ) -> [CLLocationCoordinate2D] {
-        guard isEnabled, coordinates.count >= 3 else { return coordinates }
+        guard isEnabled, coordinates.count >= 2 else { return coordinates }
         let tMeters = maxAlongMeters(metersPerPoint: metersPerPoint, alongPt: alongPt)
         guard tMeters > 1e-9 else { return coordinates }
         let mapPoints = coordinates.map { MKMapPoint($0) }
@@ -105,13 +82,7 @@ enum RouteCornerSmoothing {
         guard metersPerMapPoint > 1e-12 else { return coordinates }
         let maxAlong = CGFloat(tMeters / metersPerMapPoint)
         let raw = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
-        let smoothed = planAndEmit(
-            points: raw,
-            maxAlong: maxAlong,
-            minTurnDegrees: colinearEpsilonDegrees,
-            frac: maxAlongSegmentFraction,
-            samples: samples
-        )
+        let smoothed = smoothPoints(raw, maxAlong: maxAlong)
         return smoothed.map {
             MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
         }
@@ -122,8 +93,7 @@ enum RouteCornerSmoothing {
         _ coordinates: [CLLocationCoordinate2D],
         fittingRegion: MKCoordinateRegion,
         mapWidth: CGFloat,
-        mapHeight: CGFloat,
-        samples: Int = arcSamples
+        mapHeight: CGFloat
     ) -> [CLLocationCoordinate2D] {
         let mpp = metersPerPoint(
             latitude: fittingRegion.center.latitude,
@@ -133,139 +103,75 @@ enum RouteCornerSmoothing {
         return smoothCoordinates(
             coordinates,
             metersPerPoint: mpp,
-            alongPt: alongPt(mapWidth: mapWidth, mapHeight: mapHeight),
-            samples: samples
+            alongPt: alongPt(mapWidth: mapWidth, mapHeight: mapHeight)
         )
     }
 
-    // MARK: - Plan + emit
+    // MARK: - Resample + moving average
 
-    private static func planAndEmit(
-        points: [CGPoint],
-        maxAlong: CGFloat,
-        minTurnDegrees: CGFloat,
-        frac: CGFloat,
-        samples: Int
-    ) -> [CGPoint] {
-        let plans = planEveryInteriorVertex(
-            points: points,
-            maxAlong: maxAlong,
-            minTurnDegrees: minTurnDegrees,
-            frac: frac
-        )
-        guard !plans.isEmpty else { return points }
-
-        var planAtApex: [Int: FilletPlan] = [:]
-        for plan in plans {
-            planAtApex[plan.apexIndex] = plan
+    /// Linear interpolate along cumulative distance at uniform step `h`.
+    private static func resampleUniform(_ points: [CGPoint], step h: CGFloat) -> [CGPoint] {
+        guard points.count >= 2, h > 1e-12 else { return points }
+        var cum: [CGFloat] = [0]
+        cum.reserveCapacity(points.count)
+        for i in 1..<points.count {
+            let d = hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+            cum.append(cum[i - 1] + d)
         }
+        let total = cum[cum.count - 1]
+        guard total > 1e-9 else { return [points[0], points[points.count - 1]] }
 
         var out: [CGPoint] = []
-        out.reserveCapacity(points.count + plans.count * samples)
+        out.reserveCapacity(Int(total / h) + 2)
         out.append(points[0])
-        for i in 1..<(points.count - 1) {
-            if let plan = planAtApex[i] {
-                if let prev = out.last, hypot(prev.x - plan.t1.x, prev.y - plan.t1.y) < 1e-9 {
-                    out.removeLast()
-                }
-                out.append(plan.t1)
-                let n = max(2, samples)
-                let p = plan.apex
-                for s in 1..<n {
-                    let u = CGFloat(s) / CGFloat(n)
-                    let omu = 1 - u
-                    out.append(
-                        CGPoint(
-                            x: omu * omu * plan.t1.x + 2 * omu * u * p.x + u * u * plan.t2.x,
-                            y: omu * omu * plan.t1.y + 2 * omu * u * p.y + u * u * plan.t2.y
-                        )
-                    )
-                }
-                out.append(plan.t2)
-            } else {
-                out.append(points[i])
+        var target = h
+        var seg = 0
+        while target < total - 1e-9 {
+            while seg < cum.count - 2, cum[seg + 1] < target {
+                seg += 1
             }
+            let d0 = cum[seg]
+            let d1 = cum[seg + 1]
+            let span = d1 - d0
+            let t = span > 1e-12 ? (target - d0) / span : 0
+            let a = points[seg]
+            let b = points[seg + 1]
+            out.append(CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+            target += h
         }
-        out.append(points[points.count - 1])
-        return out.count >= 2 ? out : points
+        let last = points[points.count - 1]
+        if let prev = out.last, hypot(prev.x - last.x, prev.y - last.y) > 1e-9 {
+            out.append(last)
+        } else if out.isEmpty {
+            out.append(last)
+        } else {
+            out[out.count - 1] = last
+        }
+        return out
     }
 
-    /// Every interior vertex except near-colinear (angle≈0).
-    private static func planEveryInteriorVertex(
-        points: [CGPoint],
-        maxAlong: CGFloat,
-        minTurnDegrees: CGFloat,
-        frac: CGFloat
-    ) -> [FilletPlan] {
-        let last = points.count - 1
-        var turns = Array(repeating: CGFloat(0), count: points.count)
-        var seeds: [Int] = []
-        for i in 1..<last {
-            let t = adjacentTurnDegrees(points, i)
-            turns[i] = t
-            if t + 1e-6 > minTurnDegrees {
-                seeds.append(i)
+    /// Uniform moving average. `halfWindow` = 4 → W = 9 = 2·t_m/h+1.
+    /// Near ends the window shrinks symmetrically; index 0 and last stay fixed.
+    private static func movingAverage(_ points: [CGPoint], halfWindow r: Int) -> [CGPoint] {
+        let n = points.count
+        guard n >= 2, r > 0 else { return points }
+        var out = Array(repeating: CGPoint.zero, count: n)
+        out[0] = points[0]
+        out[n - 1] = points[n - 1]
+        if n == 2 { return out }
+        for i in 1..<(n - 1) {
+            let left = min(r, i, n - 1 - i)
+            let lo = i - left
+            let hi = i + left
+            var sx: CGFloat = 0
+            var sy: CGFloat = 0
+            let count = hi - lo + 1
+            for j in lo...hi {
+                sx += points[j].x
+                sy += points[j].y
             }
+            out[i] = CGPoint(x: sx / CGFloat(count), y: sy / CGFloat(count))
         }
-        guard !seeds.isEmpty else { return [] }
-
-        var reservedAlong = Array(repeating: CGFloat(0), count: points.count)
-        var accepted: [FilletPlan] = []
-        // Stronger turns first so shared edges reserve fairly.
-        for i in seeds.sorted(by: { turns[$0] > turns[$1] }) {
-            guard let plan = makeAdjacentPlan(
-                points: points,
-                apex: i,
-                maxAlong: maxAlong,
-                frac: frac,
-                reservedAlong: reservedAlong
-            ) else { continue }
-            accepted.append(plan)
-            reservedAlong[i - 1] += plan.along
-            reservedAlong[i] += plan.along
-        }
-        accepted.sort { $0.apexIndex < $1.apexIndex }
-        return accepted
-    }
-
-    private static func makeAdjacentPlan(
-        points: [CGPoint],
-        apex i: Int,
-        maxAlong: CGFloat,
-        frac: CGFloat,
-        reservedAlong: [CGFloat]
-    ) -> FilletPlan? {
-        let a = points[i - 1], b = points[i], c = points[i + 1]
-        let prevLen = hypot(b.x - a.x, b.y - a.y)
-        let nextLen = hypot(c.x - b.x, c.y - b.y)
-        guard prevLen > 1e-9, nextLen > 1e-9 else { return nil }
-
-        let inboundFree = prevLen - reservedAlong[i - 1]
-        let outboundFree = nextLen - reservedAlong[i]
-        guard inboundFree > 0, outboundFree > 0 else { return nil }
-
-        // t = min(t_m, prev×0.45, next×0.45)
-        let along = min(maxAlong, inboundFree * frac, outboundFree * frac)
-        guard along > 1e-9 else { return nil }
-
-        // prevDir = (P−A)/|P−A|, nextDir = (C−P)/|C−P|
-        // A' = P − t·prevDir, B' = P + t·nextDir
-        let prevDirX = (b.x - a.x) / prevLen
-        let prevDirY = (b.y - a.y) / prevLen
-        let nextDirX = (c.x - b.x) / nextLen
-        let nextDirY = (c.y - b.y) / nextLen
-        let t1 = CGPoint(x: b.x - prevDirX * along, y: b.y - prevDirY * along)
-        let t2 = CGPoint(x: b.x + nextDirX * along, y: b.y + nextDirY * along)
-        return FilletPlan(apexIndex: i, apex: b, t1: t1, t2: t2, along: along)
-    }
-
-    private static func adjacentTurnDegrees(_ points: [CGPoint], _ i: Int) -> CGFloat {
-        let a = points[i - 1], b = points[i], c = points[i + 1]
-        let abx = b.x - a.x, aby = b.y - a.y
-        let bcx = c.x - b.x, bcy = c.y - b.y
-        let abLen = hypot(abx, aby), bcLen = hypot(bcx, bcy)
-        guard abLen > 1e-9, bcLen > 1e-9 else { return 0 }
-        let dot = max(-1, min(1, (abx * bcx + aby * bcy) / (abLen * bcLen)))
-        return acos(dot) * 180 / .pi
+        return out
     }
 }

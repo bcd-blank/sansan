@@ -926,13 +926,11 @@ enum HikingRouteSnapshotGenerator {
         // Time order: stretch₁ casing→fill, stretch₂ casing→fill… so later white cuts earlier green.
         // Mid-loop cuts keep joins far from the geometric cross; overlap hides round-cap seams.
         // Cuts must use drawPoints indices (cleaned) so stretch slices match stroke geometry.
-        // Corner fillets on the full path first (L = 1% of shorter canvas side),
-        // then stretch-split — avoids overlap stretches re-drawing a raw sharp tip.
+        // Resample+MA smooth (t_m = 1% of shorter canvas side), then stretch-split.
         let canvasAlong = RouteCornerSmoothing.alongFractionOfMinSide
             * min(CGFloat(cgContext.width), CGFloat(cgContext.height))
         let filletedAll = RouteCornerSmoothing.smoothPoints(
             drawPoints,
-            radius: canvasAlong,
             maxAlong: canvasAlong
         )
         let drawHits = RouteSelfCrossing.hits(
