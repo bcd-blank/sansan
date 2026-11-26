@@ -61,17 +61,21 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let minCut = smoothed.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.15)
-        XCTAssertLessThan(minCut, 1.6)
+        XCTAssertGreaterThan(minCut, 0.08)
+        XCTAssertLessThan(minCut, 0.7, "12pt along ≈0.5m; tip cut must stay local")
 
-        // Non-filleted verts far from any ≥30° tip stay bit-identical in position.
-        // Spot-check a gentle mid-leg vertex (idx 224 turn≈0.8°).
-        let gentle = coords[224]
-        let gLoc = CLLocation(latitude: gentle.latitude, longitude: gentle.longitude)
-        let nearest = smoothed.map {
-            gLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? 999
-        XCTAssertLessThan(nearest, 0.15)
+        // Outside ~12pt of tip, smoothed verts hug raw path (no leg rewrite).
+        var maxApproachDev: CLLocationDistance = 0
+        for s in smoothed {
+            let sLoc = CLLocation(latitude: s.latitude, longitude: s.longitude)
+            let dApex = sLoc.distance(from: apexLoc)
+            if dApex < 1.5 || dApex > 35 { continue }
+            let d = coords.map {
+                sLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+            }.min() ?? 999
+            maxApproachDev = max(maxApproachDev, d)
+        }
+        XCTAssertLessThan(maxApproachDev, 0.55, "approach rewrite; maxDev=\(maxApproachDev)")
     }
 
     func testGamajiFilletThenStretchLocal() {
@@ -87,7 +91,7 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let minCut = all.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.15)
-        XCTAssertLessThan(minCut, 1.6)
+        XCTAssertGreaterThan(minCut, 0.08)
+        XCTAssertLessThan(minCut, 0.7)
     }
 }

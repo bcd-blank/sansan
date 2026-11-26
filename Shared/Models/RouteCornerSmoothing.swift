@@ -19,11 +19,15 @@ enum RouteCornerSmoothing {
     static let maxFilletAlongPt: CGFloat = 12
     static let maxAlongSegmentFraction: CGFloat = 0.4
     static let arcSamples: Int = 5
-    /// Map-space t cap ≡ 12pt at curve3 tipzoom SoT.
-    static let maxFilletAlongMeters: CLLocationDistance = 1.2
+    /// Map-space t cap = 12pt at curve3 tipzoom.
+    /// Phone tipzoom: span≈32m over ≈1200pt map height → 12pt≈0.32m (not 1.2m).
+    static let maxFilletAlongMeters: CLLocationDistance = 0.35
     /// Kept for token/canvas callers; arc radius is derived from along × tan(θ/2).
     static let filletRadiusPt: CGFloat = 12
-    static let filletRadiusMeters: CLLocationDistance = 1.2
+    static let filletRadiusMeters: CLLocationDistance = 0.35
+    /// Adjacent turn on legs shorter than this is unstable GPS noise (wrong ≥30°).
+    /// Must still leave real curve3 legs (≈6.4m) eligible.
+    static let minIncidentLegMeters: CLLocationDistance = 5.5
 
     static var isEnabled: Bool {
         let args = ProcessInfo.processInfo.arguments
@@ -54,12 +58,14 @@ enum RouteCornerSmoothing {
         guard isEnabled, points.count >= 3 else { return points }
         _ = radius // arc r derived from along × tan(θ/2); kept for call-site compat
         let frac = max(0.05, min(0.49, segmentFraction))
+        // pt-space: min leg ≈ maxAlong (unstable micro-edges)
         return planAndEmit(
             points: points,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
             frac: frac,
-            samples: samples
+            samples: samples,
+            minLeg: maxAlong
         )
     }
 
@@ -77,13 +83,15 @@ enum RouteCornerSmoothing {
         let metersPerMapPoint = MKMetersPerMapPointAtLatitude(midLat)
         guard metersPerMapPoint > 1e-12 else { return coordinates }
         let maxAlong = CGFloat(maxAlongMeters / metersPerMapPoint)
+        let minLeg = CGFloat(minIncidentLegMeters / metersPerMapPoint)
         let raw = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
         let smoothed = planAndEmit(
             points: raw,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
             frac: maxAlongSegmentFraction,
-            samples: samples
+            samples: samples,
+            minLeg: minLeg
         )
         return smoothed.map {
             MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
@@ -97,13 +105,15 @@ enum RouteCornerSmoothing {
         maxAlong: CGFloat,
         minTurnDegrees: CGFloat,
         frac: CGFloat,
-        samples: Int
+        samples: Int,
+        minLeg: CGFloat
     ) -> [CGPoint] {
         let plans = planEverySharpVertex(
             points: points,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
-            frac: frac
+            frac: frac,
+            minLeg: minLeg
         )
         guard !plans.isEmpty else { return points }
 
@@ -142,16 +152,25 @@ enum RouteCornerSmoothing {
     }
 
     /// Every adjacent ≥30° vertex — no cluster / local-max / protrusion filter.
+    /// Turn uses the two incident segment directions (correct adjacent measure).
+    /// Legs shorter than minLeg are GPS micro-edges: angle is unstable and must
+    /// not count as a ≥30° corner (wrong measurement on densified noise).
     private static func planEverySharpVertex(
         points: [CGPoint],
         maxAlong: CGFloat,
         minTurnDegrees: CGFloat,
-        frac: CGFloat
+        frac: CGFloat,
+        minLeg: CGFloat
     ) -> [FilletPlan] {
         let last = points.count - 1
         var turns = Array(repeating: CGFloat(0), count: points.count)
         var seeds: [Int] = []
+        let legMin = max(minLeg, maxAlong, 1e-3)
         for i in 1..<last {
+            let a = points[i - 1], b = points[i], c = points[i + 1]
+            let prevLen = hypot(b.x - a.x, b.y - a.y)
+            let nextLen = hypot(c.x - b.x, c.y - b.y)
+            guard prevLen + 1e-6 >= legMin, nextLen + 1e-6 >= legMin else { continue }
             let t = adjacentTurnDegrees(points, i)
             turns[i] = t
             if t + 1e-3 >= minTurnDegrees {

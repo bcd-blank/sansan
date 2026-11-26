@@ -4,17 +4,18 @@
   "unit": {
     "ios": "pt",
     "android": "dp",
-    "mapping": "1:1 at same logical width; map t-cap maxFilletAlongMeters ≡ 12pt at curve3 tipzoom"
+    "mapping": "1:1; map t-cap = 12pt at curve3 tipzoom ≈0.35m (span≈32m / ≈1100pt)"
   },
-  "revision": "v2g-spec-each-ge30-adjacent-arc",
-  "notes": "Team-lead final. Same draw verts. Each adjacent ≥30°: t=min(12pt, seg×0.4) on incident segments; A→P→B → one circularArc. Then stretch-split + casing/fill 9/5/0.9. No simplify/resample/cluster/local-max.",
+  "revision": "v2g-spec-along-12pt-true",
+  "notes": "Each adjacent ≥30° (legs ≥ maxAlong): t=min(12pt≈0.35m, seg×0.4); circularArc on incident segments. Prior 1.2m t-cap was ~3× too large on tipzoom.",
   "minTurnDegrees": 30,
   "maxFilletAlongPt": 12,
   "maxAlongSegmentFraction": 0.4,
   "arcSamples": 5,
-  "maxFilletAlongMeters": 1.2,
+  "maxFilletAlongMeters": 0.35,
+  "minIncidentLegMeters": 5.5,
   "filletRadiusPt": 12,
-  "filletRadiusMeters": 1.2,
+  "filletRadiusMeters": 0.35,
   "method": "circularArcAdjacent",
-  "methodNotes": "t=min(maxAlong, 0.4·prev, 0.4·next); r=t·tan(θ/2); replace apex with arc samples on two incident segments only."
+  "methodNotes": "t=min(maxAlong, 0.4·prev, 0.4·next); r=t·tan(θ/2). Both incident legs must be ≥ minIncidentLegMeters or turn angle is treated as unstable GPS noise (not a real ≥30°)."
 }
