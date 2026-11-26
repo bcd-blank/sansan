@@ -740,13 +740,12 @@ enum HikingRouteSnapshotGenerator {
 
         switch appearance {
         case .standard:
-            // Detail snapshot: continuous green + white→green overlay only at true crosses
-            // (same rule as live detail map / share summary).
+            // Detail snapshot = live detail tokens (JW): casing 9 / fill 5 / white 0.9 layer alpha.
             drawContinuousRouteWithCrossOverlays(
                 points: points,
                 contentScale: contentScale,
-                casingWidth: detailRouteLineWidth * 1.6 * contentScale,
-                fillWidth: detailRouteLineWidth * contentScale,
+                casingWidth: 9 * contentScale,
+                fillWidth: 5 * contentScale,
                 white: UIColor.white.withAlphaComponent(0.9),
                 green: UIColor(red: 0.12, green: 0.72, blue: 0.45, alpha: 1),
                 shadow: false,
@@ -923,19 +922,41 @@ enum HikingRouteSnapshotGenerator {
         }
         #endif
 
-        // Base: one continuous path stroke (Android pathOf + drawPath×2).
-        // Catmull-Rom→cubic so CG joins aren't 톱니·조각; still a single Path.stroke.
-        let strokePoints = Self.simplifiedBridgePoints(
-            drawPoints,
-            epsilon: max(0.55 * contentScale, 0.4)
+        // JW: few long stretches between self-crosses (not per-GPS-segment, not short bridges).
+        // Time order: stretch₁ casing→fill, stretch₂ casing→fill… so later white cuts earlier green.
+        // Mid-loop cuts keep joins far from the geometric cross; overlap hides round-cap seams.
+        // Cuts must use drawPoints indices (cleaned) so stretch slices match stroke geometry.
+        let drawHits = RouteSelfCrossing.hits(
+            in: drawPoints,
+            minLoopLength: minLoopLength,
+            minSeparationEdges: 2,
+            minCrossSin: 0.20,
+            minProximitySin: 0.28,
+            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+            proximityDistance: casingWidth * 0.65
         )
-        let full = Self.continuousStrokePath(strokePoints)
-        full.lineCapStyle = .round
-        full.lineJoinStyle = .round
-        strokeWhiteThenGreen(full, withShadow: shadow)
-        // JW: continuous dual-layer only — no short-bridge overlays (round casing caps
-        // on per-hit polylines looked dashed). Cross hit logs kept above for diagnostics.
-        _ = (hits, bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
+        let stretchList = RouteSelfCrossing.chronologicalPointStretches(
+            points: drawPoints,
+            hits: drawHits,
+            overlapVertices: 4
+        )
+        #if DEBUG
+        NSLog(
+            "[km-label] route stretches=%d drawHits=%d rawHits=%d",
+            stretchList.count, drawHits.count, hits.count
+        )
+        #endif
+        _ = (bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
+        for (index, stretch) in stretchList.enumerated() {
+            let strokePoints = Self.simplifiedBridgePoints(
+                stretch,
+                epsilon: max(0.55 * contentScale, 0.4)
+            )
+            let path = Self.continuousStrokePath(strokePoints)
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            strokeWhiteThenGreen(path, withShadow: shadow && index == 0)
+        }
     }
 
     /// Single continuous stroke path: Catmull-Rom → cubics (no polyline join teeth).

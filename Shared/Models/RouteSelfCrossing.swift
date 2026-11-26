@@ -5,6 +5,8 @@ import CoreGraphics
 /// True self-crossing hits on a route polyline (later edge over earlier).
 enum RouteSelfCrossing {
     struct Hit: Equatable {
+        /// Index of the earlier edge start vertex (`points[earlierEdge] → points[earlierEdge+1]`).
+        let earlierEdge: Int
         /// Index of the later edge start vertex (`points[laterEdge] → points[laterEdge+1]`).
         let laterEdge: Int
         /// Parametric position on the later edge in `(0, 1)`.
@@ -14,6 +16,7 @@ enum RouteSelfCrossing {
     }
 
     struct CoordinateHit {
+        let earlierEdge: Int
         let laterEdge: Int
         let u: Double
         /// Interpolated map coordinate on the later edge.
@@ -83,7 +86,7 @@ enum RouteSelfCrossing {
                     points[j], points[j + 1],
                     minCrossSin: minCrossSin
                 ) {
-                    crosses.append(Hit(laterEdge: j, u: hit.u, point: hit.point))
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: hit.u, point: hit.point))
                     continue
                 }
                 // Near-parallel proximity: ribbons visually cross even without a strict X.
@@ -95,7 +98,7 @@ enum RouteSelfCrossing {
                     points[j], points[j + 1],
                     maxDistance: proximityDistance
                    ) {
-                    crosses.append(Hit(laterEdge: j, u: near.u, point: near.point))
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: near.u, point: near.point))
                 }
             }
         }
@@ -155,12 +158,118 @@ enum RouteSelfCrossing {
             }
             let coord = interpolate(cleanedCoords[j], cleanedCoords[j + 1], t: Double(hit.u))
             return CoordinateHit(
+                earlierEdge: hit.earlierEdge,
                 laterEdge: j,
                 u: Double(hit.u),
                 coordinate: coord,
                 overlayCoordinates: overlay
             )
         }
+    }
+
+    /// Few long chronological stretches split **between** self-crosses (JW).
+    /// Cut sits mid-loop so the join is far from the geometric cross; adjacent
+    /// stretches share `overlapVertices` so the next round casing cap does not
+    /// leave a visible seam on the previous fill. Empty hits → one continuous stretch.
+    static func chronologicalPointStretches(
+        points: [CGPoint],
+        hits: [Hit],
+        overlapVertices: Int = 4
+    ) -> [[CGPoint]] {
+        guard points.count >= 2 else { return [] }
+        let last = points.count - 1
+        let cuts = stretchCutIndices(hits: hits, lastIndex: last)
+        return sliceStretches(points: points, cuts: cuts, overlapVertices: overlapVertices)
+    }
+
+    /// Map-coordinate stretches for live MapPolyline / thumbnail (same cut rule).
+    static func chronologicalCoordinateStretches(
+        in coordinates: [CLLocationCoordinate2D],
+        minLoopMeters: CLLocationDistance = 60,
+        overlapVertices: Int = 4
+    ) -> [[CLLocationCoordinate2D]] {
+        guard coordinates.count >= 2 else { return [] }
+        guard coordinates.count >= 5 else { return [coordinates] }
+
+        let mapPoints = coordinates.map { MKMapPoint($0) }
+        let rawPoints = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
+        let points = cleanedPoints(rawPoints)
+        let cleanedCoords: [CLLocationCoordinate2D] = points.map {
+            MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
+        }
+        guard cleanedCoords.count >= 2 else { return [coordinates] }
+
+        let mid = cleanedCoords[cleanedCoords.count / 2]
+        let meterPerMapPoint = MKMetersPerMapPointAtLatitude(mid.latitude)
+        let minLoop = CGFloat(minLoopMeters / max(meterPerMapPoint, 1e-9))
+        let dedupe = CGFloat(12 / max(meterPerMapPoint, 1e-9))
+        let proximity = CGFloat(8 / max(meterPerMapPoint, 1e-9))
+        let hits = hits(
+            in: points,
+            minLoopLength: minLoop,
+            minSeparationEdges: 2,
+            minCrossSin: 0.18,
+            minProximitySin: 0.28,
+            dedupeDistance: dedupe,
+            proximityDistance: proximity
+        )
+        let pointStretches = chronologicalPointStretches(
+            points: points,
+            hits: hits,
+            overlapVertices: overlapVertices
+        )
+        return pointStretches.map { stretch in
+            stretch.map { MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate }
+        }
+    }
+
+    /// Mid-loop cut indices (exclusive of 0 / last). Far from both earlier and later edges.
+    static func stretchCutIndices(hits: [Hit], lastIndex: Int) -> [Int] {
+        guard lastIndex >= 2 else { return [] }
+        var cuts: [Int] = []
+        for hit in hits {
+            let span = hit.laterEdge - hit.earlierEdge
+            // Need room on both sides of the mid cut so the join stays away from the cross.
+            guard span >= 8 else { continue }
+            let mid = hit.earlierEdge + span / 2
+            let minAway = max(3, span / 4)
+            guard mid - hit.earlierEdge >= minAway,
+                  hit.laterEdge - mid >= minAway,
+                  mid > 0,
+                  mid < lastIndex
+            else { continue }
+            cuts.append(mid)
+        }
+        cuts.sort()
+        var unique: [Int] = []
+        for cut in cuts {
+            if let last = unique.last, abs(cut - last) < 4 { continue }
+            unique.append(cut)
+        }
+        return unique
+    }
+
+    private static func sliceStretches(
+        points: [CGPoint],
+        cuts: [Int],
+        overlapVertices: Int
+    ) -> [[CGPoint]] {
+        let last = points.count - 1
+        guard !cuts.isEmpty else { return [points] }
+        let overlap = max(1, overlapVertices)
+        let boundaries = [0] + cuts + [last]
+        var stretches: [[CGPoint]] = []
+        for index in 0..<(boundaries.count - 1) {
+            var start = boundaries[index]
+            let end = boundaries[index + 1]
+            if index > 0 {
+                // Overlap into previous stretch so next round casing cap sits on shared path.
+                start = max(0, start - overlap)
+            }
+            guard end > start else { continue }
+            stretches.append(Array(points[start...end]))
+        }
+        return stretches.filter { $0.count >= 2 }
     }
 
     /// Local later-ribbon bridge: `backPad` before + `forwardPad` after the cross.

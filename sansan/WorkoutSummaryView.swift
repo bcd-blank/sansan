@@ -46,6 +46,11 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    private var summaryRouteStretches: [[CLLocationCoordinate2D]] {
+        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: routeCoordinates)
+        return stretches.isEmpty ? [routeCoordinates] : stretches
+    }
+
     private var stationaryLocation: CLLocationCoordinate2D? {
         HikingSessionMetrics.stationaryCoordinate(from: session.points)
     }
@@ -112,8 +117,18 @@ struct WorkoutSummaryView: View {
                     viewSize: CGSize(width: 340, height: 220)
                 )
             )) {
-                MapPolyline(coordinates: routeCoordinates)
-                    .stroke(Self.routeColor, lineWidth: 5)
+                ForEach(Array(summaryRouteStretches.enumerated()), id: \.offset) { _, stretch in
+                    MapPolyline(coordinates: stretch)
+                        .stroke(
+                            Color.white.opacity(0.9),
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+                        )
+                    MapPolyline(coordinates: stretch)
+                        .stroke(
+                            Self.routeColor,
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                        )
+                }
 
                 if let start = routeCoordinates.first {
                     Annotation("시작", coordinate: start) {

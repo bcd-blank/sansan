@@ -451,21 +451,29 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
+    /// Few long stretches between self-crosses (JW): later stretch casing cuts earlier fill.
+    private var routeStretches: [[CLLocationCoordinate2D]] {
+        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: routeCoordinates)
+        return stretches.isEmpty ? [routeCoordinates] : stretches
+    }
+
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        // One continuous geometry × two layers (JW): white casing UNDER green fill.
-        // No per-segment overlays — round casing caps on short bridges looked dashed.
-        // Casing uses stroke color alpha via a single continuous path (no stacked beads).
-        MapPolyline(coordinates: routeCoordinates)
-            .stroke(
-                Color.white.opacity(0.9),
-                style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-            )
-        MapPolyline(coordinates: routeCoordinates)
-            .stroke(
-                Color(red: 0.12, green: 0.72, blue: 0.45),
-                style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-            )
+        // Stretch-split (not per-GPS-segment): mid-loop cuts between self-crosses only.
+        // Draw order per stretch: casing → fill; later stretch paints over earlier at crosses.
+        // Tokens: white×9 @0.9 under green×5; round join/cap. No short-bridge overlays.
+        ForEach(Array(routeStretches.enumerated()), id: \.offset) { _, stretch in
+            MapPolyline(coordinates: stretch)
+                .stroke(
+                    Color.white.opacity(0.9),
+                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+                )
+            MapPolyline(coordinates: stretch)
+                .stroke(
+                    Color(red: 0.12, green: 0.72, blue: 0.45),
+                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                )
+        }
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
