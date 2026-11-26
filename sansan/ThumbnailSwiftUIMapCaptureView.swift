@@ -24,9 +24,15 @@ struct ThumbnailSwiftUIMapCaptureView: View {
     }
 
     private var routeRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
-        let filleted = RouteCornerSmoothing.smoothCoordinates(coordinates)
-        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
-        let list = stretches.isEmpty ? [filleted] : stretches
+        // Render zoom/size = thumbnail fit camera.
+        let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: viewSize)
+        let filleted = RouteCornerSmoothing.smoothCoordinates(
+            coordinates,
+            fittingRegion: region,
+            mapWidth: viewSize.width,
+            mapHeight: viewSize.height
+        )
+        let list = [filleted]
         var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
         for (index, stretch) in list.enumerated() where stretch.count >= 2 {
             layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))

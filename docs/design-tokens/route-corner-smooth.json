@@ -4,18 +4,17 @@
   "unit": {
     "ios": "pt",
     "android": "dp",
-    "mapping": "1:1; map t-cap = 12pt at curve3 tipzoom ≈0.35m (span≈32m / ≈1100pt)"
+    "mapping": "1:1; L=0.01\u00d7min(mapW,mapH); t_m=L\u00d7metersPerPoint"
   },
-  "revision": "v2g-spec-along-12pt-true",
-  "notes": "Each adjacent ≥30° (legs ≥ maxAlong): t=min(12pt≈0.35m, seg×0.4); circularArc on incident segments. Prior 1.2m t-cap was ~3× too large on tipzoom.",
-  "minTurnDegrees": 30,
-  "maxFilletAlongPt": 12,
-  "maxAlongSegmentFraction": 0.4,
-  "arcSamples": 5,
-  "maxFilletAlongMeters": 0.35,
-  "minIncidentLegMeters": 5.5,
-  "filletRadiusPt": 12,
-  "filletRadiusMeters": 0.35,
-  "method": "circularArcAdjacent",
-  "methodNotes": "t=min(maxAlong, 0.4·prev, 0.4·next); r=t·tan(θ/2). Both incident legs must be ≥ minIncidentLegMeters or turn angle is treated as unstable GPS noise (not a real ≥30°)."
+  "revision": "v2i-L-1pct-all-verts-bezier16",
+  "notes": "L=1% of shorter map side (390\u21923.9pt). Every interior vertex (skip angle\u22480 only). t=min(t_m, seg\u00d70.45); A\u2192P\u2192B quadratic Bezier control=P, 16 samples. Fit-open + idle zoom \u0394\u22650.5.",
+  "alongFractionOfMinSide": 0.01,
+  "maxAlongSegmentFraction": 0.45,
+  "arcSamples": 16,
+  "colinearEpsilonDegrees": 0.5,
+  "method": "quadraticBezier",
+  "methodNotes": "A=P\u2212t\u00b7prevDir, B=P+t\u00b7nextDir. No \u226530\u00b0 gate.",
+  "mapMinSideFraction": 0.01,
+  "minTurnDegrees": 0,
+  "zoomRecalcDelta": 0.5
 }

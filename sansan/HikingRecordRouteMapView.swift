@@ -214,11 +214,31 @@ struct HikingRecordRouteMapView: View {
             .mapStyle(.standard(elevation: .flat))
             .onMapCameraChange(frequency: .onEnd) { context in
                 scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: context.camera.distance)
+                let rect = liveVisibleMapRect(proxy: proxy) ?? context.rect
+                let zoom = RouteCornerSmoothing.zoomLevel(
+                    longitudeDelta: context.region.span.longitudeDelta
+                )
+                // Fit-open computes once; idle zoom Δ≥0.5 → recompute fillet, replace line only.
+                if let last = lastFilletZoomLevel, abs(zoom - last) >= 0.5 {
+                    let mpp = RouteCornerSmoothing.metersPerPoint(
+                        latitude: context.region.center.latitude,
+                        visibleMapRect: rect,
+                        boundsWidth: mapWidth
+                    )
+                    rebuildRouteRailLayers(metersPerPoint: mpp, region: context.region)
+                } else if lastFilletZoomLevel == nil {
+                    let mpp = RouteCornerSmoothing.metersPerPoint(
+                        latitude: context.region.center.latitude,
+                        visibleMapRect: rect,
+                        boundsWidth: mapWidth
+                    )
+                    rebuildRouteRailLayers(metersPerPoint: mpp, region: context.region)
+                }
                 guard isLiveRegistryActive else { return }
                 LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
                     recordID: recordID,
                     region: context.region,
-                    visibleMapRect: liveVisibleMapRect(proxy: proxy) ?? context.rect
+                    visibleMapRect: rect
                 )
             }
             .onChange(of: kilometerMarkerPlacements) { _, _ in
@@ -284,9 +304,11 @@ struct HikingRecordRouteMapView: View {
 #if DEBUG
     private func applyUITestMapCaptureAction(_ action: UITestMapCaptureHooks.Action) {
         guard routeCoordinates.count >= 2 else { return }
+        let region: MKCoordinateRegion?
         switch action {
         case .fit:
             fitRouteInView(animated: false)
+            return
         case .zoomIn:
             // Zoom near the end so mid/late km stay on-screen (TC-01: 3·4km on ~4.28km).
             // Span tighter than route-fit so zoom± captures actually differ (가마지천 fit ≈ 0.006).
@@ -296,43 +318,40 @@ struct HikingRecordRouteMapView: View {
             )
             let center = routeCoordinates[centerIndex]
             let span = MKCoordinateSpan(latitudeDelta: 0.0028, longitudeDelta: 0.0028)
-            mapPosition = .region(MKCoordinateRegion(center: center, span: span))
+            region = MKCoordinateRegion(center: center, span: span)
         case .zoomRouteStraight:
-            mapPosition = .region(
-                MKCoordinateRegion(
-                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.straight,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
-                )
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.straight,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
             )
         case .zoomRouteCurve:
-            mapPosition = .region(
-                MKCoordinateRegion(
-                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
-                )
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
             )
         case .zoomRouteCurve2:
-            mapPosition = .region(
-                MKCoordinateRegion(
-                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve2,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
-                )
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve2,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
             )
         case .zoomRouteCurve3:
-            mapPosition = .region(
-                MKCoordinateRegion(
-                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve3,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
-                )
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve3,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
             )
         case .zoomRouteCross:
             // Crossing SoT: pond junction @ 4× casing crop zoom (span 0.0002875).
-            mapPosition = .region(
-                MKCoordinateRegion(
-                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.cross,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
-                )
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.cross,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
             )
+        }
+        guard let region else { return }
+        mapPosition = .region(region)
+        // Programmatic camera often skips onMapCameraChange — rebuild when zoom Δ≥0.5.
+        let zoom = RouteCornerSmoothing.zoomLevel(longitudeDelta: region.span.longitudeDelta)
+        if lastFilletZoomLevel == nil || abs(zoom - (lastFilletZoomLevel ?? zoom)) >= 0.5 {
+            rebuildRouteRailLayers(region: region)
         }
     }
 #endif
@@ -472,6 +491,9 @@ struct HikingRecordRouteMapView: View {
 
     /// Cached stretch rails — avoid O(n²) self-cross on every Map body pass.
     @State private var cachedRouteRailLayers: [RouteRailLayer] = []
+    /// Screen m/pt used for the last fillet rebuild (fit-open + idle zoom Δ≥0.5).
+    @State private var filletMetersPerPoint: CLLocationDistance = 0
+    @State private var lastFilletZoomLevel: Double?
 
     private struct RouteRailLayer: Identifiable {
         let id: String
@@ -479,27 +501,46 @@ struct HikingRecordRouteMapView: View {
         let isCasing: Bool
     }
 
-    private func rebuildRouteRailLayers() {
+    private func currentFilletMetersPerPoint(region: MKCoordinateRegion? = nil) -> CLLocationDistance {
+        let reg = region ?? fittingRegion
+        return RouteCornerSmoothing.metersPerPoint(
+            latitude: reg.center.latitude,
+            visibleMapRect: reg.mapRect,
+            boundsWidth: mapWidth
+        )
+    }
+
+    private func rebuildRouteRailLayers(metersPerPoint: CLLocationDistance? = nil, region: MKCoordinateRegion? = nil) {
         let coords = routeCoordinates
         guard coords.count >= 2 else {
             cachedRouteRailLayers = []
             return
         }
-        // Continuous dual-rail first; replace with stretch rails off the main render path.
+        let mpp = metersPerPoint ?? currentFilletMetersPerPoint(region: region)
+        let L = RouteCornerSmoothing.alongPt(mapWidth: mapWidth, mapHeight: mapHeight)
+        let zoom = RouteCornerSmoothing.zoomLevel(
+            longitudeDelta: (region ?? fittingRegion).span.longitudeDelta
+        )
+        filletMetersPerPoint = mpp
+        lastFilletZoomLevel = zoom
+        // Continuous dual-rail first (raw — never fillet on MainActor; all-vert Bezier is heavy).
         if cachedRouteRailLayers.isEmpty {
-            let warm = RouteCornerSmoothing.smoothCoordinates(coords)
             cachedRouteRailLayers = [
-                RouteRailLayer(id: "c0", coordinates: warm, isCasing: true),
-                RouteRailLayer(id: "f0", coordinates: warm, isCasing: false)
+                RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
             ]
         }
         Task(priority: .userInitiated) {
-            // Fillet the full path first, then stretch-split. Per-stretch fillets left
-            // sharp tips in overlap regions (curve3): one stretch cut the tip, the
-            // overlapping neighbor still drew the raw apex on top.
-            let filleted = RouteCornerSmoothing.smoothCoordinates(coords)
-            let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
-            let list = stretches.isEmpty ? [filleted] : stretches
+            // Fillet the full path first (all-vert Bezier). Stretch cuts from RAW only —
+            // hits on densified fillet is O(n²) catastrophic; map cut verts onto filleted.
+            let filleted = RouteCornerSmoothing.smoothCoordinates(coords, metersPerPoint: mpp, alongPt: L)
+            let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
+            let list: [[CLLocationCoordinate2D]]
+            if rawStretches.count <= 1 {
+                list = [filleted]
+            } else {
+                list = Self.sliceFilleted(filleted, byRawStretches: rawStretches)
+            }
             var layers: [RouteRailLayer] = []
             layers.reserveCapacity(max(list.count, 1) * 2)
             for (index, stretch) in list.enumerated() where stretch.count >= 2 {
@@ -530,11 +571,11 @@ struct HikingRecordRouteMapView: View {
                     }
                 }
                 let pts = layers.first?.coordinates.count ?? 0
-                // Prove before/after share the same input vertex array (SHARP = fillet off only).
                 let rawN = coords.count
                 let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
-                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
+                let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
+                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
                 for c in filleted {
                     let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
                     if d <= 40 {
@@ -560,6 +601,38 @@ struct HikingRecordRouteMapView: View {
 #endif
             }
         }
+    }
+
+    /// Map raw stretch endpoints onto the densified fillet polyline (geo-nearest).
+    private static func sliceFilleted(
+        _ filleted: [CLLocationCoordinate2D],
+        byRawStretches rawStretches: [[CLLocationCoordinate2D]]
+    ) -> [[CLLocationCoordinate2D]] {
+        guard filleted.count >= 2, !rawStretches.isEmpty else { return [filleted] }
+        func nearestIndex(to coord: CLLocationCoordinate2D) -> Int {
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            var best = 0
+            var bestD = Double.greatestFiniteMagnitude
+            for (i, c) in filleted.enumerated() {
+                let d = loc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                if d < bestD {
+                    bestD = d
+                    best = i
+                }
+            }
+            return best
+        }
+        var out: [[CLLocationCoordinate2D]] = []
+        for stretch in rawStretches {
+            guard let first = stretch.first, let last = stretch.last else { continue }
+            var i0 = nearestIndex(to: first)
+            var i1 = nearestIndex(to: last)
+            if i1 < i0 { swap(&i0, &i1) }
+            if i1 > i0 {
+                out.append(Array(filleted[i0...i1]))
+            }
+        }
+        return out.isEmpty ? [filleted] : out
     }
 
     @MapContentBuilder
@@ -932,6 +1005,8 @@ struct HikingRecordRouteMapView: View {
         } else {
             mapPosition = .region(fittingRegion)
         }
+        // Detail fit-open: compute 12pt fillet at the fit camera.
+        rebuildRouteRailLayers(region: fittingRegion)
         guard isLiveRegistryActive else { return }
         LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
             recordID: recordID,

@@ -47,9 +47,18 @@ struct WorkoutSummaryView: View {
     }
 
     private var summaryRouteRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
-        let filleted = RouteCornerSmoothing.smoothCoordinates(routeCoordinates)
-        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
-        let list = stretches.isEmpty ? [filleted] : stretches
+        // Render zoom/size = summary map fit (340×220).
+        let region = HikingMapRegion.fitting(
+            coordinates: routeCoordinates,
+            viewSize: CGSize(width: 340, height: 220)
+        )
+        let filleted = RouteCornerSmoothing.smoothCoordinates(
+            routeCoordinates,
+            fittingRegion: region,
+            mapWidth: 340,
+            mapHeight: 220
+        )
+        let list = [filleted]
         var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
         for (index, stretch) in list.enumerated() where stretch.count >= 2 {
             layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
