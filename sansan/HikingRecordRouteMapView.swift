@@ -530,8 +530,11 @@ struct HikingRecordRouteMapView: View {
                     }
                 }
                 let pts = layers.first?.coordinates.count ?? 0
-                var dump = "enabled=\(enabled) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
-                // Continuous fillet (pre-stretch) near apex — proves arc samples exist.
+                // Prove before/after share the same input vertex array (SHARP = fillet off only).
+                let rawN = coords.count
+                let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
+                let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
+                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
                 for c in filleted {
                     let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
                     if d <= 40 {

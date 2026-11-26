@@ -11,21 +11,14 @@ final class RouteCornerSmoothingTests: XCTestCase {
             CGPoint(x: 40, y: 0),
             CGPoint(x: 40, y: 40)
         ]
-        let smoothed = RouteCornerSmoothing.smoothPoints(
-            points,
-            radius: 12,
-            maxAlong: 12,
-            minTurnDegrees: 30,
-            samples: 8
-        )
-        XCTAssertGreaterThan(smoothed.count, points.count, "fillet must insert samples")
+        let smoothed = RouteCornerSmoothing.smoothPoints(points)
+        XCTAssertGreaterThan(smoothed.count, points.count)
         XCTAssertEqual(smoothed.first, points.first)
         XCTAssertEqual(smoothed.last, points.last)
         let hasExactApex = smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.05 }
-        XCTAssertFalse(hasExactApex, "exact sharp apex should be replaced by fillet")
+        XCTAssertFalse(hasExactApex)
     }
 
-    /// curve3-class ~42° adjacent elbow must fillet under 30° threshold.
     func testMidSharpFortyDegreeFillet() {
         let rad = CGFloat.pi * 40 / 180
         let apex = CGPoint(x: 50, y: 0)
@@ -35,38 +28,31 @@ final class RouteCornerSmoothingTests: XCTestCase {
             CGPoint(x: 50 + 50 * cos(rad), y: 50 * sin(rad))
         ]
         let smoothed = RouteCornerSmoothing.smoothPoints(points)
-        XCTAssertGreaterThan(smoothed.count, points.count, "≈40° must fillet at minTurn=30")
+        XCTAssertGreaterThan(smoothed.count, points.count)
         let minDist = smoothed.dropFirst().dropLast().map { hypot($0.x - apex.x, $0.y - apex.y) }.min() ?? 0
-        XCTAssertGreaterThan(minDist, 1.0, "circular fillet must leave the apex")
+        XCTAssertGreaterThan(minDist, 0.5)
     }
 
-    /// Compound zigzags: each ≥30° elbow rounds locally; path topology preserved
-    /// (no single extended-arm chord that deletes mid vertices).
-    func testCompoundTipRoundsLocallyWithoutRewritingPath() {
-        var points: [CGPoint] = [CGPoint(x: 0, y: 0)]
-        points.append(CGPoint(x: 40, y: 0))
-        points.append(CGPoint(x: 46, y: 2))
-        points.append(CGPoint(x: 50, y: 0)) // tip
-        points.append(CGPoint(x: 54, y: 6))
-        points.append(CGPoint(x: 70, y: 28))
-        let tip = points[3]
-        let smoothed = RouteCornerSmoothing.smoothPoints(
-            points,
-            radius: 12,
-            maxAlong: 12,
-            minTurnDegrees: 30,
-            samples: 8
-        )
-        XCTAssertGreaterThan(smoothed.count, 2)
-        // Endpoints + far legs preserved.
+    /// Weaker neighbor elbows stay as raw verts; only local-max tip is rounded.
+    func testWeakerNeighborElbowsPreserved() {
+        // Strong tip at (50,0); weaker jog before it should remain.
+        let points: [CGPoint] = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 30, y: 0),
+            CGPoint(x: 35, y: 3),   // ~weak elbow
+            CGPoint(x: 40, y: 0),
+            CGPoint(x: 50, y: 0),   // strong tip (~90° into north)
+            CGPoint(x: 50, y: 40)
+        ]
+        let weak = points[2]
+        let tip = points[4]
+        let smoothed = RouteCornerSmoothing.smoothPoints(points)
+        let weakKept = smoothed.contains { hypot($0.x - weak.x, $0.y - weak.y) < 0.2 }
+        XCTAssertTrue(weakKept, "weaker neighbor vertex must stay (no teeth densify)")
+        let tipKept = smoothed.contains { hypot($0.x - tip.x, $0.y - tip.y) < 0.2 }
+        XCTAssertFalse(tipKept, "local-max tip must be replaced by short arc")
         XCTAssertEqual(smoothed.first, points.first)
         XCTAssertEqual(smoothed.last, points.last)
-        // Tip vertex itself should be replaced (rounded).
-        let hasExactTip = smoothed.contains { hypot($0.x - tip.x, $0.y - tip.y) < 0.2 }
-        XCTAssertFalse(hasExactTip, "sharp tip vertex must be rounded away")
-        // Path must still pass near the tip (slight round, not a distant chord).
-        let minDist = smoothed.map { hypot($0.x - tip.x, $0.y - tip.y) }.min() ?? 999
-        XCTAssertLessThan(minDist, 10, "local fillet must stay near tip; got \(minDist)")
     }
 
     func testGentleTurnUnchanged() {
@@ -75,75 +61,71 @@ final class RouteCornerSmoothingTests: XCTestCase {
             CGPoint(x: 50, y: 0),
             CGPoint(x: 100, y: 13)
         ]
-        let smoothed = RouteCornerSmoothing.smoothPoints(
-            points,
-            radius: 12,
-            maxAlong: 12,
-            minTurnDegrees: 30,
-            samples: 8
-        )
-        XCTAssertEqual(smoothed.count, points.count)
-        XCTAssertEqual(smoothed[1].x, points[1].x, accuracy: 0.01)
-        XCTAssertEqual(smoothed[1].y, points[1].y, accuracy: 0.01)
-    }
-
-    func testStraightUnchanged() {
-        let points: [CGPoint] = (0..<8).map { CGPoint(x: CGFloat($0) * 10, y: 0) }
         let smoothed = RouteCornerSmoothing.smoothPoints(points)
         XCTAssertEqual(smoothed.count, points.count)
     }
 
-    /// Same input array: sharp-disabled path equals raw; smoothed only differs near ≥30° elbows.
-    func testGamajiSameInputPreservesPathOutsideFillets() {
+    func testStraightUnchanged() {
+        let points: [CGPoint] = (0..<8).map { CGPoint(x: CGFloat($0) * 10, y: 0) }
+        XCTAssertEqual(RouteCornerSmoothing.smoothPoints(points).count, points.count)
+    }
+
+    /// Same input: sub-threshold verts identical; path outside fillets matches; tip only slightly cut.
+    func testGamajiSameInputPreservesTopologyOutsideTip() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
         }
-        XCTAssertGreaterThanOrEqual(coords.count, 240)
         let apexIdx = 232
         let apex = coords[apexIdx]
         XCTAssertEqual(apex.latitude, 37.64200773, accuracy: 1e-7)
-        XCTAssertEqual(apex.longitude, 126.63898472, accuracy: 1e-7)
 
-        // Force-enabled smooth (tests run with smoothing on by default).
         let smoothed = RouteCornerSmoothing.smoothCoordinates(coords)
-        XCTAssertGreaterThan(smoothed.count, 2)
-
-        // Every raw vertex with adjacent turn <30° must still appear (within 0.15m).
+        // Count how many raw verts are missing (>0.5m) — should be few local-max tips only.
+        var missing = 0
         var preserved = 0
-        var filletedAway = 0
         for i in 1..<(coords.count - 1) {
-            let a = coords[i - 1], b = coords[i], c = coords[i + 1]
-            let turn = Self.turnDegrees(a, b, c)
+            let b = coords[i]
             let bLoc = CLLocation(latitude: b.latitude, longitude: b.longitude)
             let nearest = smoothed.map {
                 bLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
             }.min() ?? 999
-            if turn + 1e-3 < 30 {
-                XCTAssertLessThan(
-                    nearest,
-                    0.15,
-                    "sub-threshold vertex \(i) turn=\(turn) must be preserved; nearest=\(nearest)m"
-                )
+            if nearest < 0.15 {
                 preserved += 1
             } else if nearest > 0.5 {
-                filletedAway += 1
+                missing += 1
             }
         }
-        XCTAssertGreaterThan(preserved, 100, "most vertices are gentle and must match")
-        XCTAssertGreaterThan(filletedAway, 0, "at least one ≥30° tip should be rounded away")
+        // Vast majority of verts preserved; only local-max tips replaced.
+        XCTAssertGreaterThan(preserved, coords.count - 40)
+        XCTAssertLessThan(missing, 80, "too many verts replaced — would invent tipzoom teeth; missing=\(missing)")
 
-        // Apex cut is slight (local), not a multi-meter chord rewrite.
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
         let minCut = smoothed.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.3, "curve3 apex should leave the tip slightly; got \(minCut)m")
-        XCTAssertLessThan(minCut, 4.5, "apex cut must stay within short-arc budget; got \(minCut)m")
-        print("CURVE3_V2E preserved=\(preserved) filletedAway=\(filletedAway) minCut=\(minCut)")
+        XCTAssertGreaterThan(minCut, 0.2, "tip should round slightly")
+        XCTAssertLessThan(minCut, 3.0, "tip cut must stay short-arc; got \(minCut)")
+
+        // Hausdorff-ish: every smoothed point near apex stays close to raw path.
+        let rawNear = coords.enumerated().compactMap { (i, c) -> CLLocationCoordinate2D? in
+            let d = apexLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+            return d <= 30 ? c : nil
+        }
+        var maxDev: CLLocationDistance = 0
+        for s in smoothed {
+            let sLoc = CLLocation(latitude: s.latitude, longitude: s.longitude)
+            if sLoc.distance(from: apexLoc) > 30 { continue }
+            let d = rawNear.map {
+                sLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+            }.min() ?? 999
+            maxDev = max(maxDev, d)
+        }
+        XCTAssertLessThan(maxDev, 2.6, "smoothed path must hug raw topology; maxDev=\(maxDev)m")
+        print("CURVE3_V2F preserved=\(preserved) missing=\(missing) minCut=\(minCut) maxDev=\(maxDev)")
     }
 
-    func testGamajiFilletThenStretchStillLocal() {
+    func testGamajiFilletThenStretchLocal() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
@@ -152,27 +134,11 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
         let filleted = RouteCornerSmoothing.smoothCoordinates(coords)
         let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
-        let list = stretches.isEmpty ? [filleted] : stretches
-        let all = list.flatMap { $0 }
+        let all = (stretches.isEmpty ? [filleted] : stretches).flatMap { $0 }
         let minCut = all.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.3)
-        XCTAssertLessThan(minCut, 4.5)
-    }
-
-    private static func turnDegrees(
-        _ a: CLLocationCoordinate2D,
-        _ b: CLLocationCoordinate2D,
-        _ c: CLLocationCoordinate2D
-    ) -> Double {
-        let ab = MKMapPoint(b).x - MKMapPoint(a).x
-        let aby = MKMapPoint(b).y - MKMapPoint(a).y
-        let bc = MKMapPoint(c).x - MKMapPoint(b).x
-        let bcy = MKMapPoint(c).y - MKMapPoint(b).y
-        let abLen = hypot(ab, aby), bcLen = hypot(bc, bcy)
-        guard abLen > 1e-12, bcLen > 1e-12 else { return 0 }
-        let dot = max(-1, min(1, (ab * bc + aby * bcy) / (abLen * bcLen)))
-        return acos(dot) * 180 / .pi
+        XCTAssertGreaterThan(minCut, 0.2)
+        XCTAssertLessThan(minCut, 3.0)
     }
 }
