@@ -4,21 +4,17 @@
   "unit": {
     "ios": "pt",
     "android": "dp",
-    "mapping": "1:1 at same logical width; map uses filletRadiusMeters / maxFilletAlongMeters (pt caps are NOT meters)"
+    "mapping": "1:1 at same logical width; map t-cap maxFilletAlongMeters ≡ 12pt at curve3 tipzoom"
   },
-  "revision": "v2g-jw-tipzoom-single-short-arc",
-  "notes": "Render-only. Same GPS input as sharp. One geometric tip per wide component; short adjacent circularArc (1.2m). Tip must protrude ≥2.5m on an 18m chord (filters micro-jogs). v2f tipzoom FAIL: second local-max ~26m up-leg filleted → green bulge/new elbows.",
+  "revision": "v2g-spec-each-ge30-adjacent-arc",
+  "notes": "Team-lead final. Same draw verts. Each adjacent ≥30°: t=min(12pt, seg×0.4) on incident segments; A→P→B → one circularArc. Then stretch-split + casing/fill 9/5/0.9. No simplify/resample/cluster/local-max.",
   "minTurnDegrees": 30,
-  "filletRadiusPt": 12,
   "maxFilletAlongPt": 12,
-  "maxAlongSegmentFraction": 0.35,
+  "maxAlongSegmentFraction": 0.4,
   "arcSamples": 5,
-  "filletRadiusMeters": 1.2,
   "maxFilletAlongMeters": 1.2,
-  "localMaxGapMeters": 45,
-  "localMaxGapPt": 90,
-  "minTipProtrusionMeters": 2.5,
-  "tipChordSpanMeters": 18,
-  "method": "circularArcLocalMaxAdjacent",
-  "methodNotes": "Seeds = adjacent ≥30° AND tip protrusion ≥ minTipProtrusion on tipChordSpan. Components within localMaxGap; fillet geometric tip only on two incident segments. Tipzoom gate: outside tip disk, before|after green overlap ≥0.99 on tipzoom PNGs."
+  "filletRadiusPt": 12,
+  "filletRadiusMeters": 1.2,
+  "method": "circularArcAdjacent",
+  "methodNotes": "t=min(maxAlong, 0.4·prev, 0.4·next); r=t·tan(θ/2); replace apex with arc samples on two incident segments only."
 }

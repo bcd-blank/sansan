@@ -3,31 +3,27 @@ import CoreLocation
 import Foundation
 import MapKit
 
-/// Render-only sharp-corner fillets (JW). Stored GPS / distance unchanged.
+/// Render-only sharp-corner fillets (team lead final). Stored GPS / distance unchanged.
 /// Tokens: `docs/design-tokens/route-corner-smooth.json` (== `route_corner_smooth.json`).
 ///
-/// **v2g:** Same input as sharp. One short circularArc per tip **component**
-/// (wide gap so tipzoom neighborhood has a single tip). Apex only on the two
-/// incident segments; every other vertex untouched. v2f still filleted a second
-/// ≥30° local-max (~26m up-leg) inside tipzoom → green bulge / new elbows.
+/// Fixed spec (both OS):
+/// 1) Same draw vertex array — no simplify / resample / cluster.
+/// 2) Each P(i) with adjacent turn ≥30°: A·B on the two incident segments at
+///    t=min(12pt, seg×0.4); replace A→P→B with one circular arc. All other
+///    verts/segments unchanged.
+/// 3) Then existing stretch-split + chronological casing/fill 9/5/0.9 round.
+///
+/// Map path uses maxFilletAlongMeters (=12pt at curve3 tipzoom) as the t cap.
 enum RouteCornerSmoothing {
     static let minTurnDegrees: CGFloat = 30
-    static let filletRadiusPt: CGFloat = 12
     static let maxFilletAlongPt: CGFloat = 12
-    static let maxAlongSegmentFraction: CGFloat = 0.35
+    static let maxAlongSegmentFraction: CGFloat = 0.4
     static let arcSamples: Int = 5
-    /// Short enough that tipzoom legs outside ~12pt stay pixel-identical.
-    static let filletRadiusMeters: CLLocationDistance = 1.2
+    /// Map-space t cap ≡ 12pt at curve3 tipzoom SoT.
     static let maxFilletAlongMeters: CLLocationDistance = 1.2
-    /// Wide window: one geometric tip per compound corner (curve3 228…232).
-    static let localMaxGapMeters: CLLocationDistance = 45
-    static let localMaxGapPt: CGFloat = 90
-    /// Tip must protrude this far from the ±span chord (filters GPS micro-jogs
-    /// that only become visible after densifying an arc).
-    static let minTipProtrusionMeters: CLLocationDistance = 2.5
-    static let tipChordSpanMeters: CLLocationDistance = 18
-    static let minTipProtrusionPt: CGFloat = 8
-    static let tipChordSpanPt: CGFloat = 36
+    /// Kept for token/canvas callers; arc radius is derived from along × tan(θ/2).
+    static let filletRadiusPt: CGFloat = 12
+    static let filletRadiusMeters: CLLocationDistance = 1.2
 
     static var isEnabled: Bool {
         let args = ProcessInfo.processInfo.arguments
@@ -38,7 +34,6 @@ enum RouteCornerSmoothing {
 
     private struct FilletPlan {
         let apexIndex: Int
-        let turnDegrees: CGFloat
         let t1: CGPoint
         let t2: CGPoint
         let center: CGPoint
@@ -54,53 +49,41 @@ enum RouteCornerSmoothing {
         maxAlong: CGFloat = maxFilletAlongPt,
         minTurnDegrees: CGFloat = minTurnDegrees,
         samples: Int = arcSamples,
-        segmentFraction: CGFloat = maxAlongSegmentFraction,
-        localMaxGap: CGFloat = localMaxGapPt,
-        minTipProtrusion: CGFloat = minTipProtrusionPt,
-        tipChordSpan: CGFloat = tipChordSpanPt
+        segmentFraction: CGFloat = maxAlongSegmentFraction
     ) -> [CGPoint] {
         guard isEnabled, points.count >= 3 else { return points }
+        _ = radius // arc r derived from along × tan(θ/2); kept for call-site compat
         let frac = max(0.05, min(0.49, segmentFraction))
         return planAndEmit(
             points: points,
-            radius: radius,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
             frac: frac,
-            samples: samples,
-            localMaxGap: localMaxGap,
-            minTipProtrusion: minTipProtrusion,
-            tipChordSpan: tipChordSpan
+            samples: samples
         )
     }
 
     static func smoothCoordinates(
         _ coordinates: [CLLocationCoordinate2D],
         radiusMeters: CLLocationDistance = filletRadiusMeters,
+        maxAlongMeters: CLLocationDistance = maxFilletAlongMeters,
         minTurnDegrees: CGFloat = minTurnDegrees,
         samples: Int = arcSamples
     ) -> [CLLocationCoordinate2D] {
+        _ = radiusMeters
         guard isEnabled, coordinates.count >= 3 else { return coordinates }
         let mapPoints = coordinates.map { MKMapPoint($0) }
         let midLat = coordinates[coordinates.count / 2].latitude
         let metersPerMapPoint = MKMetersPerMapPointAtLatitude(midLat)
         guard metersPerMapPoint > 1e-12 else { return coordinates }
-        let radius = CGFloat(radiusMeters / metersPerMapPoint)
-        let maxAlong = CGFloat(maxFilletAlongMeters / metersPerMapPoint)
-        let localMaxGap = CGFloat(localMaxGapMeters / metersPerMapPoint)
-        let minTip = CGFloat(minTipProtrusionMeters / metersPerMapPoint)
-        let tipSpan = CGFloat(tipChordSpanMeters / metersPerMapPoint)
+        let maxAlong = CGFloat(maxAlongMeters / metersPerMapPoint)
         let raw = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
         let smoothed = planAndEmit(
             points: raw,
-            radius: radius,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
             frac: maxAlongSegmentFraction,
-            samples: samples,
-            localMaxGap: localMaxGap,
-            minTipProtrusion: minTip,
-            tipChordSpan: tipSpan
+            samples: samples
         )
         return smoothed.map {
             MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
@@ -111,24 +94,16 @@ enum RouteCornerSmoothing {
 
     private static func planAndEmit(
         points: [CGPoint],
-        radius: CGFloat,
         maxAlong: CGFloat,
         minTurnDegrees: CGFloat,
         frac: CGFloat,
-        samples: Int,
-        localMaxGap: CGFloat,
-        minTipProtrusion: CGFloat,
-        tipChordSpan: CGFloat
+        samples: Int
     ) -> [CGPoint] {
-        let plans = planLocalMaxFillets(
+        let plans = planEverySharpVertex(
             points: points,
-            radius: radius,
             maxAlong: maxAlong,
             minTurnDegrees: minTurnDegrees,
-            frac: frac,
-            localMaxGap: localMaxGap,
-            minTipProtrusion: minTipProtrusion,
-            tipChordSpan: tipChordSpan
+            frac: frac
         )
         guard !plans.isEmpty else { return points }
 
@@ -166,15 +141,12 @@ enum RouteCornerSmoothing {
         return out.count >= 2 ? out : points
     }
 
-    private static func planLocalMaxFillets(
+    /// Every adjacent ≥30° vertex — no cluster / local-max / protrusion filter.
+    private static func planEverySharpVertex(
         points: [CGPoint],
-        radius: CGFloat,
         maxAlong: CGFloat,
         minTurnDegrees: CGFloat,
-        frac: CGFloat,
-        localMaxGap: CGFloat,
-        minTipProtrusion: CGFloat,
-        tipChordSpan: CGFloat
+        frac: CGFloat
     ) -> [FilletPlan] {
         let last = points.count - 1
         var turns = Array(repeating: CGFloat(0), count: points.count)
@@ -182,62 +154,20 @@ enum RouteCornerSmoothing {
         for i in 1..<last {
             let t = adjacentTurnDegrees(points, i)
             turns[i] = t
-            guard t + 1e-3 >= minTurnDegrees else { continue }
-            // Visually sharp tip only: must protrude from a longer chord.
-            let protrusion = tipProtrusion(points, apex: i, span: tipChordSpan)
-            guard protrusion + 1e-3 >= minTipProtrusion else { continue }
-            seeds.append(i)
+            if t + 1e-3 >= minTurnDegrees {
+                seeds.append(i)
+            }
         }
         guard !seeds.isEmpty else { return [] }
 
-        var components: [[Int]] = []
-        var cur: [Int] = [seeds[0]]
-        for s in seeds.dropFirst() {
-            if pathDistance(points, from: cur.last!, to: s) <= localMaxGap {
-                cur.append(s)
-            } else {
-                components.append(cur)
-                cur = [s]
-            }
-        }
-        components.append(cur)
-
-        // Visual tip of a V = farthest from the midpoint of a chord that sits
-        // on the long approaches *outside* the seed component. Neighbor-only
-        // chords preferred idx 231 over camera tip 232 (v2f tipzoom FAIL).
-        let approachPad = tipChordSpan
-        var tips: [Int] = []
-        for comp in components {
-            let first = comp.first!, lastSeed = comp.last!
-            if comp.count == 1 {
-                tips.append(first)
-                continue
-            }
-            let back = indexAtPathDistance(points, from: first, distance: -approachPad)
-            let fwd = indexAtPathDistance(points, from: lastSeed, distance: approachPad)
-            let p0 = points[back], p1 = points[fwd]
-            let mid = CGPoint(x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2)
-            var best = comp[0]
-            var bestDist: CGFloat = -1
-            for i in comp {
-                let dist = hypot(points[i].x - mid.x, points[i].y - mid.y)
-                if dist > bestDist + 1e-6 || (abs(dist - bestDist) <= 1e-6 && turns[i] > turns[best]) {
-                    bestDist = dist
-                    best = i
-                }
-            }
-            tips.append(best)
-        }
-
         var reservedAlong = Array(repeating: CGFloat(0), count: points.count)
         var accepted: [FilletPlan] = []
-        let ordered = tips.sorted { turns[$0] > turns[$1] }
-        for i in ordered {
+        // Stronger turns first so shared edges reserve fairly.
+        for i in seeds.sorted(by: { turns[$0] > turns[$1] }) {
             guard let plan = makeAdjacentPlan(
                 points: points,
                 apex: i,
                 turn: turns[i],
-                radius: radius,
                 maxAlong: maxAlong,
                 frac: frac,
                 reservedAlong: reservedAlong
@@ -250,48 +180,10 @@ enum RouteCornerSmoothing {
         return accepted
     }
 
-    /// Distance from apex to chord spanning ~`span` along-path each side.
-    private static func tipProtrusion(_ points: [CGPoint], apex: Int, span: CGFloat) -> CGFloat {
-        let back = indexAtPathDistance(points, from: apex, distance: -span)
-        let fwd = indexAtPathDistance(points, from: apex, distance: span)
-        guard back < apex, fwd > apex else { return 0 }
-        let p0 = points[back], p1 = points[fwd], b = points[apex]
-        let lx = p1.x - p0.x, ly = p1.y - p0.y
-        let llen = hypot(lx, ly)
-        guard llen > 1e-6 else { return 0 }
-        return abs((b.x - p0.x) * ly - (b.y - p0.y) * lx) / llen
-    }
-
-    private static func indexAtPathDistance(_ points: [CGPoint], from: Int, distance: CGFloat) -> Int {
-        if distance == 0 { return from }
-        if distance < 0 {
-            var left = -distance
-            var i = from
-            while i > 0, left > 0 {
-                let step = hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
-                if step >= left { return i - 1 }
-                left -= step
-                i -= 1
-            }
-            return i
-        } else {
-            var left = distance
-            var i = from
-            while i < points.count - 1, left > 0 {
-                let step = hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y)
-                if step >= left { return i + 1 }
-                left -= step
-                i += 1
-            }
-            return i
-        }
-    }
-
     private static func makeAdjacentPlan(
         points: [CGPoint],
         apex i: Int,
         turn: CGFloat,
-        radius: CGFloat,
         maxAlong: CGFloat,
         frac: CGFloat,
         reservedAlong: [CGFloat]
@@ -310,13 +202,8 @@ enum RouteCornerSmoothing {
         let outboundFree = nextLen - reservedAlong[i]
         guard inboundFree > 0.4, outboundFree > 0.4 else { return nil }
 
-        let along = min(
-            radius / tanHalf,
-            maxAlong,
-            inboundFree * frac,
-            outboundFree * frac
-        )
-        // Keep along short — tipzoom legs outside ~12pt must match.
+        // Spec: t = min(12pt, seg×0.4) on each incident segment.
+        let along = min(maxAlong, inboundFree * frac, outboundFree * frac)
         guard along > 0.25 else { return nil }
 
         let t1 = CGPoint(
@@ -354,7 +241,6 @@ enum RouteCornerSmoothing {
 
         return FilletPlan(
             apexIndex: i,
-            turnDegrees: turn,
             t1: t1,
             t2: t2,
             center: center,
@@ -373,15 +259,5 @@ enum RouteCornerSmoothing {
         guard abLen > 1e-3, bcLen > 1e-3 else { return 0 }
         let dot = max(-1, min(1, (abx * bcx + aby * bcy) / (abLen * bcLen)))
         return acos(dot) * 180 / .pi
-    }
-
-    private static func pathDistance(_ points: [CGPoint], from: Int, to: Int) -> CGFloat {
-        guard from != to else { return 0 }
-        let lo = min(from, to), hi = max(from, to)
-        var d: CGFloat = 0
-        for i in lo..<hi {
-            d += hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y)
-        }
-        return d
     }
 }

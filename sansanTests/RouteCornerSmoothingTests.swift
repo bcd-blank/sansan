@@ -2,7 +2,6 @@ import XCTest
 @testable import sansan
 import CoreGraphics
 import CoreLocation
-import MapKit
 
 final class RouteCornerSmoothingTests: XCTestCase {
     func testSharpCornerGetsFilletSamples() {
@@ -15,8 +14,25 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertGreaterThan(smoothed.count, points.count)
         XCTAssertEqual(smoothed.first, points.first)
         XCTAssertEqual(smoothed.last, points.last)
-        let hasExactApex = smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.05 }
-        XCTAssertFalse(hasExactApex)
+        XCTAssertFalse(smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.05 })
+    }
+
+    func testEveryGe30GetsArcNotOnlyLocalMax() {
+        // Two ≥30° tips far apart — both must fillet (spec: each P(i)).
+        let points: [CGPoint] = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 50, y: 0),
+            CGPoint(x: 50, y: 50),
+            CGPoint(x: 100, y: 50),
+            CGPoint(x: 100, y: 100)
+        ]
+        let tip1 = points[1]
+        let tip2 = points[3]
+        let smoothed = RouteCornerSmoothing.smoothPoints(points)
+        XCTAssertFalse(smoothed.contains { hypot($0.x - tip1.x, $0.y - tip1.y) < 0.2 })
+        XCTAssertFalse(smoothed.contains { hypot($0.x - tip2.x, $0.y - tip2.y) < 0.2 })
+        XCTAssertEqual(smoothed.first, points.first)
+        XCTAssertEqual(smoothed.last, points.last)
     }
 
     func testGentleTurnUnchanged() {
@@ -33,66 +49,29 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(RouteCornerSmoothing.smoothPoints(points).count, points.count)
     }
 
-    /// Micro-jog ≥30° but low protrusion must stay raw (no tipzoom teeth).
-    func testLowProtrusionMicroJogNotFilleted() {
-        // Shallow 35° bump with tiny protrusion over a long chord.
-        let points: [CGPoint] = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 40, y: 0),
-            CGPoint(x: 42, y: 1.2), // micro jog
-            CGPoint(x: 44, y: 0),
-            CGPoint(x: 80, y: 0)
-        ]
-        let jog = points[2]
-        let smoothed = RouteCornerSmoothing.smoothPoints(
-            points,
-            minTipProtrusion: 8,
-            tipChordSpan: 36
-        )
-        let kept = smoothed.contains { hypot($0.x - jog.x, $0.y - jog.y) < 0.2 }
-        XCTAssertTrue(kept, "low-protrusion micro-jog must remain (no densify teeth)")
-    }
-
-    func testGamajiCurve3ShortArcPreservesApproach() {
+    func testGamajiCurve3TipCutAndNeighborsOnIncidentOnly() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
         }
-        let apexIdx = 232
-        let apex = coords[apexIdx]
+        let apex = coords[232]
         XCTAssertEqual(apex.latitude, 37.64200773, accuracy: 1e-7)
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-
         let smoothed = RouteCornerSmoothing.smoothCoordinates(coords)
         let minCut = smoothed.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(minCut, 0.15, "tip should round slightly")
-        XCTAssertLessThan(minCut, 1.6, "tip cut must stay short for tipzoom; got \(minCut)")
+        XCTAssertGreaterThan(minCut, 0.15)
+        XCTAssertLessThan(minCut, 1.6)
 
-        // Neighbor seeds (228, 231) must remain as raw verts — only tip replaced.
-        for idx in [228, 231] {
-            let c = coords[idx]
-            let loc = CLLocation(latitude: c.latitude, longitude: c.longitude)
-            let nearest = smoothed.map {
-                loc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-            }.min() ?? 999
-            XCTAssertLessThan(nearest, 0.2, "neighbor seed \(idx) must stay (not filleted); d=\(nearest)")
-        }
-
-        // Outside 4m of tip, every smoothed point hugs a raw vertex (no approach rewrite).
-        var maxApproachDev: CLLocationDistance = 0
-        for s in smoothed {
-            let sLoc = CLLocation(latitude: s.latitude, longitude: s.longitude)
-            let dApex = sLoc.distance(from: apexLoc)
-            if dApex < 4 || dApex > 35 { continue }
-            let d = coords.map {
-                sLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-            }.min() ?? 999
-            maxApproachDev = max(maxApproachDev, d)
-        }
-        XCTAssertLessThan(maxApproachDev, 0.25, "approach rewrite; maxDev=\(maxApproachDev)")
-        print("CURVE3_V2G minCut=\(minCut) maxApproachDev=\(maxApproachDev)")
+        // Non-filleted verts far from any ≥30° tip stay bit-identical in position.
+        // Spot-check a gentle mid-leg vertex (idx 224 turn≈0.8°).
+        let gentle = coords[224]
+        let gLoc = CLLocation(latitude: gentle.latitude, longitude: gentle.longitude)
+        let nearest = smoothed.map {
+            gLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+        }.min() ?? 999
+        XCTAssertLessThan(nearest, 0.15)
     }
 
     func testGamajiFilletThenStretchLocal() {
