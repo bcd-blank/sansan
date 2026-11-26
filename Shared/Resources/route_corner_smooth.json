@@ -4,18 +4,17 @@
   "unit": {
     "ios": "pt",
     "android": "dp",
-    "mapping": "1:1 at same logical width; map path uses filletRadiusMeters (raised so 2.5m cap no longer blocks pt-scale fillets)"
+    "mapping": "1:1 at same logical width; map path uses filletRadiusMeters / maxFilletAlongMeters (pt caps are NOT meters)"
   },
-  "revision": "v2d-jw-local-cluster-arc",
-  "notes": "Render-only. v2d: local clusterGap (14pt / 10m) so curve3 gets its own circularArc — v2c armTarget-sized gap merged a 30m-away elbow into one chord (still-pointed kink). Fillet full path THEN stretch-split.",
+  "revision": "v2e-jw-adjacent-short-arc",
+  "notes": "Render-only. v2e: adjacent-only short circularArc (~12pt / maxAlong 4m). Same GPS input as sharp; outside fillet radius centerline must match before. v2d extended-arm/cluster rewrote curve3 into a different zigzag (JW FAIL).",
   "minTurnDegrees": 30,
   "filletRadiusPt": 12,
-  "maxFilletAlongPt": 28,
+  "maxFilletAlongPt": 12,
   "maxAlongSegmentFraction": 0.4,
-  "arcSamples": 14,
-  "filletRadiusMeters": 8,
-  "clusterGapPt": 14,
-  "clusterGapMeters": 10,
-  "method": "circularArcExtendedArm",
-  "methodNotes": "Window arms up to maxAlong along the polyline; turn from arm directions; along=min(r/tan(θ/2), maxAlong, 0.4·arm); replace vertices between T1/T2 with circular-arc samples. Cluster only compound zigzags within clusterGap. GPS unchanged."
+  "arcSamples": 8,
+  "filletRadiusMeters": 4,
+  "maxFilletAlongMeters": 4,
+  "method": "circularArcAdjacent",
+  "methodNotes": "Per adjacent ≥30° vertex: along=min(r/tan(θ/2), maxAlong, 0.4·seg); replace apex with short circular-arc samples on the two incident segments only. No cluster / no extended arms. GPS unchanged."
 }

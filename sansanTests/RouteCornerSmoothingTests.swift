@@ -2,10 +2,10 @@ import XCTest
 @testable import sansan
 import CoreGraphics
 import CoreLocation
+import MapKit
 
 final class RouteCornerSmoothingTests: XCTestCase {
     func testSharpCornerGetsFilletSamples() {
-        // Right-angle (90°) corner — above 30° threshold.
         let points: [CGPoint] = [
             CGPoint(x: 0, y: 0),
             CGPoint(x: 40, y: 0),
@@ -14,9 +14,9 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let smoothed = RouteCornerSmoothing.smoothPoints(
             points,
             radius: 12,
-            maxAlong: 28,
+            maxAlong: 12,
             minTurnDegrees: 30,
-            samples: 10
+            samples: 8
         )
         XCTAssertGreaterThan(smoothed.count, points.count, "fillet must insert samples")
         XCTAssertEqual(smoothed.first, points.first)
@@ -25,7 +25,7 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertFalse(hasExactApex, "exact sharp apex should be replaced by fillet")
     }
 
-    /// curve3-class ~42° adjacent elbow must fillet under v2 30° threshold.
+    /// curve3-class ~42° adjacent elbow must fillet under 30° threshold.
     func testMidSharpFortyDegreeFillet() {
         let rad = CGFloat.pi * 40 / 180
         let apex = CGPoint(x: 50, y: 0)
@@ -37,36 +37,39 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let smoothed = RouteCornerSmoothing.smoothPoints(points)
         XCTAssertGreaterThan(smoothed.count, points.count, "≈40° must fillet at minTurn=30")
         let minDist = smoothed.dropFirst().dropLast().map { hypot($0.x - apex.x, $0.y - apex.y) }.min() ?? 0
-        XCTAssertGreaterThan(minDist, 2.0, "circular fillet must visibly leave the apex")
+        XCTAssertGreaterThan(minDist, 1.0, "circular fillet must leave the apex")
     }
 
-    /// Compound tip like Gamaji curve3: short zigzags that window to ~90°.
-    /// Extended arms must cut the tip far enough for eye-diff at 4× zoom.
-    func testCompoundTipExtendedArmCutsApex() {
-        // Build a pointed zigzag: inbound east, three short jogs, outbound NE.
+    /// Compound zigzags: each ≥30° elbow rounds locally; path topology preserved
+    /// (no single extended-arm chord that deletes mid vertices).
+    func testCompoundTipRoundsLocallyWithoutRewritingPath() {
         var points: [CGPoint] = [CGPoint(x: 0, y: 0)]
         points.append(CGPoint(x: 40, y: 0))
         points.append(CGPoint(x: 46, y: 2))
-        points.append(CGPoint(x: 50, y: 0)) // visual tip
+        points.append(CGPoint(x: 50, y: 0)) // tip
         points.append(CGPoint(x: 54, y: 6))
         points.append(CGPoint(x: 70, y: 28))
         let tip = points[3]
         let smoothed = RouteCornerSmoothing.smoothPoints(
             points,
             radius: 12,
-            maxAlong: 28,
+            maxAlong: 12,
             minTurnDegrees: 30,
-            samples: 10
+            samples: 8
         )
         XCTAssertGreaterThan(smoothed.count, 2)
-        let minDist = smoothed.map { hypot($0.x - tip.x, $0.y - tip.y) }.min() ?? 0
-        XCTAssertGreaterThan(minDist, 3.5, "extended-arm fillet must clear compound tip for eye-diff")
+        // Endpoints + far legs preserved.
+        XCTAssertEqual(smoothed.first, points.first)
+        XCTAssertEqual(smoothed.last, points.last)
+        // Tip vertex itself should be replaced (rounded).
         let hasExactTip = smoothed.contains { hypot($0.x - tip.x, $0.y - tip.y) < 0.2 }
-        XCTAssertFalse(hasExactTip, "compound tip vertex must not remain")
+        XCTAssertFalse(hasExactTip, "sharp tip vertex must be rounded away")
+        // Path must still pass near the tip (slight round, not a distant chord).
+        let minDist = smoothed.map { hypot($0.x - tip.x, $0.y - tip.y) }.min() ?? 999
+        XCTAssertLessThan(minDist, 10, "local fillet must stay near tip; got \(minDist)")
     }
 
     func testGentleTurnUnchanged() {
-        // ~15° bend — below 30° threshold.
         let points: [CGPoint] = [
             CGPoint(x: 0, y: 0),
             CGPoint(x: 50, y: 0),
@@ -75,9 +78,9 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let smoothed = RouteCornerSmoothing.smoothPoints(
             points,
             radius: 12,
-            maxAlong: 28,
+            maxAlong: 12,
             minTurnDegrees: 30,
-            samples: 10
+            samples: 8
         )
         XCTAssertEqual(smoothed.count, points.count)
         XCTAssertEqual(smoothed[1].x, points[1].x, accuracy: 0.01)
@@ -90,8 +93,8 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(smoothed.count, points.count)
     }
 
-    /// Gamaji curve3 camera vertex must move ≥2.5m under map-space cluster fillet.
-    func testGamajiCurve3ApexCutMeters() {
+    /// Same input array: sharp-disabled path equals raw; smoothed only differs near ≥30° elbows.
+    func testGamajiSameInputPreservesPathOutsideFillets() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
@@ -99,92 +102,77 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(coords.count, 240)
         let apexIdx = 232
         let apex = coords[apexIdx]
-        // Camera SoT for curve3.
         XCTAssertEqual(apex.latitude, 37.64200773, accuracy: 1e-7)
         XCTAssertEqual(apex.longitude, 126.63898472, accuracy: 1e-7)
 
+        // Force-enabled smooth (tests run with smoothing on by default).
         let smoothed = RouteCornerSmoothing.smoothCoordinates(coords)
         XCTAssertGreaterThan(smoothed.count, 2)
 
+        // Every raw vertex with adjacent turn <30° must still appear (within 0.15m).
+        var preserved = 0
+        var filletedAway = 0
+        for i in 1..<(coords.count - 1) {
+            let a = coords[i - 1], b = coords[i], c = coords[i + 1]
+            let turn = Self.turnDegrees(a, b, c)
+            let bLoc = CLLocation(latitude: b.latitude, longitude: b.longitude)
+            let nearest = smoothed.map {
+                bLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+            }.min() ?? 999
+            if turn + 1e-3 < 30 {
+                XCTAssertLessThan(
+                    nearest,
+                    0.15,
+                    "sub-threshold vertex \(i) turn=\(turn) must be preserved; nearest=\(nearest)m"
+                )
+                preserved += 1
+            } else if nearest > 0.5 {
+                filletedAway += 1
+            }
+        }
+        XCTAssertGreaterThan(preserved, 100, "most vertices are gentle and must match")
+        XCTAssertGreaterThan(filletedAway, 0, "at least one ≥30° tip should be rounded away")
+
+        // Apex cut is slight (local), not a multi-meter chord rewrite.
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-        let minMeters = smoothed.map {
+        let minCut = smoothed.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(
-            minMeters,
-            2.5,
-            "curve3 apex must be cut by ≥2.5m for 4× eye-diff; got \(minMeters)m"
-        )
+        XCTAssertGreaterThan(minCut, 0.3, "curve3 apex should leave the tip slightly; got \(minCut)m")
+        XCTAssertLessThan(minCut, 4.5, "apex cut must stay within short-arc budget; got \(minCut)m")
+        print("CURVE3_V2E preserved=\(preserved) filletedAway=\(filletedAway) minCut=\(minCut)")
     }
 
-    func testGamajiCurve3ReportsCutDistance() {
+    func testGamajiFilletThenStretchStillLocal() {
         let fixture = UITestMountainPathFixtures.gamajicheon
         let coords: [CLLocationCoordinate2D] = fixture.points.map {
             CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
         }
         let apex = coords[232]
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-        let smoothed = RouteCornerSmoothing.smoothCoordinates(coords)
-        let minMeters = smoothed.map {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? 0
-        // Log for capture tuning.
-        print("CURVE3_APEX_CUT_M=\(minMeters) smoothedCount=\(smoothed.count) rawCount=\(coords.count)")
-        XCTAssertGreaterThan(minMeters, 2.5)
-    }
-
-    /// Live map order: fillet full path, then stretch-split.
-    func testGamajiCurve3ApexCutAfterStretchSplit() {
-        let fixture = UITestMountainPathFixtures.gamajicheon
-        let coords: [CLLocationCoordinate2D] = fixture.points.map {
-            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
-        }
-        let apex = coords[232]
-        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-
         let filleted = RouteCornerSmoothing.smoothCoordinates(coords)
         let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
         let list = stretches.isEmpty ? [filleted] : stretches
         let all = list.flatMap { $0 }
-        let minMeters = all.map {
+        let minCut = all.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(
-            minMeters,
-            2.5,
-            "after fillet-then-stretch, curve3 apex must still be cut ≥2.5m; got \(minMeters)m; stretches=\(list.count)"
-        )
+        XCTAssertGreaterThan(minCut, 0.3)
+        XCTAssertLessThan(minCut, 4.5)
     }
 
-    /// Local cluster only: curve3 must keep densified arc samples near the apex
-    /// (no 30m chord from a merged distant elbow).
-    func testGamajiCurve3HasLocalArcNotDistantChord() {
-        let fixture = UITestMountainPathFixtures.gamajicheon
-        let coords: [CLLocationCoordinate2D] = fixture.points.map {
-            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
-        }
-        let apex = coords[232]
-        let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
-        let smoothed = RouteCornerSmoothing.smoothCoordinates(coords)
-        let near = smoothed.filter {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude)) <= 20
-        }
-        let minCut = smoothed.map {
-            apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
-        }.min() ?? -1
-        // Consecutive near-apex samples in path order should not jump >12m.
-        var maxGap: CLLocationDistance = 0
-        for i in 0..<(smoothed.count - 1) {
-            let a = smoothed[i], b = smoothed[i + 1]
-            let da = apexLoc.distance(from: CLLocation(latitude: a.latitude, longitude: a.longitude))
-            let db = apexLoc.distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
-            guard da <= 25 || db <= 25 else { continue }
-            let gap = CLLocation(latitude: a.latitude, longitude: a.longitude)
-                .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
-            maxGap = max(maxGap, gap)
-        }
-        print("CURVE3_LOCAL near=\(near.count) minCut=\(minCut) maxGap=\(maxGap) smoothed=\(smoothed.count)")
-        XCTAssertGreaterThanOrEqual(near.count, 6, "local fillet arc must densify near curve3; got \(near.count) minCut=\(minCut) maxGap=\(maxGap)")
-        XCTAssertLessThan(maxGap, 12, "curve3 must not be a distant-elbow chord; maxGap=\(maxGap)m near=\(near.count) minCut=\(minCut)")
+    private static func turnDegrees(
+        _ a: CLLocationCoordinate2D,
+        _ b: CLLocationCoordinate2D,
+        _ c: CLLocationCoordinate2D
+    ) -> Double {
+        let ab = MKMapPoint(b).x - MKMapPoint(a).x
+        let aby = MKMapPoint(b).y - MKMapPoint(a).y
+        let bc = MKMapPoint(c).x - MKMapPoint(b).x
+        let bcy = MKMapPoint(c).y - MKMapPoint(b).y
+        let abLen = hypot(ab, aby), bcLen = hypot(bc, bcy)
+        guard abLen > 1e-12, bcLen > 1e-12 else { return 0 }
+        let dot = max(-1, min(1, (ab * bc + aby * bcy) / (abLen * bcLen)))
+        return acos(dot) * 180 / .pi
     }
 }
