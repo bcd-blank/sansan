@@ -6,17 +6,19 @@
     "android": "dp",
     "mapping": "1:1 at same logical width; map uses filletRadiusMeters / maxFilletAlongMeters (pt caps are NOT meters)"
   },
-  "revision": "v2f-jw-local-max-short-arc",
-  "notes": "Render-only. Same GPS input as sharp. Fillet only local-maximum ≥30° vertices with short circularArc on the two incident segments; all other verts untouched. v2e filleted every ≥30° GPS micro-elbow → tipzoom zigzags/teeth (FAIL).",
+  "revision": "v2g-jw-tipzoom-single-short-arc",
+  "notes": "Render-only. Same GPS input as sharp. One geometric tip per wide component; short adjacent circularArc (1.2m). Tip must protrude ≥2.5m on an 18m chord (filters micro-jogs). v2f tipzoom FAIL: second local-max ~26m up-leg filleted → green bulge/new elbows.",
   "minTurnDegrees": 30,
   "filletRadiusPt": 12,
   "maxFilletAlongPt": 12,
-  "maxAlongSegmentFraction": 0.4,
-  "arcSamples": 6,
-  "filletRadiusMeters": 2.5,
-  "maxFilletAlongMeters": 2.5,
-  "localMaxGapMeters": 12,
-  "localMaxGapPt": 24,
+  "maxAlongSegmentFraction": 0.35,
+  "arcSamples": 5,
+  "filletRadiusMeters": 1.2,
+  "maxFilletAlongMeters": 1.2,
+  "localMaxGapMeters": 45,
+  "localMaxGapPt": 90,
+  "minTipProtrusionMeters": 2.5,
+  "tipChordSpanMeters": 18,
   "method": "circularArcLocalMaxAdjacent",
-  "methodNotes": "Seeds = adjacent turn ≥30°. Keep only local maxima within localMaxGap. along=min(r/tan(θ/2), maxAlong, 0.4·seg) on incident segments only; replace apex with short arc samples. No cluster chord / no extended arms / no whole-path densify."
+  "methodNotes": "Seeds = adjacent ≥30° AND tip protrusion ≥ minTipProtrusion on tipChordSpan. Components within localMaxGap; fillet geometric tip only on two incident segments. Tipzoom gate: outside tip disk, before|after green overlap ≥0.99 on tipzoom PNGs."
 }
