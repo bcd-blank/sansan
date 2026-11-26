@@ -213,14 +213,22 @@ enum RouteSelfCrossing {
             dedupeDistance: dedupe,
             proximityDistance: proximity
         )
-        let pointStretches = chronologicalPointStretches(
-            points: points,
-            hits: hits,
-            overlapVertices: overlapVertices
-        )
-        return pointStretches.map { stretch in
-            stretch.map { MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate }
+        let cuts = stretchCutIndices(hits: hits, lastIndex: cleanedCoords.count - 1)
+        guard !cuts.isEmpty else { return [cleanedCoords] }
+        let overlap = max(1, overlapVertices)
+        let boundaries = [0] + cuts + [cleanedCoords.count - 1]
+        var stretches: [[CLLocationCoordinate2D]] = []
+        for index in 0..<(boundaries.count - 1) {
+            var start = boundaries[index]
+            let end = boundaries[index + 1]
+            if index > 0 {
+                start = max(0, start - overlap)
+            }
+            guard end > start else { continue }
+            stretches.append(Array(cleanedCoords[start...end]))
         }
+        let filtered = stretches.filter { $0.count >= 2 }
+        return filtered.isEmpty ? [cleanedCoords] : filtered
     }
 
     /// Mid-loop cut indices (exclusive of 0 / last). Far from both earlier and later edges.

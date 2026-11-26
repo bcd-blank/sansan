@@ -308,10 +308,11 @@ struct HikingRecordRouteMapView: View {
                 )
             )
         case .zoomRouteCross:
+            // Crossing SoT: pond junction @ 4× casing crop zoom (span 0.0002875).
             mapPosition = .region(
                 MKCoordinateRegion(
                     center: UITestMapCaptureHooks.GamajiRouteCasingPose.cross,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
                 )
             )
         }
@@ -451,29 +452,54 @@ struct HikingRecordRouteMapView: View {
         }
     }
 
-    /// Few long stretches between self-crosses (JW): later stretch casing cuts earlier fill.
-    private var routeStretches: [[CLLocationCoordinate2D]] {
-        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: routeCoordinates)
-        return stretches.isEmpty ? [routeCoordinates] : stretches
+    /// Cached stretch rails — avoid O(n²) self-cross on every Map body pass.
+    @State private var cachedRouteRailLayers: [RouteRailLayer] = []
+
+    private struct RouteRailLayer: Identifiable {
+        let id: String
+        let coordinates: [CLLocationCoordinate2D]
+        let isCasing: Bool
+    }
+
+    private func rebuildRouteRailLayers() {
+        let coords = routeCoordinates
+        guard coords.count >= 2 else {
+            cachedRouteRailLayers = []
+            return
+        }
+        // Continuous dual-rail first; replace with stretch rails off the main render path.
+        if cachedRouteRailLayers.isEmpty {
+            cachedRouteRailLayers = [
+                RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+            ]
+        }
+        Task(priority: .userInitiated) {
+            let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
+            let list = stretches.isEmpty ? [coords] : stretches
+            var layers: [RouteRailLayer] = []
+            layers.reserveCapacity(max(list.count, 1) * 2)
+            for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+                layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
+                layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
+            }
+            if layers.isEmpty {
+                layers = [
+                    RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+                ]
+            }
+            await MainActor.run {
+                cachedRouteRailLayers = layers
+            }
+        }
     }
 
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        // Stretch-split (not per-GPS-segment): mid-loop cuts between self-crosses only.
-        // Draw order per stretch: casing → fill; later stretch paints over earlier at crosses.
-        // Tokens: white×9 @0.9 under green×5; round join/cap. No short-bridge overlays.
-        ForEach(Array(routeStretches.enumerated()), id: \.offset) { _, stretch in
-            MapPolyline(coordinates: stretch)
-                .stroke(
-                    Color.white.opacity(0.9),
-                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-                )
-            MapPolyline(coordinates: stretch)
-                .stroke(
-                    Color(red: 0.12, green: 0.72, blue: 0.45),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-                )
-        }
+        // Stretch-split (JW): mid-loop cuts between self-crosses; casing→fill per stretch.
+        // Cache starts as continuous dual-rail, then upgrades to stretch rails async.
+        routeStretchPolylines
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
@@ -488,6 +514,42 @@ struct HikingRecordRouteMapView: View {
                     .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.endpoint) }
             }
         }
+    }
+
+    @MapContentBuilder
+    private var routeStretchPolylines: some MapContent {
+        // Unrolled — MapContent ForEach dropped strokes on this Map.
+        if cachedRouteRailLayers.count > 0 { routeRailMapPolyline(cachedRouteRailLayers[0]) }
+        if cachedRouteRailLayers.count > 1 { routeRailMapPolyline(cachedRouteRailLayers[1]) }
+        if cachedRouteRailLayers.count > 2 { routeRailMapPolyline(cachedRouteRailLayers[2]) }
+        if cachedRouteRailLayers.count > 3 { routeRailMapPolyline(cachedRouteRailLayers[3]) }
+        if cachedRouteRailLayers.count > 4 { routeRailMapPolyline(cachedRouteRailLayers[4]) }
+        if cachedRouteRailLayers.count > 5 { routeRailMapPolyline(cachedRouteRailLayers[5]) }
+        if cachedRouteRailLayers.count > 6 { routeRailMapPolyline(cachedRouteRailLayers[6]) }
+        if cachedRouteRailLayers.count > 7 { routeRailMapPolyline(cachedRouteRailLayers[7]) }
+        if cachedRouteRailLayers.count > 8 { routeRailMapPolyline(cachedRouteRailLayers[8]) }
+        if cachedRouteRailLayers.count > 9 { routeRailMapPolyline(cachedRouteRailLayers[9]) }
+        if cachedRouteRailLayers.count > 10 { routeRailMapPolyline(cachedRouteRailLayers[10]) }
+        if cachedRouteRailLayers.count > 11 { routeRailMapPolyline(cachedRouteRailLayers[11]) }
+        if cachedRouteRailLayers.count > 12 { routeRailMapPolyline(cachedRouteRailLayers[12]) }
+        if cachedRouteRailLayers.count > 13 { routeRailMapPolyline(cachedRouteRailLayers[13]) }
+        if cachedRouteRailLayers.count > 14 { routeRailMapPolyline(cachedRouteRailLayers[14]) }
+        if cachedRouteRailLayers.count > 15 { routeRailMapPolyline(cachedRouteRailLayers[15]) }
+    }
+
+    @MapContentBuilder
+    private func routeRailMapPolyline(_ layer: RouteRailLayer) -> some MapContent {
+        MapPolyline(coordinates: layer.coordinates)
+            .stroke(
+                layer.isCasing
+                    ? Color.white.opacity(0.9)
+                    : Color(red: 0.12, green: 0.72, blue: 0.45),
+                style: StrokeStyle(
+                    lineWidth: layer.isCasing ? 9 : 5,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
     }
 
     @MapContentBuilder
@@ -676,6 +738,7 @@ struct HikingRecordRouteMapView: View {
             // Yield so Map is in the hierarchy before camera fit (avoids blank grid).
             await Task.yield()
             fitRouteInView(animated: false)
+            rebuildRouteRailLayers()
 #if DEBUG
             logDetailOpenReady(stage: "cache")
 #endif
@@ -700,6 +763,7 @@ struct HikingRecordRouteMapView: View {
             routeCoordinates = quickCoords
             isRouteDisplayReady = true
             fitRouteInView(animated: false)
+            rebuildRouteRailLayers()
 #if DEBUG
             logDetailOpenReady(stage: "map-first")
 #endif
@@ -717,6 +781,7 @@ struct HikingRecordRouteMapView: View {
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
         fitRouteInView(animated: false)
+        rebuildRouteRailLayers()
 #if DEBUG
         logDetailOpenReady(stage: "prepared")
 #endif

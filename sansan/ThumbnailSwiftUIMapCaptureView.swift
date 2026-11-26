@@ -23,24 +23,31 @@ struct ThumbnailSwiftUIMapCaptureView: View {
         _position = State(initialValue: .region(region))
     }
 
-    private var routeStretches: [[CLLocationCoordinate2D]] {
+    private var routeRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
         let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coordinates)
-        return stretches.isEmpty ? [coordinates] : stretches
+        let list = stretches.isEmpty ? [coordinates] : stretches
+        var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
+        for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+            layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
+            layers.append((id: "f\(index)", coordinates: stretch, isCasing: false))
+        }
+        return layers
     }
 
     var body: some View {
         Map(position: $position, interactionModes: []) {
             // Same stretch-split dual-rail as detail (JW crossing + no dashed caps).
-            ForEach(Array(routeStretches.enumerated()), id: \.offset) { _, stretch in
-                MapPolyline(coordinates: stretch)
+            ForEach(routeRailLayers, id: \.id) { layer in
+                MapPolyline(coordinates: layer.coordinates)
                     .stroke(
-                        Color.white.opacity(0.9),
-                        style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-                    )
-                MapPolyline(coordinates: stretch)
-                    .stroke(
-                        Color(red: 0.12, green: 0.72, blue: 0.45),
-                        style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                        layer.isCasing
+                            ? Color.white.opacity(0.9)
+                            : Color(red: 0.12, green: 0.72, blue: 0.45),
+                        style: StrokeStyle(
+                            lineWidth: layer.isCasing ? 9 : 5,
+                            lineCap: .round,
+                            lineJoin: .round
+                        )
                     )
             }
         }

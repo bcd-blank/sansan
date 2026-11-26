@@ -128,14 +128,16 @@ enum UITestMapCaptureHooks {
     static let zoomCurveName = "com.jw.sansan.uitest.mapZoomRouteCurve" as CFString
     static let zoomCrossName = "com.jw.sansan.uitest.mapZoomRouteCross" as CFString
 
-    /// 가마지천 a415 — dens-norm crop cameras (RESULT-route-casing).
+    /// 가마지천 a415 — dens-norm crop cameras (RESULT-route-casing / route-crossing).
     enum GamajiRouteCasingPose {
         static let span = MKCoordinateSpan(latitudeDelta: 0.00115, longitudeDelta: 0.00115)
+        /// JW crossing SoT: 4× tighter than casing crop span (0.00115/4).
+        static let cross4xSpan = MKCoordinateSpan(latitudeDelta: 0.0002875, longitudeDelta: 0.0002875)
         /// Long near-colinear stretch center (fixture idx ~207).
         static let straight = CLLocationCoordinate2D(latitude: 37.64311855, longitude: 126.63755373)
         /// Sharpest turn ~86.6° (fixture idx 285).
         static let curve = CLLocationCoordinate2D(latitude: 37.64010938, longitude: 126.64202434)
-        /// True self-cross (edges 59×139, loop ~617m).
+        /// True self-cross (edges 59×139, loop ~617m) — pond junction center.
         static let cross = CLLocationCoordinate2D(latitude: 37.64648737, longitude: 126.63456760)
     }
 

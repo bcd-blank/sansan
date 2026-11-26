@@ -46,9 +46,15 @@ struct WorkoutSummaryView: View {
         }
     }
 
-    private var summaryRouteStretches: [[CLLocationCoordinate2D]] {
+    private var summaryRouteRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
         let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: routeCoordinates)
-        return stretches.isEmpty ? [routeCoordinates] : stretches
+        let list = stretches.isEmpty ? [routeCoordinates] : stretches
+        var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
+        for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+            layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
+            layers.append((id: "f\(index)", coordinates: stretch, isCasing: false))
+        }
+        return layers
     }
 
     private var stationaryLocation: CLLocationCoordinate2D? {
@@ -117,16 +123,15 @@ struct WorkoutSummaryView: View {
                     viewSize: CGSize(width: 340, height: 220)
                 )
             )) {
-                ForEach(Array(summaryRouteStretches.enumerated()), id: \.offset) { _, stretch in
-                    MapPolyline(coordinates: stretch)
+                ForEach(summaryRouteRailLayers, id: \.id) { layer in
+                    MapPolyline(coordinates: layer.coordinates)
                         .stroke(
-                            Color.white.opacity(0.9),
-                            style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
-                        )
-                    MapPolyline(coordinates: stretch)
-                        .stroke(
-                            Self.routeColor,
-                            style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                            layer.isCasing ? Color.white.opacity(0.9) : Self.routeColor,
+                            style: StrokeStyle(
+                                lineWidth: layer.isCasing ? 9 : 5,
+                                lineCap: .round,
+                                lineJoin: .round
+                            )
                         )
                 }
 
