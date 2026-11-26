@@ -1,10 +1,10 @@
 {
   "id": "route.cornerSmooth",
-  "revision": "v2j-resample-ma9",
+  "revision": "v2j-resample-moving-avg",
   "mapMinSideFraction": 0.01,
   "resampleStepFractionOfTm": 0.25,
   "movingAverageWindow": 9,
   "method": "uniformResampleMovingAverage",
   "zoomRecalcDelta": 0.5,
-  "notes": "t_m=0.01×min(mapW,mapH)×mpp. Resample h=t_m/4. MA window=2·t_m/h+1=9 uniform; ends shrink symmetrically; start/end fixed. Render-only — never distance/GPS. stretch-split on smoothed."
+  "notes": "t_m=0.01\u00d7min(mapW,mapH)\u00d7mpp. Resample h=t_m/4. MA window=9 uniform; ends shrink; start/end fixed. Render-only."
 }
