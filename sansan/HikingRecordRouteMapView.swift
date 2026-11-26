@@ -266,6 +266,10 @@ struct HikingRecordRouteMapView: View {
                     applyUITestMapCaptureAction(.zoomRouteStraight)
                 case "zoomRouteCurve":
                     applyUITestMapCaptureAction(.zoomRouteCurve)
+                case "zoomRouteCurve2":
+                    applyUITestMapCaptureAction(.zoomRouteCurve2)
+                case "zoomRouteCurve3":
+                    applyUITestMapCaptureAction(.zoomRouteCurve3)
                 case "zoomRouteCross":
                     applyUITestMapCaptureAction(.zoomRouteCross)
                 default:
@@ -304,7 +308,21 @@ struct HikingRecordRouteMapView: View {
             mapPosition = .region(
                 MKCoordinateRegion(
                     center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve,
-                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+                )
+            )
+        case .zoomRouteCurve2:
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve2,
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+                )
+            )
+        case .zoomRouteCurve3:
+            mapPosition = .region(
+                MKCoordinateRegion(
+                    center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve3,
+                    span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
                 )
             )
         case .zoomRouteCross:
@@ -469,24 +487,28 @@ struct HikingRecordRouteMapView: View {
         }
         // Continuous dual-rail first; replace with stretch rails off the main render path.
         if cachedRouteRailLayers.isEmpty {
+            let warm = RouteCornerSmoothing.smoothCoordinates(coords)
             cachedRouteRailLayers = [
-                RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
-                RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+                RouteRailLayer(id: "c0", coordinates: warm, isCasing: true),
+                RouteRailLayer(id: "f0", coordinates: warm, isCasing: false)
             ]
         }
         Task(priority: .userInitiated) {
             let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
             let list = stretches.isEmpty ? [coords] : stretches
+            // Render-only corner fillets on each stretch (incl. boundaries); GPS unchanged.
+            let smoothed = list.map { RouteCornerSmoothing.smoothCoordinates($0) }
             var layers: [RouteRailLayer] = []
-            layers.reserveCapacity(max(list.count, 1) * 2)
-            for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+            layers.reserveCapacity(max(smoothed.count, 1) * 2)
+            for (index, stretch) in smoothed.enumerated() where stretch.count >= 2 {
                 layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
                 layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
             }
             if layers.isEmpty {
+                let fallback = RouteCornerSmoothing.smoothCoordinates(coords)
                 layers = [
-                    RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
-                    RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+                    RouteRailLayer(id: "c0", coordinates: fallback, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: fallback, isCasing: false)
                 ]
             }
             await MainActor.run {

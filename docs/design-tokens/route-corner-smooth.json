@@ -1,0 +1,18 @@
+{
+  "id": "route.cornerSmooth",
+  "sourceOfTruth": "iPhone",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1 at same logical width; map path also uses filletRadiusMeters"
+  },
+  "revision": "v1-jw-corner-smooth",
+  "notes": "Render-only fillet at sharp vertices. Stored GPS / distance metrics must not change. Apply after stretch-split so casing→fill z-order and stretch boundaries use smoothed coords.",
+  "minTurnDegrees": 60,
+  "filletRadiusPt": 4,
+  "maxFilletAlongPt": 10,
+  "arcSamples": 5,
+  "filletRadiusMeters": 2.5,
+  "method": "quadraticBezier",
+  "methodNotes": "At vertex B with turn ≥ minTurnDegrees: cut T1/T2 along adjacent edges by along=min(r/tan(θ/2), maxAlong, 0.45·segLen); replace B with quadratic Bézier samples T1→B→T2 (arcSamples interior). Straight / gentle turns keep the vertex."
+}

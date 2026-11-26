@@ -948,8 +948,14 @@ enum HikingRouteSnapshotGenerator {
         #endif
         _ = (bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
         for (index, stretch) in stretchList.enumerated() {
-            let strokePoints = Self.simplifiedBridgePoints(
+            // Corner fillets in canvas pt (token filletRadiusPt × contentScale).
+            let filleted = RouteCornerSmoothing.smoothPoints(
                 stretch,
+                radius: RouteCornerSmoothing.filletRadiusPt * contentScale,
+                maxAlong: RouteCornerSmoothing.maxFilletAlongPt * contentScale
+            )
+            let strokePoints = Self.simplifiedBridgePoints(
+                filleted,
                 epsilon: max(0.55 * contentScale, 0.4)
             )
             let path = Self.continuousStrokePath(strokePoints)

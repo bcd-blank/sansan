@@ -119,6 +119,8 @@ enum UITestMapCaptureHooks {
         /// 가마지천 SoT crops — fixed camera so Android can match the same point.
         case zoomRouteStraight
         case zoomRouteCurve
+        case zoomRouteCurve2
+        case zoomRouteCurve3
         case zoomRouteCross
     }
 
@@ -126,17 +128,23 @@ enum UITestMapCaptureHooks {
     static let zoomInName = "com.jw.sansan.uitest.mapZoomIn" as CFString
     static let zoomStraightName = "com.jw.sansan.uitest.mapZoomRouteStraight" as CFString
     static let zoomCurveName = "com.jw.sansan.uitest.mapZoomRouteCurve" as CFString
+    static let zoomCurve2Name = "com.jw.sansan.uitest.mapZoomRouteCurve2" as CFString
+    static let zoomCurve3Name = "com.jw.sansan.uitest.mapZoomRouteCurve3" as CFString
     static let zoomCrossName = "com.jw.sansan.uitest.mapZoomRouteCross" as CFString
 
     /// 가마지천 a415 — dens-norm crop cameras (RESULT-route-casing / route-crossing).
     enum GamajiRouteCasingPose {
         static let span = MKCoordinateSpan(latitudeDelta: 0.00115, longitudeDelta: 0.00115)
-        /// JW crossing SoT: 4× tighter than casing crop span (0.00115/4).
+        /// JW crossing / sharp-corner SoT: 4× tighter than casing crop span (0.00115/4).
         static let cross4xSpan = MKCoordinateSpan(latitudeDelta: 0.0002875, longitudeDelta: 0.0002875)
         /// Long near-colinear stretch center (fixture idx ~207).
         static let straight = CLLocationCoordinate2D(latitude: 37.64311855, longitude: 126.63755373)
-        /// Sharpest turn ~86.6° (fixture idx 285).
+        /// Sharpest adjacent turn ~86.6° (fixture idx 285).
         static let curve = CLLocationCoordinate2D(latitude: 37.64010938, longitude: 126.64202434)
+        /// Second sharp ≥60° (fixture idx 466 · ~69°).
+        static let curve2 = CLLocationCoordinate2D(latitude: 37.63741827, longitude: 126.63125700)
+        /// Third sharp windowed turn (fixture idx 232 · ~96° / 12m arms).
+        static let curve3 = CLLocationCoordinate2D(latitude: 37.64200773, longitude: 126.63898472)
         /// True self-cross (edges 59×139, loop ~617m) — pond junction center.
         static let cross = CLLocationCoordinate2D(latitude: 37.64648737, longitude: 126.63456760)
     }
@@ -158,6 +166,12 @@ enum UITestMapCaptureHooks {
         )
         CFNotificationCenterAddObserver(
             center, nil, uiTestMapZoomCurveNotify, zoomCurveName, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestMapZoomCurve2Notify, zoomCurve2Name, nil, .deliverImmediately
+        )
+        CFNotificationCenterAddObserver(
+            center, nil, uiTestMapZoomCurve3Notify, zoomCurve3Name, nil, .deliverImmediately
         )
         CFNotificationCenterAddObserver(
             center, nil, uiTestMapZoomCrossNotify, zoomCrossName, nil, .deliverImmediately
@@ -227,6 +241,14 @@ private let uiTestMapZoomStraightNotify: CFNotificationCallback = { _, _, _, _, 
 
 private let uiTestMapZoomCurveNotify: CFNotificationCallback = { _, _, _, _, _ in
     uiTestMapPostAction("zoomRouteCurve")
+}
+
+private let uiTestMapZoomCurve2Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestMapPostAction("zoomRouteCurve2")
+}
+
+private let uiTestMapZoomCurve3Notify: CFNotificationCallback = { _, _, _, _, _ in
+    uiTestMapPostAction("zoomRouteCurve3")
 }
 
 private let uiTestMapZoomCrossNotify: CFNotificationCallback = { _, _, _, _, _ in
