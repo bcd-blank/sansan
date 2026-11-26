@@ -926,8 +926,15 @@ enum HikingRouteSnapshotGenerator {
         // Time order: stretch₁ casing→fill, stretch₂ casing→fill… so later white cuts earlier green.
         // Mid-loop cuts keep joins far from the geometric cross; overlap hides round-cap seams.
         // Cuts must use drawPoints indices (cleaned) so stretch slices match stroke geometry.
+        // Corner fillets on the full path first (token filletRadiusPt × contentScale),
+        // then stretch-split — avoids overlap stretches re-drawing a raw sharp tip.
+        let filletedAll = RouteCornerSmoothing.smoothPoints(
+            drawPoints,
+            radius: RouteCornerSmoothing.filletRadiusPt * contentScale,
+            maxAlong: RouteCornerSmoothing.maxFilletAlongPt * contentScale
+        )
         let drawHits = RouteSelfCrossing.hits(
-            in: drawPoints,
+            in: filletedAll,
             minLoopLength: minLoopLength,
             minSeparationEdges: 2,
             minCrossSin: 0.20,
@@ -936,7 +943,7 @@ enum HikingRouteSnapshotGenerator {
             proximityDistance: casingWidth * 0.65
         )
         let stretchList = RouteSelfCrossing.chronologicalPointStretches(
-            points: drawPoints,
+            points: filletedAll,
             hits: drawHits,
             overlapVertices: 4
         )
@@ -948,14 +955,8 @@ enum HikingRouteSnapshotGenerator {
         #endif
         _ = (bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
         for (index, stretch) in stretchList.enumerated() {
-            // Corner fillets in canvas pt (token filletRadiusPt × contentScale).
-            let filleted = RouteCornerSmoothing.smoothPoints(
-                stretch,
-                radius: RouteCornerSmoothing.filletRadiusPt * contentScale,
-                maxAlong: RouteCornerSmoothing.maxFilletAlongPt * contentScale
-            )
             let strokePoints = Self.simplifiedBridgePoints(
-                filleted,
+                stretch,
                 epsilon: max(0.55 * contentScale, 0.4)
             )
             let path = Self.continuousStrokePath(strokePoints)

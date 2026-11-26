@@ -494,25 +494,67 @@ struct HikingRecordRouteMapView: View {
             ]
         }
         Task(priority: .userInitiated) {
-            let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
-            let list = stretches.isEmpty ? [coords] : stretches
-            // Render-only corner fillets on each stretch (incl. boundaries); GPS unchanged.
-            let smoothed = list.map { RouteCornerSmoothing.smoothCoordinates($0) }
+            // Fillet the full path first, then stretch-split. Per-stretch fillets left
+            // sharp tips in overlap regions (curve3): one stretch cut the tip, the
+            // overlapping neighbor still drew the raw apex on top.
+            let filleted = RouteCornerSmoothing.smoothCoordinates(coords)
+            let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
+            let list = stretches.isEmpty ? [filleted] : stretches
             var layers: [RouteRailLayer] = []
-            layers.reserveCapacity(max(smoothed.count, 1) * 2)
-            for (index, stretch) in smoothed.enumerated() where stretch.count >= 2 {
+            layers.reserveCapacity(max(list.count, 1) * 2)
+            for (index, stretch) in list.enumerated() where stretch.count >= 2 {
                 layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
                 layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
             }
             if layers.isEmpty {
-                let fallback = RouteCornerSmoothing.smoothCoordinates(coords)
                 layers = [
-                    RouteRailLayer(id: "c0", coordinates: fallback, isCasing: true),
-                    RouteRailLayer(id: "f0", coordinates: fallback, isCasing: false)
+                    RouteRailLayer(id: "c0", coordinates: filleted, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: filleted, isCasing: false)
                 ]
             }
             await MainActor.run {
                 cachedRouteRailLayers = layers
+#if DEBUG
+                let enabled = RouteCornerSmoothing.isEnabled
+                let target = UITestMapCaptureHooks.GamajiRouteCasingPose.curve3
+                let targetLoc = CLLocation(latitude: target.latitude, longitude: target.longitude)
+                var nearest = Double.greatestFiniteMagnitude
+                var nearestCoord = target
+                for layer in layers where !layer.isCasing {
+                    for c in layer.coordinates {
+                        let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                        if d < nearest {
+                            nearest = d
+                            nearestCoord = c
+                        }
+                    }
+                }
+                let pts = layers.first?.coordinates.count ?? 0
+                var dump = "enabled=\(enabled) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filleted.count) args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
+                // Continuous fillet (pre-stretch) near apex — proves arc samples exist.
+                for c in filleted {
+                    let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                    if d <= 40 {
+                        dump += String(format: "fillet,%.6f,%.6f,%.2f\n", c.latitude, c.longitude, d)
+                    }
+                }
+                for layer in layers where !layer.isCasing {
+                    dump += "layer,\(layer.id)\n"
+                    for c in layer.coordinates {
+                        let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                        if d <= 40 {
+                            dump += String(format: "pt,%.6f,%.6f,%.2f\n", c.latitude, c.longitude, d)
+                        }
+                    }
+                }
+                if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    try? dump.write(
+                        to: dir.appendingPathComponent("corner-smooth-debug.txt"),
+                        atomically: true,
+                        encoding: .utf8
+                    )
+                }
+#endif
             }
         }
     }

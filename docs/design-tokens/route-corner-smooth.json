@@ -6,14 +6,16 @@
     "android": "dp",
     "mapping": "1:1 at same logical width; map path uses filletRadiusMeters (raised so 2.5m cap no longer blocks pt-scale fillets)"
   },
-  "revision": "v2-jw-corner-smooth-visible",
-  "notes": "Render-only fillet at sharp vertices. Stored GPS / distance metrics must not change. Apply after stretch-split so casing→fill z-order and stretch boundaries use smoothed coords. v2: minTurn 30° + circular arc (not quadratic-through-apex) so curve3 (~42° adjacent, short legs) cuts the tip visibly under 40% along cap.",
+  "revision": "v2d-jw-local-cluster-arc",
+  "notes": "Render-only. v2d: local clusterGap (14pt / 10m) so curve3 gets its own circularArc — v2c armTarget-sized gap merged a 30m-away elbow into one chord (still-pointed kink). Fillet full path THEN stretch-split.",
   "minTurnDegrees": 30,
   "filletRadiusPt": 12,
   "maxFilletAlongPt": 28,
   "maxAlongSegmentFraction": 0.4,
-  "arcSamples": 6,
+  "arcSamples": 14,
   "filletRadiusMeters": 8,
-  "method": "circularArc",
-  "methodNotes": "At vertex B with turn ≥ minTurnDegrees: cut T1/T2 along adjacent edges by along=min(r/tan(θ/2), maxFilletAlongPt, maxAlongSegmentFraction·segLen); replace B with circular-arc samples T1→T2 (arcSamples interior, G1). Quadratic-through-apex hugs mid-sharp tips — do not use. Straight / very gentle turns keep the vertex."
+  "clusterGapPt": 14,
+  "clusterGapMeters": 10,
+  "method": "circularArcExtendedArm",
+  "methodNotes": "Window arms up to maxAlong along the polyline; turn from arm directions; along=min(r/tan(θ/2), maxAlong, 0.4·arm); replace vertices between T1/T2 with circular-arc samples. Cluster only compound zigzags within clusterGap. GPS unchanged."
 }

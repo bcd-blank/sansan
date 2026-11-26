@@ -24,9 +24,9 @@ struct ThumbnailSwiftUIMapCaptureView: View {
     }
 
     private var routeRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
-        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coordinates)
-        let list = (stretches.isEmpty ? [coordinates] : stretches)
-            .map { RouteCornerSmoothing.smoothCoordinates($0) }
+        let filleted = RouteCornerSmoothing.smoothCoordinates(coordinates)
+        let stretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: filleted)
+        let list = stretches.isEmpty ? [filleted] : stretches
         var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
         for (index, stretch) in list.enumerated() where stretch.count >= 2 {
             layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
