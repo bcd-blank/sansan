@@ -530,27 +530,72 @@ struct HikingRecordRouteMapView: View {
                 RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
             ]
         }
+        let hikingPoints = record?.session.points
+        let segmentBreaks = record?.session.segmentBreaks
         Task(priority: .userInitiated) {
-            // Through-points Catmull. Stretch cut indices from RAW; slice smoothed
-            // so drawn verts stay on the densified curve.
-            let smoothed = RouteCornerSmoothing.smoothCoordinates(coords, metersPerPoint: mpp, alongPt: L)
-            let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
-            let list: [[CLLocationCoordinate2D]]
-            if rawStretches.count <= 1 {
-                list = [smoothed]
-            } else {
-                list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
-            }
+            // v5: pause-segment split → dejitter → Catmull (no controls across gaps).
+            // Stretch cut per pause-segment on that segment's raw coords.
             var layers: [RouteRailLayer] = []
-            layers.reserveCapacity(max(list.count, 1) * 2)
-            for (index, stretch) in list.enumerated() where stretch.count >= 2 {
-                layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
-                layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
+            var filletedTotal = 0
+            var removedTotal = 0
+            let pauseSegs: [[HikingPoint]]
+            if let hikingPoints {
+                pauseSegs = RouteCornerSmoothing.pausePointSegments(
+                    from: hikingPoints,
+                    segmentBreaks: segmentBreaks
+                )
+            } else {
+                pauseSegs = []
+            }
+            if !pauseSegs.isEmpty {
+                var layerIndex = 0
+                for rawSeg in pauseSegs {
+                    guard rawSeg.count >= 2 else { continue }
+                    var stats = RouteCornerSmoothing.DejitterStats()
+                    let smoothed = RouteCornerSmoothing.smoothHikingPoints(
+                        rawSeg,
+                        metersPerPoint: mpp,
+                        alongPt: L,
+                        statsOut: &stats
+                    )
+                    removedTotal += stats.removedCount
+                    filletedTotal += smoothed.count
+                    let rawCoords = rawSeg.map(\.coordinate)
+                    let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: rawCoords)
+                    let list: [[CLLocationCoordinate2D]]
+                    if rawStretches.count <= 1 {
+                        list = [smoothed]
+                    } else {
+                        list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
+                    }
+                    for stretch in list where stretch.count >= 2 {
+                        layers.append(RouteRailLayer(id: "c\(layerIndex)", coordinates: stretch, isCasing: true))
+                        layers.append(RouteRailLayer(id: "f\(layerIndex)", coordinates: stretch, isCasing: false))
+                        layerIndex += 1
+                    }
+                }
+            } else {
+                // Fallback: continuous display coords (no HikingPoint payload).
+                let smoothed = RouteCornerSmoothing.smoothCoordinates(
+                    coords, metersPerPoint: mpp, alongPt: L
+                )
+                filletedTotal = smoothed.count
+                let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
+                let list: [[CLLocationCoordinate2D]]
+                if rawStretches.count <= 1 {
+                    list = [smoothed]
+                } else {
+                    list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
+                }
+                for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+                    layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
+                    layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
+                }
             }
             if layers.isEmpty {
                 layers = [
-                    RouteRailLayer(id: "c0", coordinates: smoothed, isCasing: true),
-                    RouteRailLayer(id: "f0", coordinates: smoothed, isCasing: false)
+                    RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
                 ]
             }
             await MainActor.run {
@@ -575,7 +620,8 @@ struct HikingRecordRouteMapView: View {
                 let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
-                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(smoothed.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=catmullThroughPoints args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
+                let pauseN = pauseSegs.filter { $0.count >= 2 }.count
+                var dump = "enabled=\(enabled) rawCount=\(rawN) pauseSegs=\(pauseN) removed=\(removedTotal) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filletedTotal) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=catmullThroughPointsDejitter args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
                 if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                     try? dump.write(
                         to: dir.appendingPathComponent("corner-smooth-debug.txt"),

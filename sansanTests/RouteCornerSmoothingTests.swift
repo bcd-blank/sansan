@@ -92,16 +92,21 @@ final class RouteCornerSmoothingTests: XCTestCase {
         let L = RouteCornerSmoothing.alongPt(mapWidth: 390, mapHeight: 420)
         let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
         XCTAssertGreaterThan(tM, 5)
+        // Tight accuracy → dejitter never fires; validates Catmull through-points gates.
+        var stats = RouteCornerSmoothing.DejitterStats()
         let smoothed = RouteCornerSmoothing.smoothCoordinates(
             coords,
+            accuraciesMeters: Array(repeating: 0.1, count: coords.count),
             metersPerPoint: mpp,
-            alongPt: L
+            alongPt: L,
+            statsOut: &stats
         )
+        XCTAssertEqual(stats.removedCount, 0)
         XCTAssertEqual(smoothed.first!.latitude, coords.first!.latitude, accuracy: 1e-9)
         XCTAssertEqual(smoothed.last!.latitude, coords.last!.latitude, accuracy: 1e-9)
         XCTAssertGreaterThan(smoothed.count, coords.count)
 
-        // Pass: every raw point ≤0.5m from render line.
+        // Pass: every raw point ≤0.5m from render line (no removals).
         var maxDev = 0.0
         for c in coords {
             let loc = CLLocation(latitude: c.latitude, longitude: c.longitude)
@@ -196,5 +201,117 @@ final class RouteCornerSmoothingTests: XCTestCase {
             items, timestamp: \.t, saveOrderMatchesTimestamp: false
         )
         XCTAssertEqual(sorted.map(\.id), [1, 2, 0])
+    }
+
+    func testDejitterRemovesReboundSpike() {
+        // Straight run with a sharp rebound (heading ~180°, short arms, poor acc).
+        let points: [CGPoint] = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 20, y: 0),
+            CGPoint(x: 25, y: 0),
+            CGPoint(x: 22, y: 8), // spike
+            CGPoint(x: 30, y: 0),
+            CGPoint(x: 50, y: 0)
+        ]
+        let acc: [CGFloat] = [5, 5, 5, 15, 5, 5]
+        var stats = RouteCornerSmoothing.DejitterStats()
+        let smoothed = RouteCornerSmoothing.smoothPoints(
+            points,
+            metersPerUnit: 1,
+            metersPerScreenPoint: 1,
+            accuraciesMeters: acc,
+            statsOut: &stats
+        )
+        XCTAssertGreaterThanOrEqual(stats.removedCount, 1)
+        XCTAssertEqual(smoothed.first!.x, 0, accuracy: 1e-6)
+        XCTAssertEqual(smoothed.last!.x, 50, accuracy: 1e-6)
+        // Spike must not sit on the final polyline (far from y=0 line).
+        let spikeNear = smoothed.contains { hypot($0.x - 22, $0.y - 8) < 1.0 }
+        XCTAssertFalse(spikeNear, "dejitter must drop rebound spike")
+    }
+
+    func testPauseSegmentsDoNotBridgeGap() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [HikingPoint] = [
+            HikingPoint(id: UUID(), latitude: 37.0, longitude: 127.0, altitude: 0, timestamp: t0, horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.001, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(10), horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.002, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(20), horizontalAccuracy: 5),
+            // pause at +30s, resume at +90s — mid-pause GPS excluded
+            HikingPoint(id: UUID(), latitude: 37.010, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(50), horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.020, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(100), horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.021, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(110), horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.022, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(120), horizontalAccuracy: 5)
+        ]
+        let breaks = [
+            HikingSegmentBreak(
+                id: UUID(),
+                pauseLatitude: 37.002,
+                pauseLongitude: 127.0,
+                pauseTime: t0.addingTimeInterval(30),
+                resumeLatitude: 37.020,
+                resumeLongitude: 127.0,
+                resumeTime: t0.addingTimeInterval(90)
+            )
+        ]
+        let segs = RouteCornerSmoothing.pausePointSegments(from: points, segmentBreaks: breaks)
+        XCTAssertEqual(segs.count, 2)
+        XCTAssertEqual(segs[0].count, 3)
+        XCTAssertEqual(segs[1].count, 3)
+
+        let region = HikingMapRegion.fitting(
+            coordinates: points.map(\.coordinate),
+            viewSize: CGSize(width: 390, height: 420)
+        )
+        let rendered = RouteCornerSmoothing.smoothRenderSegments(
+            points: points,
+            segmentBreaks: breaks,
+            fittingRegion: region,
+            mapWidth: 390,
+            mapHeight: 420
+        )
+        XCTAssertEqual(rendered.count, 2)
+        // No polyline may contain both pre-pause last and post-resume first.
+        let preLast = segs[0].last!.coordinate
+        let postFirst = segs[1].first!.coordinate
+        for poly in rendered {
+            let hasPre = poly.contains {
+                abs($0.latitude - preLast.latitude) < 1e-9
+                    && abs($0.longitude - preLast.longitude) < 1e-9
+            }
+            let hasPost = poly.contains {
+                abs($0.latitude - postFirst.latitude) < 1e-9
+                    && abs($0.longitude - postFirst.longitude) < 1e-9
+            }
+            XCTAssertFalse(hasPre && hasPost, "pause gap must not be bridged")
+        }
+    }
+
+    func testSinglePointPauseSegmentYieldsNoLine() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let points: [HikingPoint] = [
+            HikingPoint(id: UUID(), latitude: 37.0, longitude: 127.0, altitude: 0, timestamp: t0, horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.001, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(10), horizontalAccuracy: 5),
+            HikingPoint(id: UUID(), latitude: 37.050, longitude: 127.0, altitude: 0, timestamp: t0.addingTimeInterval(100), horizontalAccuracy: 5)
+        ]
+        let breaks = [
+            HikingSegmentBreak(
+                id: UUID(),
+                pauseLatitude: 37.001,
+                pauseLongitude: 127.0,
+                pauseTime: t0.addingTimeInterval(20),
+                resumeLatitude: 37.050,
+                resumeLongitude: 127.0,
+                resumeTime: t0.addingTimeInterval(90)
+            )
+        ]
+        let rendered = RouteCornerSmoothing.smoothRenderSegments(
+            points: points,
+            segmentBreaks: breaks,
+            metersPerPoint: 1,
+            alongPt: 4
+        )
+        // First seg 2 pts → line; second seg 1 pt → no line.
+        XCTAssertEqual(rendered.count, 1)
+        XCTAssertEqual(rendered[0].first!.latitude, 37.0, accuracy: 1e-9)
     }
 }

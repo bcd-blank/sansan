@@ -47,18 +47,18 @@ struct WorkoutSummaryView: View {
     }
 
     private var summaryRouteRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
-        // Render zoom/size = summary map fit (340×220).
+        // Render zoom/size = summary map fit (340×220). Pause gaps from segmentBreaks.
         let region = HikingMapRegion.fitting(
             coordinates: routeCoordinates,
             viewSize: CGSize(width: 340, height: 220)
         )
-        let filleted = RouteCornerSmoothing.smoothCoordinates(
-            routeCoordinates,
+        let list = RouteCornerSmoothing.smoothRenderSegments(
+            points: session.points,
+            segmentBreaks: session.segmentBreaks,
             fittingRegion: region,
             mapWidth: 340,
             mapHeight: 220
         )
-        let list = [filleted]
         var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
         for (index, stretch) in list.enumerated() where stretch.count >= 2 {
             layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))

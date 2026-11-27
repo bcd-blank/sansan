@@ -13,26 +13,46 @@ import SwiftUI
 struct ThumbnailSwiftUIMapCaptureView: View {
     let coordinates: [CLLocationCoordinate2D]
     let viewSize: CGSize
+    /// When set, pause-aware v5 smooth uses raw points + segmentBreaks.
+    let hikingPoints: [HikingPoint]?
+    let segmentBreaks: [HikingSegmentBreak]?
 
     @State private var position: MapCameraPosition
 
-    init(coordinates: [CLLocationCoordinate2D], viewSize: CGSize) {
+    init(
+        coordinates: [CLLocationCoordinate2D],
+        viewSize: CGSize,
+        hikingPoints: [HikingPoint]? = nil,
+        segmentBreaks: [HikingSegmentBreak]? = nil
+    ) {
         self.coordinates = coordinates
         self.viewSize = viewSize
+        self.hikingPoints = hikingPoints
+        self.segmentBreaks = segmentBreaks
         let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: viewSize)
         _position = State(initialValue: .region(region))
     }
 
     private var routeRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
-        // Render zoom/size = thumbnail fit camera.
         let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: viewSize)
-        let filleted = RouteCornerSmoothing.smoothCoordinates(
-            coordinates,
-            fittingRegion: region,
-            mapWidth: viewSize.width,
-            mapHeight: viewSize.height
-        )
-        let list = [filleted]
+        let list: [[CLLocationCoordinate2D]]
+        if let hikingPoints {
+            list = RouteCornerSmoothing.smoothRenderSegments(
+                points: hikingPoints,
+                segmentBreaks: segmentBreaks,
+                fittingRegion: region,
+                mapWidth: viewSize.width,
+                mapHeight: viewSize.height
+            )
+        } else {
+            let filleted = RouteCornerSmoothing.smoothCoordinates(
+                coordinates,
+                fittingRegion: region,
+                mapWidth: viewSize.width,
+                mapHeight: viewSize.height
+            )
+            list = [filleted]
+        }
         var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
         for (index, stretch) in list.enumerated() where stretch.count >= 2 {
             layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
