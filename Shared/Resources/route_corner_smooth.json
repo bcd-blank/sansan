@@ -1,14 +1,13 @@
 {
   "id": "route.cornerSmooth",
-  "revision": "v3-resample-gauss-catmull",
+  "revision": "v4-catmull-through-points",
   "mapMinSideFraction": 0.01,
-  "resampleStepFractionOfTm": 1.0,
-  "gaussianSigmaSamples": 1.5,
-  "gaussianHalfWidth": 4,
   "catmullAlpha": 0.5,
-  "catmullSubdivisions": 8,
-  "minStretchLengthTmFactor": 3,
-  "method": "resampleGaussianCatmullRom",
+  "subdivPxPerSample": 2,
+  "subdivMin": 2,
+  "subdivMax": 16,
+  "duplicateMinSeparationMeters": 0.5,
+  "method": "catmullThroughPoints",
   "zoomRecalcDelta": 0.5,
-  "notes": "t_m=0.01\u00d7min(mapW,mapH)\u00d7mpp. Per stretch: resample s=t_m; Gaussian \u03c3=1.5 k=4; centripetal Catmull-Rom \u03b1=0.5 \u00d78. Skip if length<3\u00b7t_m; ends fixed. Render-only."
+  "notes": "Per stretch: keep saved points (skip dup <0.5m); centripetal Catmull-Rom α=0.5 through all kept; subdiv by screen length 1/2px (min2 max16); duplicate ends. Meter plane. |Δzoom|≥0.5 recompute subdiv. Render-only."
 }

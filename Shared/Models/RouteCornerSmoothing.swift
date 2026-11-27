@@ -6,24 +6,25 @@ import MapKit
 /// Render-only path smoothing. Stored GPS / distance must never use this array.
 /// Tokens: `docs/design-tokens/route-corner-smooth.json`.
 ///
-/// Spec (v3 — resample → Gaussian → centripetal Catmull-Rom):
-/// 1. Input = one stretch of raw draw verts (cut at self-crosses by callers).
-/// 2. t_m = 0.01×min(mapW,mapH)×mpp. If stretch length < 3·t_m → draw raw.
-/// 3. Uniform resample by cumulative distance, step s = t_m (both endpoints).
-/// 4. Gaussian σ=1.5 samples, half-width k=4 (9 taps); w_j=exp(-j²/(2·1.5²))
-///    normalized; window shrinks at ends; first/last fixed to original.
-/// 5. Centripetal Catmull-Rom α=0.5, 8 subdivisions/segment; duplicate ends.
-/// 6. Callers feed into MKPolyline; casing/fill 9/5/0.9 round unchanged.
+/// Spec (v4 — centripetal Catmull-Rom through kept points):
+/// 1. Input = one stretch of saved original points (save order). Skip only
+///    duplicates &lt;0.5 m from last kept; no other drop/move.
+/// 2. Centripetal Catmull-Rom α=0.5 through ALL kept points. Per segment,
+///    subdivide by screen length 1 sample / 2 px (min 2, max 16). Duplicate ends
+///    for controls.
+/// 3. Meter plane (ENU / mercator). |Δzoom|≥0.5 → callers recompute (subdiv counts).
+/// 4. Token `v4-catmull-through-points`. Casing/fill 9/5/0.9 round unchanged.
 enum RouteCornerSmoothing {
     static let alongFractionOfMinSide: CGFloat = 0.01
     /// Canvas/pt fallback when no map size is known.
     static let maxFilletAlongPt: CGFloat = 4
-    /// Skip smoothing when stretch length is shorter than this × t_m.
-    static let minStretchLengthTmFactor: CGFloat = 3
-    static let gaussianSigmaSamples: CGFloat = 1.5
-    static let gaussianHalfWidth: Int = 4
     static let catmullAlpha: CGFloat = 0.5
-    static let catmullSubdivisions: Int = 8
+    static let subdivPxPerSample: CGFloat = 2
+    static let subdivMin: Int = 2
+    static let subdivMax: Int = 16
+    /// Drop consecutive duplicates closer than this (meters).
+    static let duplicateMinSeparationMeters: CLLocationDistance = 0.5
+    static let zoomRecalcDelta: Double = 0.5
 
     static var isEnabled: Bool {
         let args = ProcessInfo.processInfo.arguments
@@ -32,7 +33,7 @@ enum RouteCornerSmoothing {
         return true
     }
 
-    /// L in screen pt = 1% of the shorter map side.
+    /// L in screen pt = 1% of the shorter map side (kept for dump / callers).
     static func alongPt(mapWidth: CGFloat, mapHeight: CGFloat) -> CGFloat {
         let side = min(mapWidth, mapHeight)
         guard side > 1 else { return maxFilletAlongPt }
@@ -50,7 +51,7 @@ enum RouteCornerSmoothing {
             * (visibleMapRect.width / Double(boundsWidth))
     }
 
-    /// t_m = L × metersPerPoint.
+    /// t_m = L × metersPerPoint (dump / legacy callers; v4 subdiv uses mpp directly).
     static func maxAlongMeters(
         metersPerPoint: CLLocationDistance,
         alongPt: CGFloat
@@ -63,28 +64,61 @@ enum RouteCornerSmoothing {
         log2(360.0 / max(longitudeDelta, 1e-12))
     }
 
-    /// Pt-space path (canvas / snapshot). `maxAlong` = t_m in the same unit as `points`.
+    /// If Part A finds save order ≠ timestamp order, sort render input by timestamp only.
+    /// No GPS jitter filter — report numbers; JW decides filter.
+    static func sortByTimestampIfNeeded<T>(
+        _ items: [T],
+        timestamp: (T) -> Date?,
+        saveOrderMatchesTimestamp: Bool
+    ) -> [T] {
+        guard !saveOrderMatchesTimestamp, items.count >= 2 else { return items }
+        var indexed = Array(items.enumerated())
+        indexed.sort { a, b in
+            let ta = timestamp(a.element)
+            let tb = timestamp(b.element)
+            switch (ta, tb) {
+            case let (ta?, tb?):
+                if ta != tb { return ta < tb }
+                return a.offset < b.offset
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return a.offset < b.offset
+            }
+        }
+        return indexed.map(\.element)
+    }
+
+    /// Pt-space path (canvas / snapshot).
+    /// - `metersPerUnit`: meters represented by one CGPoint unit (1 for canvas pt).
+    /// - `metersPerScreenPoint`: meters per screen point/px (1 for canvas pt → subdiv in pt).
+    static func smoothPoints(
+        _ points: [CGPoint],
+        metersPerUnit: CGFloat,
+        metersPerScreenPoint: CGFloat
+    ) -> [CGPoint] {
+        guard isEnabled, points.count >= 2 else { return points }
+        guard metersPerUnit > 1e-18, metersPerScreenPoint > 1e-18 else { return points }
+        let kept = dropNearDuplicates(points, metersPerUnit: metersPerUnit)
+        guard kept.count >= 2 else { return points }
+        return centripetalCatmullRomThrough(
+            kept,
+            alpha: catmullAlpha,
+            metersPerUnit: metersPerUnit,
+            metersPerScreenPoint: metersPerScreenPoint
+        )
+    }
+
+    /// Canvas convenience: treat pt as unit+screen scale (subdiv by pt length / 2).
     static func smoothPoints(
         _ points: [CGPoint],
         maxAlong: CGFloat
     ) -> [CGPoint] {
-        guard isEnabled, points.count >= 2, maxAlong > 1e-9 else { return points }
-        let total = pathLength(points)
-        // Short stretch: skip smooth, draw raw (endpoints already raw).
-        if total < minStretchLengthTmFactor * maxAlong { return points }
-        let s = maxAlong // spacing = t_m
-        guard s > 1e-12 else { return points }
-        let resampled = resampleUniform(points, step: s)
-        let gauss = gaussianSmooth(
-            resampled,
-            sigma: gaussianSigmaSamples,
-            halfWidth: gaussianHalfWidth
-        )
-        return centripetalCatmullRom(
-            gauss,
-            alpha: catmullAlpha,
-            subdivisions: catmullSubdivisions
-        )
+        // maxAlong retained for call-site compatibility; v4 ignores t_m resample.
+        _ = maxAlong
+        return smoothPoints(points, metersPerUnit: 1, metersPerScreenPoint: 1)
     }
 
     /// Map path — pass camera `metersPerPoint` and screen `alongPt` (= L).
@@ -95,15 +129,18 @@ enum RouteCornerSmoothing {
         alongPt: CGFloat
     ) -> [CLLocationCoordinate2D] {
         guard isEnabled, coordinates.count >= 2 else { return coordinates }
-        let tMeters = maxAlongMeters(metersPerPoint: metersPerPoint, alongPt: alongPt)
-        guard tMeters > 1e-9 else { return coordinates }
+        _ = alongPt // dump / legacy; subdiv uses metersPerPoint directly
+        guard metersPerPoint > 1e-12 else { return coordinates }
         let mapPoints = coordinates.map { MKMapPoint($0) }
         let midLat = coordinates[coordinates.count / 2].latitude
         let metersPerMapPoint = MKMetersPerMapPointAtLatitude(midLat)
         guard metersPerMapPoint > 1e-12 else { return coordinates }
-        let maxAlong = CGFloat(tMeters / metersPerMapPoint)
         let raw = mapPoints.map { CGPoint(x: $0.x, y: $0.y) }
-        let smoothed = smoothPoints(raw, maxAlong: maxAlong)
+        let smoothed = smoothPoints(
+            raw,
+            metersPerUnit: CGFloat(metersPerMapPoint),
+            metersPerScreenPoint: CGFloat(metersPerPoint)
+        )
         return smoothed.map {
             MKMapPoint(x: Double($0.x), y: Double($0.y)).coordinate
         }
@@ -128,99 +165,77 @@ enum RouteCornerSmoothing {
         )
     }
 
-    // MARK: - v3 pipeline
+    // MARK: - v4 pipeline
 
-    private static func pathLength(_ points: [CGPoint]) -> CGFloat {
-        var total: CGFloat = 0
-        for i in 1..<points.count {
-            total += hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
-        }
-        return total
-    }
-
-    /// Linear interpolate along cumulative distance at uniform step `s`. Both endpoints included.
-    private static func resampleUniform(_ points: [CGPoint], step s: CGFloat) -> [CGPoint] {
-        guard points.count >= 2, s > 1e-12 else { return points }
-        var cum: [CGFloat] = [0]
-        cum.reserveCapacity(points.count)
-        for i in 1..<points.count {
-            let d = hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
-            cum.append(cum[i - 1] + d)
-        }
-        let total = cum[cum.count - 1]
-        guard total > 1e-9 else { return [points[0], points[points.count - 1]] }
-
-        var out: [CGPoint] = []
-        out.reserveCapacity(Int(total / s) + 2)
-        out.append(points[0])
-        var target = s
-        var seg = 0
-        while target < total - 1e-9 {
-            while seg < cum.count - 2, cum[seg + 1] < target {
-                seg += 1
+    /// Keep first; skip points &lt;0.5 m from last kept; always keep last.
+    private static func dropNearDuplicates(
+        _ points: [CGPoint],
+        metersPerUnit: CGFloat
+    ) -> [CGPoint] {
+        guard points.count >= 2 else { return points }
+        let minSepUnits = CGFloat(duplicateMinSeparationMeters) / metersPerUnit
+        var kept: [CGPoint] = [points[0]]
+        for i in 1..<(points.count - 1) {
+            let p = points[i]
+            let prev = kept[kept.count - 1]
+            if hypot(p.x - prev.x, p.y - prev.y) >= minSepUnits {
+                kept.append(p)
             }
-            let d0 = cum[seg]
-            let d1 = cum[seg + 1]
-            let span = d1 - d0
-            let t = span > 1e-12 ? (target - d0) / span : 0
-            let a = points[seg]
-            let b = points[seg + 1]
-            out.append(CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
-            target += s
         }
         let last = points[points.count - 1]
-        if let prev = out.last, hypot(prev.x - last.x, prev.y - last.y) > 1e-9 {
-            out.append(last)
-        } else if out.isEmpty {
-            out.append(last)
-        } else {
-            out[out.count - 1] = last
-        }
-        return out
-    }
-
-    /// Gaussian smooth. σ in samples; halfWidth k → 2k+1 taps.
-    /// Near ends the window shrinks symmetrically; index 0 and last stay fixed.
-    private static func gaussianSmooth(
-        _ points: [CGPoint],
-        sigma: CGFloat,
-        halfWidth k: Int
-    ) -> [CGPoint] {
-        let n = points.count
-        guard n >= 2, k > 0, sigma > 1e-12 else { return points }
-        var out = Array(repeating: CGPoint.zero, count: n)
-        out[0] = points[0]
-        out[n - 1] = points[n - 1]
-        if n == 2 { return out }
-
-        let twoSigmaSq = 2 * sigma * sigma
-        for i in 1..<(n - 1) {
-            let left = min(k, i, n - 1 - i)
-            var sx: CGFloat = 0
-            var sy: CGFloat = 0
-            var wSum: CGFloat = 0
-            for j in -left...left {
-                let w = exp(-(CGFloat(j) * CGFloat(j)) / twoSigmaSq)
-                let p = points[i + j]
-                sx += p.x * w
-                sy += p.y * w
-                wSum += w
+        if let prev = kept.last {
+            if hypot(last.x - prev.x, last.y - prev.y) >= 1e-12 {
+                kept.append(last)
+            } else {
+                kept[kept.count - 1] = last
             }
-            out[i] = CGPoint(x: sx / wSum, y: sy / wSum)
+        } else {
+            kept.append(last)
         }
-        return out
+        return kept
     }
 
-    /// Centripetal Catmull-Rom. Duplicate ends for control; `subdivisions` samples per segment
-    /// (exclusive of segment start; segment end included via next segment / final append).
-    private static func centripetalCatmullRom(
+    private static func subdivisionCount(
+        from: CGPoint,
+        to: CGPoint,
+        metersPerUnit: CGFloat,
+        metersPerScreenPoint: CGFloat
+    ) -> Int {
+        let units = hypot(to.x - from.x, to.y - from.y)
+        let meters = units * metersPerUnit
+        let screenPx = meters / metersPerScreenPoint
+        let raw = Int((screenPx / subdivPxPerSample).rounded())
+        return max(subdivMin, min(subdivMax, max(raw, subdivMin)))
+    }
+
+    /// Centripetal Catmull-Rom through all points. Duplicate ends for controls.
+    /// Per-segment subdivision from screen length (1 / 2 px, clamp 2…16).
+    private static func centripetalCatmullRomThrough(
         _ points: [CGPoint],
         alpha: CGFloat,
-        subdivisions: Int
+        metersPerUnit: CGFloat,
+        metersPerScreenPoint: CGFloat
     ) -> [CGPoint] {
         let n = points.count
-        guard n >= 2, subdivisions > 0 else { return points }
-        if n == 2 { return points }
+        guard n >= 2 else { return points }
+        if n == 2 {
+            let subdiv = subdivisionCount(
+                from: points[0],
+                to: points[1],
+                metersPerUnit: metersPerUnit,
+                metersPerScreenPoint: metersPerScreenPoint
+            )
+            var out: [CGPoint] = [points[0]]
+            for s in 1..<subdiv {
+                let u = CGFloat(s) / CGFloat(subdiv)
+                out.append(CGPoint(
+                    x: points[0].x + (points[1].x - points[0].x) * u,
+                    y: points[0].y + (points[1].y - points[0].y) * u
+                ))
+            }
+            out.append(points[1])
+            return out
+        }
 
         // Duplicate ends for control points.
         var ctrl = [CGPoint]()
@@ -230,7 +245,7 @@ enum RouteCornerSmoothing {
         ctrl.append(points[n - 1])
 
         var out: [CGPoint] = []
-        out.reserveCapacity((n - 1) * subdivisions + 1)
+        out.reserveCapacity(n * subdivMax)
         out.append(points[0])
 
         for i in 1..<(ctrl.count - 2) {
@@ -238,36 +253,36 @@ enum RouteCornerSmoothing {
             let p1 = ctrl[i]
             let p2 = ctrl[i + 1]
             let p3 = ctrl[i + 2]
+            let subdiv = subdivisionCount(
+                from: p1,
+                to: p2,
+                metersPerUnit: metersPerUnit,
+                metersPerScreenPoint: metersPerScreenPoint
+            )
             let t0: CGFloat = 0
             let t1 = t0 + pow(max(hypot(p1.x - p0.x, p1.y - p0.y), 1e-12), alpha)
             let t2 = t1 + pow(max(hypot(p2.x - p1.x, p2.y - p1.y), 1e-12), alpha)
             let t3 = t2 + pow(max(hypot(p3.x - p2.x, p3.y - p2.y), 1e-12), alpha)
-            // Sample interior of [p1,p2]: subdivisions steps → subdivisions points excluding p1,
-            // including p2 only on the final segment.
-            for s in 1...subdivisions {
-                let u = CGFloat(s) / CGFloat(subdivisions)
-                let t = t1 + (t2 - t1) * u
-                let pt = catmullPoint(p0: p0, p1: p1, p2: p2, p3: p3, t0: t0, t1: t1, t2: t2, t3: t3, t: t)
-                if s < subdivisions {
-                    out.append(pt)
-                } else if i == ctrl.count - 3 {
-                    // Last segment end = original last (already fixed).
-                    out.append(points[n - 1])
+            // Sample interior of [p1,p2]; land exactly on kept p2 at segment end.
+            for s in 1...subdiv {
+                if s == subdiv {
+                    out.append(ctrl[i + 1])
                 } else {
-                    out.append(pt)
+                    let u = CGFloat(s) / CGFloat(subdiv)
+                    let t = t1 + (t2 - t1) * u
+                    out.append(catmullPoint(
+                        p0: p0, p1: p1, p2: p2, p3: p3,
+                        t0: t0, t1: t1, t2: t2, t3: t3, t: t
+                    ))
                 }
             }
         }
-        // Ensure exact endpoint.
-        if let last = out.last, hypot(last.x - points[n - 1].x, last.y - points[n - 1].y) > 1e-9 {
-            out[out.count - 1] = points[n - 1]
-        } else if out.isEmpty {
+        out[0] = points[0]
+        if out.isEmpty {
             out.append(points[n - 1])
         } else {
             out[out.count - 1] = points[n - 1]
         }
-        // Ensure exact start.
-        out[0] = points[0]
         return out
     }
 
