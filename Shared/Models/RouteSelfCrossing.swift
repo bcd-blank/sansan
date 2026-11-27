@@ -3,7 +3,8 @@ import MapKit
 import CoreGraphics
 
 /// True self-crossing hits on a route polyline (later edge over earlier).
-enum RouteSelfCrossing {
+/// `nonisolated` — SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor; must run off-main in MapView.
+nonisolated enum RouteSelfCrossing: Sendable {
     struct Hit: Equatable {
         /// Index of the earlier edge start vertex (`points[earlierEdge] → points[earlierEdge+1]`).
         let earlierEdge: Int
@@ -60,6 +61,10 @@ enum RouteSelfCrossing {
     /// `minLoopLength` is in the same units as `points`.
     /// `proximityDistance`: also treat near-parallel approaches within this gap as crosses.
     /// `minProximitySin`: Android parity — proximity branch needs |sin θ| ≥ 0.28 (~12°).
+    ///
+    /// Perf: precompute edge lengths once; accumulate `i→j` length with `acc += d[j-1]`
+    /// (never `cum[j]-cum[i]` — FP mismatch vs Android). Skip pairs whose AABBs
+    /// (expanded by `proximityDistance`) do not overlap. Intersection math unchanged.
     static func hits(
         in points: [CGPoint],
         minLoopLength: CGFloat,
@@ -72,14 +77,90 @@ enum RouteSelfCrossing {
         // Do not re-clean — laterEdge must stay aligned with the caller's drawPoints.
         guard points.count >= 5 else { return [] }
         let lastEdge = points.count - 2
+        // d[k] = |points[k]→points[k+1]| for k = 0…n-2 — one pass.
+        var d = [CGFloat](repeating: 0, count: lastEdge + 1)
+        for k in 0...lastEdge {
+            let a = points[k], b = points[k + 1]
+            d[k] = hypot(b.x - a.x, b.y - a.y)
+        }
+        let pad = max(0, proximityDistance)
         var crosses: [Hit] = []
         for i in 0...lastEdge {
             let jMin = i + max(2, minSeparationEdges)
             guard jMin <= lastEdge else { continue }
-            for j in jMin...lastEdge {
-                if pathLength(points, from: i, to: j) < minLoopLength { continue }
+            // Outer i resets acc; each j+=1 adds d[j-1] → length i→j (same as pathLength).
+            var acc: CGFloat = 0
+            for j in (i + 1)...lastEdge {
+                acc += d[j - 1]
+                if j < jMin { continue }
+                if acc < minLoopLength { continue }
+                let a0 = points[i], a1 = points[i + 1]
+                let b0 = points[j], b1 = points[j + 1]
+                if !segmentAABBsOverlap(a0, a1, b0, b1, pad: pad) { continue }
                 let sin = edgesSin(points, i: i, j: j)
                 // Reject near-collinear crawls (Android shareRouteAllCrossings).
+                if sin < minCrossSin { continue }
+                if let hit = segmentIntersection(
+                    a0, a1, b0, b1,
+                    minCrossSin: minCrossSin
+                ) {
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: hit.u, point: hit.point))
+                    continue
+                }
+                // Near-parallel proximity: ribbons visually cross even without a strict X.
+                // Require steeper angle than hard X so dense curve joints do not false-hit.
+                if proximityDistance > 0,
+                   sin >= minProximitySin,
+                   let near = segmentProximity(
+                    a0, a1, b0, b1,
+                    maxDistance: proximityDistance
+                   ) {
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: near.u, point: near.point))
+                }
+            }
+        }
+        crosses.sort { a, b in
+            a.laterEdge < b.laterEdge || (a.laterEdge == b.laterEdge && a.u < b.u)
+        }
+        var unique: [Hit] = []
+        for cross in crosses {
+            if unique.contains(where: {
+                hypot($0.point.x - cross.point.x, $0.point.y - cross.point.y) < dedupeDistance
+            }) {
+                continue
+            }
+            unique.append(cross)
+        }
+        return unique
+    }
+
+    /// Same as `hits` but without AABB skip — O(n²) reference to prove bbox is result-neutral.
+    static func hitsWithoutAABBSkip(
+        in points: [CGPoint],
+        minLoopLength: CGFloat,
+        minSeparationEdges: Int = 5,
+        minCrossSin: CGFloat = 0.18,
+        minProximitySin: CGFloat = 0.28,
+        dedupeDistance: CGFloat,
+        proximityDistance: CGFloat = 0
+    ) -> [Hit] {
+        guard points.count >= 5 else { return [] }
+        let lastEdge = points.count - 2
+        var d = [CGFloat](repeating: 0, count: lastEdge + 1)
+        for k in 0...lastEdge {
+            let a = points[k], b = points[k + 1]
+            d[k] = hypot(b.x - a.x, b.y - a.y)
+        }
+        var crosses: [Hit] = []
+        for i in 0...lastEdge {
+            let jMin = i + max(2, minSeparationEdges)
+            guard jMin <= lastEdge else { continue }
+            var acc: CGFloat = 0
+            for j in (i + 1)...lastEdge {
+                acc += d[j - 1]
+                if j < jMin { continue }
+                if acc < minLoopLength { continue }
+                let sin = edgesSin(points, i: i, j: j)
                 if sin < minCrossSin { continue }
                 if let hit = segmentIntersection(
                     points[i], points[i + 1],
@@ -89,8 +170,60 @@ enum RouteSelfCrossing {
                     crosses.append(Hit(earlierEdge: i, laterEdge: j, u: hit.u, point: hit.point))
                     continue
                 }
-                // Near-parallel proximity: ribbons visually cross even without a strict X.
-                // Require steeper angle than hard X so dense curve joints do not false-hit.
+                if proximityDistance > 0,
+                   sin >= minProximitySin,
+                   let near = segmentProximity(
+                    points[i], points[i + 1],
+                    points[j], points[j + 1],
+                    maxDistance: proximityDistance
+                   ) {
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: near.u, point: near.point))
+                }
+            }
+        }
+        crosses.sort { a, b in
+            a.laterEdge < b.laterEdge || (a.laterEdge == b.laterEdge && a.u < b.u)
+        }
+        var unique: [Hit] = []
+        for cross in crosses {
+            if unique.contains(where: {
+                hypot($0.point.x - cross.point.x, $0.point.y - cross.point.y) < dedupeDistance
+            }) {
+                continue
+            }
+            unique.append(cross)
+        }
+        return unique
+    }
+
+    /// Pre-optimization reference (nested `pathLength` scan). Tests only — bit-identical hits.
+    static func hitsLegacyNestedPathLength(
+        in points: [CGPoint],
+        minLoopLength: CGFloat,
+        minSeparationEdges: Int = 5,
+        minCrossSin: CGFloat = 0.18,
+        minProximitySin: CGFloat = 0.28,
+        dedupeDistance: CGFloat,
+        proximityDistance: CGFloat = 0
+    ) -> [Hit] {
+        guard points.count >= 5 else { return [] }
+        let lastEdge = points.count - 2
+        var crosses: [Hit] = []
+        for i in 0...lastEdge {
+            let jMin = i + max(2, minSeparationEdges)
+            guard jMin <= lastEdge else { continue }
+            for j in jMin...lastEdge {
+                if pathLength(points, from: i, to: j) < minLoopLength { continue }
+                let sin = edgesSin(points, i: i, j: j)
+                if sin < minCrossSin { continue }
+                if let hit = segmentIntersection(
+                    points[i], points[i + 1],
+                    points[j], points[j + 1],
+                    minCrossSin: minCrossSin
+                ) {
+                    crosses.append(Hit(earlierEdge: i, laterEdge: j, u: hit.u, point: hit.point))
+                    continue
+                }
                 if proximityDistance > 0,
                    sin >= minProximitySin,
                    let near = segmentProximity(
@@ -377,6 +510,23 @@ enum RouteSelfCrossing {
             length += hypot(points[index + 1].x - points[index].x, points[index + 1].y - points[index].y)
         }
         return length
+    }
+
+    /// Axis-aligned bounding boxes of two segments (optional pad for proximity).
+    private static func segmentAABBsOverlap(
+        _ a0: CGPoint, _ a1: CGPoint,
+        _ b0: CGPoint, _ b1: CGPoint,
+        pad: CGFloat
+    ) -> Bool {
+        let aMinX = min(a0.x, a1.x) - pad
+        let aMaxX = max(a0.x, a1.x) + pad
+        let aMinY = min(a0.y, a1.y) - pad
+        let aMaxY = max(a0.y, a1.y) + pad
+        let bMinX = min(b0.x, b1.x) - pad
+        let bMaxX = max(b0.x, b1.x) + pad
+        let bMinY = min(b0.y, b1.y) - pad
+        let bMaxY = max(b0.y, b1.y) + pad
+        return aMaxX >= bMinX && bMaxX >= aMinX && aMaxY >= bMinY && bMaxY >= aMinY
     }
 
     private static func orient(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat {

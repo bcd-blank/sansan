@@ -40,6 +40,134 @@ enum UITestSupport {
             exportSummariesIfNeeded()
             exportSaveStylesIfNeeded()
             exportPhotoOffEvidenceIfNeeded()
+            anrSelfcrossGateIfNeeded()
+        }
+    }
+
+    /// `-SANSAN_ANR_SELFCROSS_GATE` — real-store only (no seed). Benches self-cross,
+    /// probes MainActor hangs ≥250ms during stretch rebuild, exports 3 image-save
+    /// styles × longest + one other record.
+    private static func anrSelfcrossGateIfNeeded() {
+        let env = ProcessInfo.processInfo.environment["SANSAN_ANR_SELFCROSS_GATE"]
+        let arg = ProcessInfo.processInfo.arguments.contains("-SANSAN_ANR_SELFCROSS_GATE")
+        guard env == "1" || arg else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.2))
+            let store = HikingRecordStore.shared
+            store.reloadForCurrentUser()
+            let records = store.records.sorted { $0.session.points.count > $1.session.points.count }
+            let dir = UserDataPaths.documentsDirectory
+                .appendingPathComponent("anr-selfcross-gate", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            guard !records.isEmpty else {
+                try? "FAIL empty store (need real backup, no seed)\n"
+                    .write(to: dir.appendingPathComponent("GATE_DONE.txt"), atomically: true, encoding: .utf8)
+                return
+            }
+
+            var lines: [String] = ["# anr-selfcross-gate"]
+            var hangOver250 = 0
+            var maxFirstMs = 0.0
+            var allUnder1s = true
+            for record in records {
+                let coords = record.session.points.map(\.coordinate)
+                guard coords.count >= 2 else { continue }
+                let name = record.displayName ?? record.id.uuidString
+                // First path display = map-first continuous dual-rail on MainActor
+                // (prepareRouteDisplayData → rebuildRouteRailLayers sync path).
+                let tPaint = CFAbsoluteTimeGetCurrent()
+                let quickCoords = record.session.points.map(\.coordinate)
+                let continuousRails = (casing: quickCoords, fill: quickCoords)
+                let firstPaintMs = (CFAbsoluteTimeGetCurrent() - tPaint) * 1000
+                _ = continuousRails.casing.count
+
+                // Start detached stretch compute, probe MainActor responsiveness during it.
+                let computeTask = Task.detached(priority: .userInitiated) {
+                    RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
+                }
+                let pingStart = CFAbsoluteTimeGetCurrent()
+                let hangMs: Double = await withCheckedContinuation { cont in
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        // Yield so detached work is scheduled, then ping main.
+                        usleep(5_000)
+                        DispatchQueue.main.async {
+                            let late = (CFAbsoluteTimeGetCurrent() - pingStart) * 1000
+                            cont.resume(returning: late)
+                        }
+                    }
+                }
+                let t0 = CFAbsoluteTimeGetCurrent()
+                let stretches = await computeTask.value
+                let computeMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000 + 5 // include usleep slack wall
+                if hangMs >= 250 { hangOver250 += 1 }
+                if firstPaintMs >= 1000 { allUnder1s = false }
+                maxFirstMs = max(maxFirstMs, firstPaintMs)
+                lines.append(
+                    String(
+                        format: "record=%@ pts=%d stretches=%d firstPaintMs=%.1f computeMs=%.1f hangProbeMs=%.1f",
+                        name, coords.count, stretches.count, firstPaintMs, computeMs, hangMs
+                    )
+                )
+            }
+            lines.append(
+                String(
+                    format: "summary records=%d maxFirstPaintMs=%.1f hang≥250=%d allFirstPaint<1s=%@",
+                    records.count, maxFirstMs, hangOver250, allUnder1s ? "yes" : "no"
+                )
+            )
+
+            let exportMapOptions = HikingShareMapExportOptions(
+                showsDistanceMarkers: true,
+                showsTimeMarkers: true,
+                showsWeatherLabel: false,
+                showsPhotoMarkers: false,
+                showsPinnedThumbnails: false
+            )
+            let styles: [(HikingRecordImageSaveStyle, String)] = [
+                (.card, "data-card"),
+                (.summary, "simple-grey"),
+                (.simpleColor, "simple-color"),
+            ]
+            let previous = HikingRecordImageSavePreferences.style
+            defer { HikingRecordImageSavePreferences.style = previous }
+            var targets: [(SavedHikingSession, String)] = []
+            if let longest = records.first {
+                let slug = (longest.displayName ?? "longest")
+                    .replacingOccurrences(of: " ", with: "-")
+                targets.append((longest, slug))
+            }
+            if let other = records.dropFirst().first(where: { $0.session.points.count >= 200 })
+                ?? records.dropFirst().first {
+                let slug = (other.displayName ?? "other")
+                    .replacingOccurrences(of: " ", with: "-")
+                targets.append((other, slug))
+            }
+            for (record, slug) in targets {
+                for (style, styleSlug) in styles {
+                    HikingRecordImageSavePreferences.style = style
+                    let tSave = CFAbsoluteTimeGetCurrent()
+                    let image = await store.shareImage(
+                        for: record.id,
+                        mapOptions: exportMapOptions,
+                        fullScreen: true
+                    )
+                    let saveMs = (CFAbsoluteTimeGetCurrent() - tSave) * 1000
+                    if let image, let data = image.pngData() {
+                        let file = "ios-\(slug)-\(styleSlug).png"
+                        try? data.write(to: dir.appendingPathComponent(file), options: .atomic)
+                        lines.append(
+                            String(format: "save OK %@ %.1fms %dx%d", file, saveMs, Int(image.size.width), Int(image.size.height))
+                        )
+                    } else {
+                        lines.append(String(format: "save FAIL %@ %.1fms", "\(slug)-\(styleSlug)", saveMs))
+                    }
+                }
+            }
+
+            let body = lines.joined(separator: "\n") + "\n"
+            try? body.write(to: dir.appendingPathComponent("gate-log.txt"), atomically: true, encoding: .utf8)
+            try? body.write(to: dir.appendingPathComponent("GATE_DONE.txt"), atomically: true, encoding: .utf8)
+            print("[anr-selfcross-gate]\n\(body)")
         }
     }
 

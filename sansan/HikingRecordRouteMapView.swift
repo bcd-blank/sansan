@@ -491,11 +491,15 @@ struct HikingRecordRouteMapView: View {
 
     /// Cached stretch rails — avoid O(n²) self-cross on every Map body pass.
     @State private var cachedRouteRailLayers: [RouteRailLayer] = []
+    /// record id + point count + style key of the layers currently applied / in flight.
+    @State private var cachedRouteRailCacheKey: String?
+    /// Generation token — stale detached self-cross results are discarded.
+    @State private var routeRailRebuildGeneration: UInt64 = 0
     /// Screen m/pt used for the last fillet rebuild (fit-open + idle zoom Δ≥0.5).
     @State private var filletMetersPerPoint: CLLocationDistance = 0
     @State private var lastFilletZoomLevel: Double?
 
-    private struct RouteRailLayer: Identifiable {
+    private struct RouteRailLayer: Identifiable, Sendable {
         let id: String
         let coordinates: [CLLocationCoordinate2D]
         let isCasing: Bool
@@ -510,10 +514,25 @@ struct HikingRecordRouteMapView: View {
         )
     }
 
+    /// Cache key: record id + GPS point count + fillet/style params (display rules unchanged).
+    private func routeRailStyleCacheKey(
+        pointCount: Int,
+        mpp: CLLocationDistance,
+        alongPt: CGFloat,
+        zoom: Double
+    ) -> String {
+        let mppKey = String(format: "%.5f", mpp)
+        let alongKey = String(format: "%.2f", alongPt)
+        let zoomKey = String(format: "%.2f", zoom)
+        let sizeKey = "\(Int(mapWidth.rounded()))x\(Int(mapHeight.rounded()))"
+        return "\(recordID.uuidString)|\(pointCount)|\(mppKey)|\(alongKey)|\(zoomKey)|\(sizeKey)"
+    }
+
     private func rebuildRouteRailLayers(metersPerPoint: CLLocationDistance? = nil, region: MKCoordinateRegion? = nil) {
         let coords = routeCoordinates
         guard coords.count >= 2 else {
             cachedRouteRailLayers = []
+            cachedRouteRailCacheKey = nil
             return
         }
         let mpp = metersPerPoint ?? currentFilletMetersPerPoint(region: region)
@@ -521,6 +540,13 @@ struct HikingRecordRouteMapView: View {
         let zoom = RouteCornerSmoothing.zoomLevel(
             longitudeDelta: (region ?? fittingRegion).span.longitudeDelta
         )
+        let pointCount = record?.session.points.count ?? coords.count
+        let cacheKey = routeRailStyleCacheKey(pointCount: pointCount, mpp: mpp, alongPt: L, zoom: zoom)
+        if cacheKey == cachedRouteRailCacheKey, !cachedRouteRailLayers.isEmpty {
+            filletMetersPerPoint = mpp
+            lastFilletZoomLevel = zoom
+            return
+        }
         filletMetersPerPoint = mpp
         lastFilletZoomLevel = zoom
         // Continuous dual-rail first (raw — never smooth on MainActor).
@@ -530,9 +556,13 @@ struct HikingRecordRouteMapView: View {
                 RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
             ]
         }
+        routeRailRebuildGeneration &+= 1
+        let generation = routeRailRebuildGeneration
+        let expectedRecordID = recordID
         let hikingPoints = record?.session.points
         let segmentBreaks = record?.session.segmentBreaks
-        Task(priority: .userInitiated) {
+        // Self-cross + fillet off main — only layer apply touches MainActor.
+        Task.detached(priority: .userInitiated) {
             // v5: pause-segment split → dejitter → Catmull (no controls across gaps).
             // Stretch cut per pause-segment on that segment's raw coords.
             var layers: [RouteRailLayer] = []
@@ -599,7 +629,11 @@ struct HikingRecordRouteMapView: View {
                 ]
             }
             await MainActor.run {
+                // Discard late results for a different record or superseded rebuild.
+                guard generation == routeRailRebuildGeneration,
+                      expectedRecordID == recordID else { return }
                 cachedRouteRailLayers = layers
+                cachedRouteRailCacheKey = cacheKey
 #if DEBUG
                 let enabled = RouteCornerSmoothing.isEnabled
                 let target = UITestMapCaptureHooks.GamajiRouteCasingPose.curve3

@@ -32,7 +32,10 @@ enum HikingRouteSnapshotAppearance {
     }
 }
 
-enum HikingRouteSnapshotGenerator {
+/// Snapshot / share / image-save route compositor.
+/// Heavy self-cross work is `nonisolated` + precomputed off the MKMapSnapshotter
+/// callback / MainActor; the CG stroke pass only paints prepared stretches.
+nonisolated enum HikingRouteSnapshotGenerator {
     /// 상세 화면·썸네일용 경로 이미지 (상세 지도와 동일 종횡비).
     static var routeImageSize: CGSize { HikingRouteImageLayout.exportSize }
 
@@ -235,6 +238,22 @@ enum HikingRouteSnapshotGenerator {
                 ? base.image.size
                 : targetCanvas
             captureIncludesOnScreenLogo = base.includesLiveDetailContent
+            // Project on MainActor (live map closure), then hits/stretches off-main.
+            let projected = projectRouteSegmentPoints(
+                using: projector,
+                record: record,
+                fallbackCoordinates: coordinates,
+                canvasSize: liveCanvas
+            )
+            let contentScale = mapContentScale(for: liveCanvas.width, appearance: .standard)
+            let prepared = await Task.detached(priority: .userInitiated) {
+                Self.prepareRouteOverlayDrawing(
+                    segmentPointLists: projected,
+                    contentScale: contentScale,
+                    canvasSize: liveCanvas,
+                    appearance: .standard
+                )
+            }.value
             return composite(
                 baseImage: base.image,
                 projector: projector,
@@ -244,7 +263,8 @@ enum HikingRouteSnapshotGenerator {
                 pixelScale: scale,
                 mapOptions: mapOptions,
                 includesLiveDetailContent: base.includesLiveDetailContent,
-                listThumbnailOnly: listThumbnailOnly
+                listThumbnailOnly: listThumbnailOnly,
+                preparedOverlay: prepared
             )
         }
 
@@ -346,26 +366,43 @@ enum HikingRouteSnapshotGenerator {
                     return
                 }
 
-                let projector = SnapshotCoordinateProjector(snapshot: snapshot)
-                let baseImage: UIImage
-                if appearance.usesGreyMapTone {
-                    baseImage = shareSummaryTonedMapImage(snapshot.image) ?? snapshot.image
-                } else {
-                    baseImage = snapshot.image
+                // Leave the snapshotter callback immediately — tone + project + hits off-queue.
+                Task.detached(priority: .userInitiated) {
+                    let projector = SnapshotCoordinateProjector(snapshot: snapshot)
+                    let baseImage: UIImage
+                    if appearance.usesGreyMapTone {
+                        baseImage = Self.shareSummaryTonedMapImage(snapshot.image) ?? snapshot.image
+                    } else {
+                        baseImage = snapshot.image
+                    }
+                    let projected = Self.projectRouteSegmentPoints(
+                        using: projector,
+                        record: record,
+                        fallbackCoordinates: coordinates,
+                        canvasSize: canvasSize
+                    )
+                    let contentScale = Self.mapContentScale(for: canvasSize.width, appearance: appearance)
+                    let prepared = Self.prepareRouteOverlayDrawing(
+                        segmentPointLists: projected,
+                        contentScale: contentScale,
+                        canvasSize: canvasSize,
+                        appearance: appearance
+                    )
+                    let image = Self.composite(
+                        baseImage: baseImage,
+                        projector: projector,
+                        record: record,
+                        coordinates: coordinates,
+                        canvasSize: canvasSize,
+                        pixelScale: pixelScale,
+                        mapOptions: mapOptions,
+                        listThumbnailOnly: listThumbnailOnly,
+                        appearance: appearance,
+                        fadeSolidEndY: fadeSolidEndY,
+                        preparedOverlay: prepared
+                    )
+                    continuation.resume(returning: image)
                 }
-                let image = composite(
-                    baseImage: baseImage,
-                    projector: projector,
-                    record: record,
-                    coordinates: coordinates,
-                    canvasSize: canvasSize,
-                    pixelScale: pixelScale,
-                    mapOptions: mapOptions,
-                    listThumbnailOnly: listThumbnailOnly,
-                    appearance: appearance,
-                    fadeSolidEndY: fadeSolidEndY
-                )
-                continuation.resume(returning: image)
             }
         }
     }
@@ -500,6 +537,83 @@ enum HikingRouteSnapshotGenerator {
         return UIImage(cgImage: outImage, scale: image.scale, orientation: image.imageOrientation)
     }
 
+    /// One pause-segment’s precomputed stretch strokes (hits already done).
+    struct PreparedRouteSegment: Sendable {
+        let points: [CGPoint]
+        let stretchStrokes: [[CGPoint]]
+    }
+
+    struct PreparedRouteOverlay: Sendable {
+        let segments: [PreparedRouteSegment]
+        let forceChunks: Bool
+    }
+
+    /// Project + geo-smooth pause segments into canvas points (no hits yet).
+    nonisolated private static func projectRouteSegmentPoints(
+        using projector: MapCoordinateProjecting,
+        record: SavedHikingSession,
+        fallbackCoordinates: [CLLocationCoordinate2D],
+        canvasSize: CGSize
+    ) -> [[CGPoint]] {
+        let fitCoords = fallbackCoordinates.isEmpty
+            ? record.session.points.map(\.coordinate)
+            : fallbackCoordinates
+        guard fitCoords.count >= 2 else { return [] }
+        let region = HikingMapRegion.fitting(coordinates: fitCoords, viewSize: canvasSize)
+        let geoSegments = RouteCornerSmoothing.smoothRenderSegments(
+            points: record.session.points,
+            segmentBreaks: record.session.segmentBreaks,
+            fittingRegion: region,
+            mapWidth: canvasSize.width,
+            mapHeight: canvasSize.height
+        )
+        if geoSegments.isEmpty {
+            let points = fallbackCoordinates.map { projector.point(for: $0) }
+            return points.count >= 2 ? [points] : []
+        }
+        return geoSegments.map { seg in
+            seg.map { projector.point(for: $0) }
+        }.filter { $0.count >= 2 }
+    }
+
+    /// Hits + stretch cuts for every segment — run in `Task.detached`, never in CG callback.
+    nonisolated static func prepareRouteOverlayDrawing(
+        segmentPointLists: [[CGPoint]],
+        contentScale: CGFloat,
+        canvasSize: CGSize,
+        appearance: HikingRouteSnapshotAppearance
+    ) -> PreparedRouteOverlay {
+        let forceChunks: Bool
+        let casingWidth: CGFloat
+        switch appearance {
+        case .standard:
+            forceChunks = false
+            casingWidth = 9 * contentScale
+        case .shareSummary, .shareSummaryColor:
+            forceChunks = ProcessInfo.processInfo.arguments.contains("-SANSAN_ROUTE_CHUNKS")
+                || ProcessInfo.processInfo.environment["SANSAN_ROUTE_CHUNKS"] == "1"
+            casingWidth = ShareSummaryTokens.routeCasing * contentScale
+        }
+        let canvasMin = min(canvasSize.width, canvasSize.height)
+        var segments: [PreparedRouteSegment] = []
+        for points in segmentPointLists where points.count >= 2 {
+            let stretches: [[CGPoint]]
+            if forceChunks {
+                stretches = []
+            } else {
+                stretches = prepareCrossStretchStrokeLists(
+                    points: points,
+                    contentScale: contentScale,
+                    casingWidth: casingWidth,
+                    alreadySmoothed: true,
+                    canvasMinSide: canvasMin
+                )
+            }
+            segments.append(PreparedRouteSegment(points: points, stretchStrokes: stretches))
+        }
+        return PreparedRouteOverlay(segments: segments, forceChunks: forceChunks)
+    }
+
     private static func composite(
         baseImage: UIImage,
         projector: MapCoordinateProjecting,
@@ -511,7 +625,8 @@ enum HikingRouteSnapshotGenerator {
         includesLiveDetailContent: Bool = false,
         listThumbnailOnly: Bool = false,
         appearance: HikingRouteSnapshotAppearance = .standard,
-        fadeSolidEndY: CGFloat? = nil
+        fadeSolidEndY: CGFloat? = nil,
+        preparedOverlay: PreparedRouteOverlay? = nil
     ) -> UIImage {
         let contentScale = mapContentScale(for: canvasSize.width, appearance: appearance)
         let format = UIGraphicsImageRendererFormat()
@@ -522,6 +637,23 @@ enum HikingRouteSnapshotGenerator {
         let mapLayer: UIImage = appearance == .shareSummaryColor
             ? RouteMapOverlayMetrics.coveringShareSummaryColorCardGutter(on: baseImage)
             : baseImage
+
+        // Fallback: if caller forgot to precompute, do it once before the CG pass (still
+        // outside UIGraphicsImageRenderer — never nested pathLength on the draw thread).
+        let overlay = preparedOverlay ?? {
+            let projected = projectRouteSegmentPoints(
+                using: projector,
+                record: record,
+                fallbackCoordinates: coordinates,
+                canvasSize: canvasSize
+            )
+            return prepareRouteOverlayDrawing(
+                segmentPointLists: projected,
+                contentScale: contentScale,
+                canvasSize: canvasSize,
+                appearance: appearance
+            )
+        }()
 
         return renderer.image { context in
             if appearance.usesGreyMapTone {
@@ -559,10 +691,7 @@ enum HikingRouteSnapshotGenerator {
                 // (Android decorateSummaryMap: drawShareRoute → endpoints → label blits).
                 // No punch holes (they break rails). Marker centers only trim bridge ends.
                 drawRoute(
-                    using: projector,
-                    record: record,
-                    fallbackCoordinates: coordinates,
-                    canvasSize: canvasSize,
+                    overlay: overlay,
                     contentScale: contentScale,
                     appearance: appearance,
                     in: context.cgContext
@@ -731,45 +860,19 @@ enum HikingRouteSnapshotGenerator {
     private static let detailEndpointInnerDiameter: CGFloat = 11
 
     private static func drawRoute(
-        using projector: MapCoordinateProjecting,
-        record: SavedHikingSession,
-        fallbackCoordinates: [CLLocationCoordinate2D],
-        canvasSize: CGSize,
+        overlay: PreparedRouteOverlay,
         contentScale: CGFloat,
         appearance: HikingRouteSnapshotAppearance,
         in cgContext: CGContext
     ) {
-        // v5: geo smooth per pause-segment (dejitter+Catmull), then project + stretch-draw.
-        let fitCoords = fallbackCoordinates.isEmpty
-            ? record.session.points.map(\.coordinate)
-            : fallbackCoordinates
-        guard fitCoords.count >= 2 else { return }
-        let region = HikingMapRegion.fitting(coordinates: fitCoords, viewSize: canvasSize)
-        let geoSegments = RouteCornerSmoothing.smoothRenderSegments(
-            points: record.session.points,
-            segmentBreaks: record.session.segmentBreaks,
-            fittingRegion: region,
-            mapWidth: canvasSize.width,
-            mapHeight: canvasSize.height
-        )
-        let segmentPointLists: [[CGPoint]]
-        if geoSegments.isEmpty {
-            let points = fallbackCoordinates.map { projector.point(for: $0) }
-            guard points.count >= 2 else { return }
-            segmentPointLists = [points]
-        } else {
-            segmentPointLists = geoSegments.map { seg in
-                seg.map { projector.point(for: $0) }
-            }.filter { $0.count >= 2 }
-        }
-        guard !segmentPointLists.isEmpty else { return }
+        guard !overlay.segments.isEmpty else { return }
 
         switch appearance {
         case .standard:
             // Detail snapshot = live detail tokens (JW): casing 9 / fill 5 / white 0.9 layer alpha.
-            for points in segmentPointLists {
+            for segment in overlay.segments {
                 drawContinuousRouteWithCrossOverlays(
-                    points: points,
+                    points: segment.points,
                     contentScale: contentScale,
                     casingWidth: 9 * contentScale,
                     fillWidth: 5 * contentScale,
@@ -778,35 +881,115 @@ enum HikingRouteSnapshotGenerator {
                     shadow: false,
                     forceChunks: false,
                     alreadySmoothed: true,
+                    precomputedStretches: segment.stretchStrokes,
                     in: cgContext
                 )
             }
         case .shareSummary, .shareSummaryColor:
             // JW/팀장: continuous Path (white→green, no join seams) + local white→green
             // overlay only at true self-crossings. No gray shadow on AFTER.
-            // `-SANSAN_ROUTE_CHUNKS` exports the old chunk before for compare captures.
-            let forceChunks = ProcessInfo.processInfo.arguments.contains("-SANSAN_ROUTE_CHUNKS")
-                || ProcessInfo.processInfo.environment["SANSAN_ROUTE_CHUNKS"] == "1"
-            for points in segmentPointLists {
+            for segment in overlay.segments {
                 drawContinuousRouteWithCrossOverlays(
-                    points: points,
+                    points: segment.points,
                     contentScale: contentScale,
                     casingWidth: ShareSummaryTokens.routeCasing * contentScale,
                     fillWidth: ShareSummaryTokens.routeWidth * contentScale,
                     white: .white,
                     green: ShareSummaryTokens.accentUIColor,
                     shadow: false,
-                    forceChunks: forceChunks,
+                    forceChunks: overlay.forceChunks,
                     alreadySmoothed: true,
+                    precomputedStretches: overlay.forceChunks ? nil : segment.stretchStrokes,
                     in: cgContext
                 )
             }
         }
     }
 
+    /// Precompute stretch stroke polylines (hits + mid-loop cuts). Call off-main /
+    /// off the MKMapSnapshotter callback — never inside `UIGraphicsImageRenderer`.
+    /// Uses optimized `RouteSelfCrossing.hits` (d[] + acc, no nested pathLength, bbox).
+    nonisolated static func prepareCrossStretchStrokeLists(
+        points: [CGPoint],
+        contentScale: CGFloat,
+        casingWidth: CGFloat,
+        alreadySmoothed: Bool,
+        canvasMinSide: CGFloat
+    ) -> [[CGPoint]] {
+        guard points.count >= 2 else { return [] }
+        let rawPoints = points
+        let drawPoints = RouteSelfCrossing.cleanedPoints(rawPoints)
+        guard drawPoints.count >= 2 else { return [] }
+
+        let minLoopLength = max(casingWidth * 8, 48 * contentScale)
+        // Android jMin = i+2. False joint seams filtered by proximity |sin|≥0.28 + soft interior.
+        var hits = RouteSelfCrossing.hits(
+            in: rawPoints,
+            minLoopLength: minLoopLength,
+            minSeparationEdges: 2,
+            minCrossSin: 0.20,
+            minProximitySin: 0.28,
+            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+            proximityDistance: casingWidth * 0.65
+        )
+        if hits.isEmpty {
+            hits = RouteSelfCrossing.hits(
+                in: drawPoints,
+                minLoopLength: minLoopLength,
+                minSeparationEdges: 2,
+                minCrossSin: 0.20,
+                minProximitySin: 0.28,
+                dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+                proximityDistance: casingWidth * 0.65
+            )
+        }
+        #if DEBUG
+        NSLog(
+            "[km-label] route crosses unique=%d raw=%d clean=%d casing=%.2f",
+            hits.count, rawPoints.count, drawPoints.count, casingWidth
+        )
+        #endif
+
+        let filletedAll: [CGPoint]
+        if alreadySmoothed {
+            filletedAll = drawPoints
+        } else {
+            let canvasAlong = RouteCornerSmoothing.alongFractionOfMinSide * canvasMinSide
+            filletedAll = RouteCornerSmoothing.smoothPoints(
+                drawPoints,
+                maxAlong: canvasAlong
+            )
+        }
+        let drawHits = RouteSelfCrossing.hits(
+            in: filletedAll,
+            minLoopLength: minLoopLength,
+            minSeparationEdges: 2,
+            minCrossSin: 0.20,
+            minProximitySin: 0.28,
+            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
+            proximityDistance: casingWidth * 0.65
+        )
+        let stretchList = RouteSelfCrossing.chronologicalPointStretches(
+            points: filletedAll,
+            hits: drawHits,
+            overlapVertices: 4
+        )
+        #if DEBUG
+        NSLog(
+            "[km-label] route stretches=%d drawHits=%d rawHits=%d",
+            stretchList.count, drawHits.count, hits.count
+        )
+        #endif
+        return stretchList.map {
+            Self.simplifiedBridgePoints($0, epsilon: max(0.55 * contentScale, 0.4))
+        }.filter { $0.count >= 2 }
+    }
+
     /// Continuous white→green ribbon + later-suffix overlay at true crosses.
     /// `forceChunks` restores chronological short chunks (join seams) for before captures.
     /// `alreadySmoothed`: points are geo-smoothed projections — skip canvas re-smooth.
+    /// Prefer passing `precomputedStretches` from `prepareCrossStretchStrokeLists` so the
+    /// CG callback never runs O(n²) hits on MainActor / snapshotter queue.
     private static func drawContinuousRouteWithCrossOverlays(
         points: [CGPoint],
         contentScale: CGFloat,
@@ -817,6 +1000,7 @@ enum HikingRouteSnapshotGenerator {
         shadow: Bool,
         forceChunks: Bool,
         alreadySmoothed: Bool = false,
+        precomputedStretches: [[CGPoint]]? = nil,
         in cgContext: CGContext
     ) {
         guard points.count >= 2 else { return }
@@ -905,100 +1089,15 @@ enum HikingRouteSnapshotGenerator {
             return
         }
 
-        // Android 6a62d1e drawShareRoute — same algorithm:
-        // detect crosses on RAW; stroke continuous BASE on cleaned (one Path);
-        // bridge = short later piece around the hit, ONE path stroke (not stitched
-        // micro-polylines). Length casing×1.75 / ×2.35; white butt AA-off; green round AA-on.
-        let rawPoints = points
-        let drawPoints = RouteSelfCrossing.cleanedPoints(rawPoints)
-        guard drawPoints.count >= 2 else { return }
-
-        let minLoopLength = max(casingWidth * 8, 48 * contentScale)
-        let whiteHalf = casingWidth * 1.75
-        let greenHalf = casingWidth * 2.35
-        let bridgeCasing = casingWidth
-        let bridgeFill = fillWidth
-
-        // Android jMin = i+2. False joint seams are filtered by proximity |sin|≥0.28
-        // + soft interior (RouteSelfCrossing), not by raising separation.
-        var bridgeSource = rawPoints
-        var hits = RouteSelfCrossing.hits(
-            in: rawPoints,
-            minLoopLength: minLoopLength,
-            minSeparationEdges: 2,
-            minCrossSin: 0.20,
-            minProximitySin: 0.28,
-            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
-            proximityDistance: casingWidth * 0.65
+        let stretchList = precomputedStretches ?? prepareCrossStretchStrokeLists(
+            points: points,
+            contentScale: contentScale,
+            casingWidth: casingWidth,
+            alreadySmoothed: alreadySmoothed,
+            canvasMinSide: min(CGFloat(cgContext.width), CGFloat(cgContext.height))
         )
-        if hits.isEmpty {
-            bridgeSource = drawPoints
-            hits = RouteSelfCrossing.hits(
-                in: drawPoints,
-                minLoopLength: minLoopLength,
-                minSeparationEdges: 2,
-                minCrossSin: 0.20,
-                minProximitySin: 0.28,
-                dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
-                proximityDistance: casingWidth * 0.65
-            )
-        }
-        #if DEBUG
-        NSLog(
-            "[km-label] route crosses unique=%d raw=%d clean=%d whiteHalf=%.1f casing/fill=%.2f/%.2f",
-            hits.count, rawPoints.count, drawPoints.count, whiteHalf, bridgeCasing, bridgeFill
-        )
-        for hit in hits {
-            NSLog(
-                "[km-label] cross at (%.1f,%.1f) laterEdge=%d u=%.3f",
-                hit.point.x, hit.point.y, hit.laterEdge, hit.u
-            )
-        }
-        #endif
-
-        // JW: few long stretches between self-crosses (not per-GPS-segment, not short bridges).
-        // Time order: stretch₁ casing→fill, stretch₂ casing→fill… so later white cuts earlier green.
-        // Mid-loop cuts keep joins far from the geometric cross; overlap hides round-cap seams.
-        // Cuts must use drawPoints indices (cleaned) so stretch slices match stroke geometry.
-        // Geo path already ran v5 dejitter+Catmull per pause-segment; skip canvas re-smooth.
-        let filletedAll: [CGPoint]
-        if alreadySmoothed {
-            filletedAll = drawPoints
-        } else {
-            let canvasAlong = RouteCornerSmoothing.alongFractionOfMinSide
-                * min(CGFloat(cgContext.width), CGFloat(cgContext.height))
-            filletedAll = RouteCornerSmoothing.smoothPoints(
-                drawPoints,
-                maxAlong: canvasAlong
-            )
-        }
-        let drawHits = RouteSelfCrossing.hits(
-            in: filletedAll,
-            minLoopLength: minLoopLength,
-            minSeparationEdges: 2,
-            minCrossSin: 0.20,
-            minProximitySin: 0.28,
-            dedupeDistance: max(casingWidth * 2.0, minLoopLength * 0.2),
-            proximityDistance: casingWidth * 0.65
-        )
-        let stretchList = RouteSelfCrossing.chronologicalPointStretches(
-            points: filletedAll,
-            hits: drawHits,
-            overlapVertices: 4
-        )
-        #if DEBUG
-        NSLog(
-            "[km-label] route stretches=%d drawHits=%d rawHits=%d",
-            stretchList.count, drawHits.count, hits.count
-        )
-        #endif
-        _ = (bridgeSource, whiteHalf, greenHalf, bridgeCasing, bridgeFill)
         for (index, stretch) in stretchList.enumerated() {
-            let strokePoints = Self.simplifiedBridgePoints(
-                stretch,
-                epsilon: max(0.55 * contentScale, 0.4)
-            )
-            let path = Self.continuousStrokePath(strokePoints)
+            let path = Self.continuousStrokePath(stretch)
             path.lineCapStyle = .round
             path.lineJoinStyle = .round
             strokeWhiteThenGreen(path, withShadow: shadow && index == 0)
