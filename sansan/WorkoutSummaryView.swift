@@ -46,6 +46,27 @@ struct WorkoutSummaryView: View {
         }
     }
 
+    private var summaryRouteRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
+        // Render zoom/size = summary map fit (340×220). Pause gaps from segmentBreaks.
+        let region = HikingMapRegion.fitting(
+            coordinates: routeCoordinates,
+            viewSize: CGSize(width: 340, height: 220)
+        )
+        let list = RouteCornerSmoothing.smoothRenderSegments(
+            points: session.points,
+            segmentBreaks: session.segmentBreaks,
+            fittingRegion: region,
+            mapWidth: 340,
+            mapHeight: 220
+        )
+        var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
+        for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+            layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
+            layers.append((id: "f\(index)", coordinates: stretch, isCasing: false))
+        }
+        return layers
+    }
+
     private var stationaryLocation: CLLocationCoordinate2D? {
         HikingSessionMetrics.stationaryCoordinate(from: session.points)
     }
@@ -112,8 +133,17 @@ struct WorkoutSummaryView: View {
                     viewSize: CGSize(width: 340, height: 220)
                 )
             )) {
-                MapPolyline(coordinates: routeCoordinates)
-                    .stroke(Self.routeColor, lineWidth: 5)
+                ForEach(summaryRouteRailLayers, id: \.id) { layer in
+                    MapPolyline(coordinates: layer.coordinates)
+                        .stroke(
+                            layer.isCasing ? Color.white.opacity(0.9) : Self.routeColor,
+                            style: StrokeStyle(
+                                lineWidth: layer.isCasing ? 9 : 5,
+                                lineCap: .round,
+                                lineJoin: .round
+                            )
+                        )
+                }
 
                 if let start = routeCoordinates.first {
                     Annotation("시작", coordinate: start) {

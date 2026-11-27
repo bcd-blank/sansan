@@ -1,0 +1,192 @@
+{
+  "id": "chrome.sizes",
+  "sourceOfTruth": "iPhone",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1 at same logical width (iPhone SoT; Android mirrors same numbers as dp)"
+  },
+  "reference": {
+    "logicalWidth": 393,
+    "notes": "Values are unscaled base (chrome.scale=1). Narrow widths multiply chrome.* by min(1, width/requiredWidth). Data-card / detail layoutScale is separate (detail content width / 377)."
+  },
+  "main": {
+    "horizontalMargin": 16,
+    "cardGap": 12,
+    "cardInnerPadding": 11,
+    "cardCornerRadius": 14,
+    "mapCard": {
+      "height": 320,
+      "cornerRadius": 16,
+      "aspect": "fixedHeight",
+      "notes": "Main live map uses fixed 320pt height, not 4:3."
+    },
+    "headerBand": {
+      "avatar": 36,
+      "brandTitleSize": 22,
+      "weatherButton": 40,
+      "paddingLeading": 16,
+      "paddingTrailing": 10,
+      "paddingVertical": 6,
+      "rowSpacing": 10
+    },
+    "sectionSpacing": 16
+  },
+  "dataCard": {
+    "layout": "icon+label same row; value trailing/right-aligned; unit secondary gray (not tinted)",
+    "minHeight": 78,
+    "innerPadding": 11,
+    "cornerRadius": 14,
+    "rowSpacing": 6,
+    "iconLabelGap": 5,
+    "iconBox": 22,
+    "iconSymbol": 11,
+    "iconCornerRadius": 6,
+    "valueUnitGap": 3,
+    "font": {
+      "label": 10,
+      "value": 22,
+      "unit": 11,
+      "labelWeight": "semibold",
+      "valueWeight": "bold",
+      "unitWeight": "medium",
+      "valueDesign": "rounded",
+      "unitColor": "secondaryLabel"
+    }
+  },
+  "bottomChrome": {
+    "requiredWidth": 392.6666666667,
+    "outerHeight": 64,
+    "radius": 32,
+    "sideInset": 20,
+    "bottomInset": 26,
+    "scrollEndBuffer": 16,
+    "floatingHeight": 90,
+    "tabItemMinWidth": 72,
+    "tabCapsuleInset": 8,
+    "selectionInset": 6,
+    "circleGap": 4,
+    "clusterGap": 8,
+    "startButton": {
+      "width": 127,
+      "height": 64,
+      "labelSize": 15
+    },
+    "tabLabelMin": 10,
+    "minTouch": {
+      "ios": 44,
+      "android": 48
+    },
+    "scale": {
+      "formula": "min(1, containerWidth / requiredWidth)",
+      "scales": [
+        "sideInset",
+        "outerHeight",
+        "tabItemMinWidth",
+        "tabCapsuleInset",
+        "selectionInset",
+        "circleGap",
+        "clusterGap",
+        "startButton.width",
+        "startButton.height",
+        "startButton.labelSize",
+        "tabLabel"
+      ],
+      "doesNotScale": [
+        "bottomInset",
+        "scrollEndBuffer",
+        "minTouch"
+      ]
+    },
+    "detail": {
+      "usesSameBottomInset": true,
+      "scrollClearance": "floatingHeight + scrollEndBuffer (= 106 at scale 1)"
+    },
+    "collection": {
+      "listScrollExtra": 4,
+      "listScrollClearance": "floatingHeight + 4 (= 94 at scale 1)"
+    }
+  },
+  "detail": {
+    "horizontalPadding": 8,
+    "contentWidthInset": 16,
+    "topPadding": 6,
+    "bottomPadding": 10,
+    "sectionSpacing": 10,
+    "cardGridSpacing": 8,
+    "topButtons": {
+      "trailingEllipsis": "system toolbar (ellipsis.circle)",
+      "minTouch": 44,
+      "font": "body.medium",
+      "visibleDiameter": 44,
+      "notes": "Touch target stays minTouch (44 iOS / 48 Android). Visible liquid-glass circle diameter matches iPhone toolbar control (~44pt at logical width 393)."
+    },
+    "titleCard": {
+      "cornerRadius": 14,
+      "innerPadding": 11,
+      "iconBox": 28,
+      "iconSymbol": 13,
+      "iconSpacing": 10,
+      "titleRowSpacing": 3,
+      "titlePrimarySize": 20,
+      "titleSecondarySize": 12,
+      "profileAvatarScale": 0.88,
+      "includesMemo": true
+    },
+    "memoCard": {
+      "embeddedInTitleCard": true,
+      "font": "footnote/secondary",
+      "placeholderColor": "tertiaryLabel"
+    },
+    "mapCard": {
+      "aspectWidthOverHeight": 0.75,
+      "aspectNotes": "Derived at logicalWidth 393 / referenceContentWidth 377 / referenceViewportHeight 780: min(contentWidth*4/3, viewportHeight*0.48)=374.4. Both platforms MUST use `height` as fixed pt/dp; do not recompute from aspect at runtime.",
+      "maxViewportFraction": 0.48,
+      "cornerRadius": 14,
+      "height": 374.4,
+      "aspect": "fixedHeight"
+    },
+    "dataCards": {
+      "ref": "dataCard",
+      "gridSpacing": 8
+    },
+    "referenceContentWidth": 377,
+    "referenceViewportHeight": 780,
+    "layoutAnchors": {
+      "logicalWidth": 393,
+      "referenceViewportHeight": 780,
+      "statusBarHandling": "Inline nav sits below safe-area top inset (~59pt on iPhone 17). Toolbar ellipsis.circle center Y = safeTop + navBarHeight/2. Title card top = safeTop + navBarHeight + detail.topPadding (6).",
+      "topCircularButtonCenterY": 80.8,
+      "titleCardTopY": 122.3,
+      "notes": "Android mirrors topCircularButtonCenterY / titleCardTopY / mapCard.height as dp from window top with same status-bar+nav convention.",
+      "measuredOn": "iPhone 17 (DarkMode-iPhone17) logical 402×874 @3x; Y anchors are screen-top pt (status-bar inclusive) and apply 1:1 at 393 SoT",
+      "mapCardHeightMeasured": 374.4
+    }
+  },
+  "collection": {
+    "horizontalPadding": 20,
+    "tabBar": {
+      "verticalPadding": 8,
+      "capsuleHeight": 64,
+      "capsuleInset": 8,
+      "itemGap": 0,
+      "glassSpacing": 12,
+      "iconSize": 14,
+      "labelStyle": "subheadline"
+    },
+    "listRow": {
+      "thumbnail": 72,
+      "thumbnailRadius": 12,
+      "rowSpacing": 12,
+      "titleMetaGap": 8,
+      "chipGap": 6,
+      "verticalPadding": 4
+    },
+    "headerFadeExtension": 72,
+    "headerSolidPortion": 0.1
+  },
+  "androidPlaceholders": {
+    "status": "fill when Android sibling lands; leave null until mirrored",
+    "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
+  }
+}

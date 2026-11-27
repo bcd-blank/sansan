@@ -364,7 +364,7 @@ struct RecordsListTabBar: View {
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: 12) {
+        GlassEffectContainer(spacing: ChromeSizes.Collection.TabBar.glassSpacing) {
             HStack(spacing: 0) {
                 ForEach(RecordsListTab.allCases) { tab in
                     tabButton(tab)
@@ -413,9 +413,12 @@ struct RecordsListTabBar: View {
                 selection = tab
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: ChromeSizes.Collection.ListRow.chipGap) {
                 Image(systemName: tab.icon)
-                    .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
+                    .font(.system(
+                        size: ChromeSizes.Collection.TabBar.iconSize,
+                        weight: isSelected ? .semibold : .medium
+                    ))
                     .symbolVariant(isSelected ? .fill : .none)
 
                 Text(tab.title)
@@ -472,11 +475,11 @@ struct HikingRecordRow: View {
     var onRename: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ChromeSizes.Collection.ListRow.rowSpacing) {
             RecordThumbnailView(record: record)
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: ChromeSizes.Collection.ListRow.titleMetaGap) {
+                HStack(alignment: .firstTextBaseline, spacing: ChromeSizes.Collection.ListRow.chipGap) {
                     Text(record.listTitle)
                         .font(.headline)
                         .lineLimit(2)
@@ -495,7 +498,7 @@ struct HikingRecordRow: View {
                     }
                 }
 
-                HStack(spacing: 6) {
+                HStack(spacing: ChromeSizes.Collection.ListRow.chipGap) {
                     RecordMetricChip(icon: "clock", text: record.formattedDurationCompact, tint: .blue)
                     RecordMetricChip(icon: "figure.hiking", text: record.formattedDistance, tint: .green)
                     RecordMetricChip(icon: "arrow.up.right", text: record.formattedElevationGain, tint: .orange)
@@ -503,7 +506,7 @@ struct HikingRecordRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, ChromeSizes.Collection.ListRow.verticalPadding)
     }
 
     @ViewBuilder
@@ -579,10 +582,15 @@ struct RecordThumbnailView: View {
                     .tint(.white)
             }
         }
-        .frame(width: 72, height: 72)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(
+            width: ChromeSizes.Collection.ListRow.thumbnail,
+            height: ChromeSizes.Collection.ListRow.thumbnail
+        )
+        .clipShape(
+            RoundedRectangle(cornerRadius: ChromeSizes.Collection.ListRow.thumbnailRadius, style: .continuous)
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: ChromeSizes.Collection.ListRow.thumbnailRadius, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.2), value: isRegenerating)

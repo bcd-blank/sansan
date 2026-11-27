@@ -13,23 +13,70 @@ import SwiftUI
 struct ThumbnailSwiftUIMapCaptureView: View {
     let coordinates: [CLLocationCoordinate2D]
     let viewSize: CGSize
+    /// When set, pause-aware v5 smooth uses raw points + segmentBreaks.
+    let hikingPoints: [HikingPoint]?
+    let segmentBreaks: [HikingSegmentBreak]?
 
     @State private var position: MapCameraPosition
 
-    init(coordinates: [CLLocationCoordinate2D], viewSize: CGSize) {
+    init(
+        coordinates: [CLLocationCoordinate2D],
+        viewSize: CGSize,
+        hikingPoints: [HikingPoint]? = nil,
+        segmentBreaks: [HikingSegmentBreak]? = nil
+    ) {
         self.coordinates = coordinates
         self.viewSize = viewSize
+        self.hikingPoints = hikingPoints
+        self.segmentBreaks = segmentBreaks
         let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: viewSize)
         _position = State(initialValue: .region(region))
     }
 
+    private var routeRailLayers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] {
+        let region = HikingMapRegion.fitting(coordinates: coordinates, viewSize: viewSize)
+        let list: [[CLLocationCoordinate2D]]
+        if let hikingPoints {
+            list = RouteCornerSmoothing.smoothRenderSegments(
+                points: hikingPoints,
+                segmentBreaks: segmentBreaks,
+                fittingRegion: region,
+                mapWidth: viewSize.width,
+                mapHeight: viewSize.height
+            )
+        } else {
+            let filleted = RouteCornerSmoothing.smoothCoordinates(
+                coordinates,
+                fittingRegion: region,
+                mapWidth: viewSize.width,
+                mapHeight: viewSize.height
+            )
+            list = [filleted]
+        }
+        var layers: [(id: String, coordinates: [CLLocationCoordinate2D], isCasing: Bool)] = []
+        for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+            layers.append((id: "c\(index)", coordinates: stretch, isCasing: true))
+            layers.append((id: "f\(index)", coordinates: stretch, isCasing: false))
+        }
+        return layers
+    }
+
     var body: some View {
         Map(position: $position, interactionModes: []) {
-            MapPolyline(coordinates: coordinates)
-                .stroke(
-                    Color(red: 0.12, green: 0.72, blue: 0.45),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-                )
+            // Same stretch-split dual-rail as detail (JW crossing + no dashed caps).
+            ForEach(routeRailLayers, id: \.id) { layer in
+                MapPolyline(coordinates: layer.coordinates)
+                    .stroke(
+                        layer.isCasing
+                            ? Color.white.opacity(0.9)
+                            : Color(red: 0.12, green: 0.72, blue: 0.45),
+                        style: StrokeStyle(
+                            lineWidth: layer.isCasing ? 9 : 5,
+                            lineCap: .round,
+                            lineJoin: .round
+                        )
+                    )
+            }
         }
         .mapStyle(.standard(elevation: .flat))
         .frame(width: viewSize.width, height: viewSize.height)

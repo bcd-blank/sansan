@@ -1,0 +1,130 @@
+{
+  "id": "imageSave.preview",
+  "sourceOfTruth": "iPhone",
+  "revision": "v25-jw-settings-footer-sot",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1 at same logical width; crop px at reference bitmap width 1206"
+  },
+  "gallery": {
+    "cardWidthFractionOfContent": 0.42,
+    "cardWidthFractionRange": [0.4, 0.45],
+    "gap": 12,
+    "leadingInset": 16,
+    "trailingInset": 16,
+    "showsPageDots": false,
+    "scrollSnap": "viewAlignedGentle",
+    "notes": "Horizontal gallery: ~42% content width so two cards fully visible + third peeking. Gap 12. Leading 16; scroll may bleed to screen edge. Free scroll with gentle view-aligned snap."
+  },
+  "card": {
+    "aspectWidth": 314,
+    "aspectHeight": 510,
+    "aspect": "314:510",
+    "cornerRadius": 16,
+    "selectedBorderWidth": 2.5,
+    "selectedBorderColor": "#34d17a",
+    "notes": "Equal aspect thumbs. Height = width × (510/314) from content×cardWidthFraction. Selected border optional accent (green). Corner 16."
+  },
+  "settingsLayout": {
+    "overlayAlign": "sectionTitleTopY",
+    "sectionTitle": "이미지 저장 방식",
+    "sotPt": {
+      "galleryCardHeight": 236,
+      "galleryToCaptionGap": 20,
+      "sectionSpacingToShareMap": 18,
+      "sectionTitleToShareMapToggleTop": 410,
+      "galleryTopToShareMapToggleTop": 370,
+      "notes": "Shared iPhone SoT (pt=dp). Android MUST mirror these — do not ship shorter caption/section gaps. galleryCardHeight is measured dens-norm expected from aspect×fraction; gaps are layout tokens (listRowInsets.bottom / listSectionSpacing)."
+    },
+    "galleryToCaptionGap": 20,
+    "sectionSpacingToShareMap": 18,
+    "galleryCardHeight": 236,
+    "sectionTitleToShareMapToggleTop": 410,
+    "galleryTopToShareMapToggleTop": 370,
+    "jwSideAt1024Px": {
+      "galleryCardHeight": 295,
+      "galleryToCaptionGap": 20,
+      "galleryTopToShareMapToggleCard": 407,
+      "notes": "Legacy JW reject table (side half @1024). Binding SoT is sotPt above, not the old Android-short column."
+    },
+    "screenshotScroll": {
+      "mode": "image-save",
+      "keepsSectionTitleVisible": true,
+      "debugHideSectionsAbove": true,
+      "notes": "DEBUG image-save mode hides sections above so 「이미지 저장 방식」 is first under nav. settings-top keeps full form at Y=0."
+    },
+    "sectionFooter": {
+      "fontSize": 13,
+      "lineHeight": 18,
+      "tracking": 0,
+      "horizontalPadding": 32,
+      "maxTextWidth": 338,
+      "wrapReference": {
+        "style": "card",
+        "line1EndsWith": "기록으로",
+        "line2": "저장합니다."
+      },
+      "notes": "v25: Form footnote SoT for image-save + share-map section footers. Measured dens-norm lead≈32pt (not 20). Android MUST mirror padding/fontSize/tracking/lineHeight so caption wraps after 「기록으로」 (not mid 「저장합니다」). maxTextWidth = 402 − 2×32."
+    },
+    "notes": "v24 gaps + v25 sectionFooter typography. Shared iPhone SoT; Android 1:1 dp."
+  },
+  "fillThenCrop": {
+    "policy": "fitWidthPreserveAspectThenCropHeight",
+    "noStretch": true,
+    "notes": "Scale save image so width == card width (keep native aspect). Crop height to card. Do NOT scale-Y independently."
+  },
+  "referenceBitmapWidth": 1206,
+  "crop": {
+    "dataCard": {
+      "source": "hangjunaru Data Card save (native ~1206×3074)",
+      "cropTopPxAt1206": 601,
+      "cropHeightPxAt1206": 1959,
+      "description": "Title card cut off above frame; map + 6 data cards visible; elevation card top slightly visible (~100px)."
+    },
+    "simpleGrey": {
+      "source": "hangjunaru Simple Grey save (native ~1206×2144)",
+      "cropTopPxAt1206": 80,
+      "cropHeightPxAt1206": 1959,
+      "description": "Same fill-width then crop; slight top trim + bottom clip; no stretch."
+    },
+    "simpleColor": {
+      "source": "hangjunaru Simple Color save (native ~1206×2144)",
+      "cropTopPxAt1206": 80,
+      "cropHeightPxAt1206": 1959,
+      "description": "Same fill-width then crop as Simple Grey; no stretch."
+    }
+  },
+  "dimOverlay": {
+    "color": "#000000",
+    "opacity": 0.2,
+    "opacityRange": [0.15, 0.25],
+    "style": "flatUniform",
+    "notGradient": true,
+    "notes": "Uniform black dim over whole thumb. Under title text and under selected check."
+  },
+  "optionTitle": {
+    "fontSize": 13,
+    "fontWeight": "semibold",
+    "color": "#FFFFFF",
+    "top": 8,
+    "leading": 8,
+    "capsule": false,
+    "notes": "v22 gallery: 13pt (was 17 full-bleed) for readability on ~42% width thumbs. White text only — no capsule."
+  },
+  "selectedBadge": {
+    "style": "checkCircle",
+    "diameter": 22,
+    "checkIconSize": 11,
+    "top": 8,
+    "trailing": 8,
+    "fill": "#34d17a",
+    "onFill": "#04140a",
+    "notes": "Gallery uses compact check circle (not full 「선택 완료」 chip — too wide on small thumbs). Only on selected card. Drawn above dim."
+  },
+  "pageDots": {
+    "enabled": false,
+    "topGap": 22,
+    "notes": "Removed for gallery — dots redundant with peeking third card + free scroll."
+  }
+}

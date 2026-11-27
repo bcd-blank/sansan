@@ -109,7 +109,8 @@ final class HikingRecordStore: ObservableObject {
 
     /// 공유·저장 이미지 — 상세 화면과 동일한 SwiftUI 레이아웃으로 렌더링(sansan 앱에서 등록).
     /// `fullScreen`이 true이면 기기 화면 전체 크기로 렌더링(사진 저장용).
-    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool) -> UIImage?)?
+    /// (record, routeImage, fullScreen, preservesCapturedLogo, mapOptions)
+    static var shareImageRenderer: (@MainActor (SavedHikingSession, UIImage, Bool, Bool, HikingShareMapExportOptions) -> UIImage?)?
     static var summaryImageRenderer: (@MainActor (SavedHikingSession, HikingShareMapExportOptions) async -> UIImage?)?
 
     /// 사진 저장용 — 기록 상세 지도와 동일한 pt·배율(sansan 앱에서 등록).
@@ -224,6 +225,11 @@ final class HikingRecordStore: ObservableObject {
             await generateAndAttachSnapshot(for: saved.id)
             await attachWeatherIfNeeded(for: saved.id)
         }
+    }
+
+    /// DEBUG/UITest: insert a fully-formed record (e.g. bundled hangjunaru fixture).
+    func importSeededRecord(_ saved: SavedHikingSession) {
+        insertSavedRecord(saved)
     }
 
     /// 산행 시작~종료 구간의 날씨 스냅샷을 채웁니다. 없거나 구 기록(평균만 있음)이면 다시 받습니다.
@@ -515,7 +521,9 @@ final class HikingRecordStore: ObservableObject {
         fullScreen: Bool = false
     ) async -> UIImage? {
         guard let record = records.first(where: { $0.id == recordID }) else { return nil }
-        if HikingRecordImageSavePreferences.style == .summary, let summary = Self.summaryImageRenderer {
+        let mapOptions = HikingShareExportPreferences.applyingSharePhotoFeatureFlags(mapOptions)
+        if HikingRecordImageSavePreferences.style.usesOffscreenSummaryRenderer,
+           let summary = Self.summaryImageRenderer {
             return await summary(record, mapOptions)
         }
         guard let routeImage = await routeImageForShare(
@@ -524,7 +532,13 @@ final class HikingRecordStore: ObservableObject {
             fullScreen: fullScreen
         ) else { return nil }
         if let renderer = Self.shareImageRenderer {
-            return renderer(record, routeImage.image, fullScreen, routeImage.includesOnScreenLogo)
+            return renderer(
+                record,
+                routeImage.image,
+                fullScreen,
+                routeImage.includesOnScreenLogo,
+                mapOptions
+            )
         }
         return nil
     }
@@ -570,6 +584,9 @@ final class HikingRecordStore: ObservableObject {
         } else {
             let detailCanvas = fullScreen ? Self.detailShareMapCanvasProvider?() : nil
             let useLiveMap = HikingRouteSnapshotGenerator.allowsLiveDetailCapture?(record.id) ?? false
+            // Data Card full-screen save: prefer MKMapSnapshotter so km labels are
+            // always composited (SwiftUI live tiles previously skipped label bake).
+            let preferSwiftUI = !fullScreen
             image = await HikingRouteSnapshotGenerator.generate(
                 record: record,
                 style: .routeOnly,
@@ -577,8 +594,8 @@ final class HikingRecordStore: ObservableObject {
                 canvasSize: detailCanvas?.size,
                 pixelScale: detailCanvas?.pixelScale,
                 reservesLegalAttributionStrip: false,
-                allowLiveDetailCapture: useLiveMap,
-                preferSwiftUIMapTiles: true
+                allowLiveDetailCapture: useLiveMap && preferSwiftUI,
+                preferSwiftUIMapTiles: preferSwiftUI
             )
             includesOnScreenLogo = fullScreen && HikingRouteSnapshotGenerator.consumeCaptureIncludesOnScreenLogo()
         }
@@ -725,6 +742,27 @@ final class HikingRecordStore: ObservableObject {
         }
     }
 
+    /// Eagerly build+persist display cache for one record (detail open path).
+    func backfillDisplayCache(for id: UUID) {
+        guard let index = records.firstIndex(where: { $0.id == id }),
+              !records[index].session.hasPersistedDisplayCache,
+              records[index].session.points.count >= 2 else { return }
+        let points = records[index].session.points
+        let heartRateSamples = records[index].session.heartRateSamples
+        Task.detached(priority: .utility) {
+            let built = HikingSessionDisplayCacheBuilder.build(
+                points: points,
+                heartRateSamples: heartRateSamples
+            )
+            await MainActor.run {
+                guard let index = self.records.firstIndex(where: { $0.id == id }),
+                      !self.records[index].session.hasPersistedDisplayCache else { return }
+                self.records[index] = self.records[index].withDisplayCache(built)
+                Task { await self.persistOffMain() }
+            }
+        }
+    }
+
     /// 구버전 기록의 표시용 캐시를 백그라운드에서 한 번 계산해 이후에는 불러오기만 합니다.
     private func scheduleDisplayCacheBackfillIfNeeded() {
         let pending: [(UUID, [HikingPoint], [HikingHeartRateSample])] = records.compactMap { record in
@@ -735,8 +773,9 @@ final class HikingRecordStore: ObservableObject {
         guard !pending.isEmpty else { return }
 
         Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(2))
-            await MountainSummitCatalog.waitUntilReady()
+            // Do not wait on summit catalog — empty summits are fine; detail open
+            // must stay ≤~1s. Brief yield so first frame can paint.
+            try? await Task.sleep(for: .milliseconds(50))
             let computed = pending.map { id, points, heartRateSamples in
                 (
                     id,

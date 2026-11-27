@@ -48,6 +48,7 @@ enum RouteMapSnapshotCapture {
         if preferSwiftUIMapTiles {
             if listThumbnailOnly {
                 if let swiftUIMap = await captureWithOffscreenSwiftUIMap(
+                    recordID: recordID,
                     coordinates: coordinates,
                     mapViewSize: mapViewSize,
                     exportSize: exportSize,
@@ -83,6 +84,7 @@ enum RouteMapSnapshotCapture {
             }
 
             if let swiftUIMap = await captureWithOffscreenSwiftUIMap(
+                recordID: recordID,
                 coordinates: coordinates,
                 mapViewSize: mapViewSize,
                 exportSize: exportSize,
@@ -409,6 +411,7 @@ enum RouteMapSnapshotCapture {
 
     /// 목록 썸네일 — 경로·지도만 오프스크린 SwiftUI Map으로 렌더합니다.
     private static func captureWithOffscreenSwiftUIMap(
+        recordID: UUID,
         coordinates: [CLLocationCoordinate2D],
         mapViewSize: CGSize,
         exportSize: CGSize,
@@ -424,7 +427,13 @@ enum RouteMapSnapshotCapture {
         let size = mapViewSize
         guard let container = makeOnScreenCaptureContainer(in: window, size: size) else { return nil }
 
-        let rootView = ThumbnailSwiftUIMapCaptureView(coordinates: coordinates, viewSize: size)
+        let saved = HikingRecordStore.shared.records.first(where: { $0.id == recordID })
+        let rootView = ThumbnailSwiftUIMapCaptureView(
+            coordinates: coordinates,
+            viewSize: size,
+            hikingPoints: saved?.session.points,
+            segmentBreaks: saved?.session.segmentBreaks
+        )
         let hosting = UIHostingController(rootView: rootView)
         hosting.view.frame = container.bounds
         hosting.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

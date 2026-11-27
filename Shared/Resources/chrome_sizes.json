@@ -1,0 +1,290 @@
+{
+  "id": "chrome.sizes",
+  "sourceOfTruth": "iPhone",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1 at same logical width (iPhone SoT; Android mirrors same numbers as dp)"
+  },
+  "reference": {
+    "logicalWidth": 393,
+    "notes": "Values are unscaled base (chrome.scale=1). Narrow widths multiply chrome.* by min(1, width/requiredWidth). Data-card / detail layoutScale is separate (detail content width / 377)."
+  },
+  "main": {
+    "horizontalMargin": 16,
+    "cardGap": 12,
+    "cardInnerPadding": 11,
+    "cardCornerRadius": 14,
+    "mapCard": {
+      "height": 320,
+      "cornerRadius": 16,
+      "aspect": "fixedHeight",
+      "notes": "Main live map uses fixed 320pt height, not 4:3."
+    },
+    "headerBand": {
+      "avatar": 36,
+      "brandTitleSize": 22,
+      "weatherButton": 40,
+      "paddingLeading": 16,
+      "paddingTrailing": 10,
+      "paddingVertical": 6,
+      "rowSpacing": 10
+    },
+    "overlayAlign": {
+      "rule": "titleTopY",
+      "notes": "iOS↔Android size-parity overlays MUST align by brand/title row top Y, not screen top (status-bar / cutout heights differ). Crop or letterbox so the sansan brand title tops coincide, then compare chrome below.",
+      "safeAreaTopInsetRefIPhone17": 59,
+      "titleTopYFromScreenTop": "safeAreaTopInset + headerBand.paddingVertical + max(0, (avatar - brandTitleSize) / 2)  (approx; prefer measured)",
+      "titleTopYAtIPhone17Ref": 84,
+      "titleTopYMeasuredPxAt3x": 253,
+      "measuredOn": "iPhone 17 (DarkMode-iPhone17) 1206×2622 @3x; brand「sansan」ink top ≈84pt from screen top. Apply 1:1 as dp on Android at same logical width."
+    },
+    "sectionSpacing": 16
+  },
+  "dataCard": {
+    "layout": "icon+label same row; value trailing/right-aligned; unit secondary gray (not tinted)",
+    "minHeight": 78,
+    "innerPadding": 11,
+    "cornerRadius": 14,
+    "rowSpacing": 6,
+    "iconLabelGap": 5,
+    "iconBox": 22,
+    "iconSymbol": 11,
+    "iconCornerRadius": 6,
+    "valueUnitGap": 3,
+    "font": {
+      "label": 10,
+      "value": 22,
+      "unit": 11,
+      "labelWeight": "semibold",
+      "valueWeight": "bold",
+      "unitWeight": "medium",
+      "valueDesign": "rounded",
+      "unitColor": "secondaryLabel"
+    }
+  },
+  "bottomChrome": {
+    "requiredWidth": 392.6666666667,
+    "outerHeight": 64,
+    "radius": 32,
+    "sideInset": 20,
+    "bottomInset": 26,
+    "scrollEndBuffer": 16,
+    "floatingHeight": 90,
+    "tabItemMinWidth": 72,
+    "tabCapsuleInset": 8,
+    "selectionInset": 6,
+    "circleGap": 4,
+    "clusterGap": 8,
+    "startButton": {
+      "width": 127,
+      "height": 64,
+      "labelSize": 15
+    },
+    "tabLabelMin": 10,
+    "minTouch": {
+      "ios": 44,
+      "android": 48
+    },
+    "scale": {
+      "formula": "min(1, containerWidth / requiredWidth)",
+      "scales": [
+        "sideInset",
+        "outerHeight",
+        "tabItemMinWidth",
+        "tabCapsuleInset",
+        "selectionInset",
+        "circleGap",
+        "clusterGap",
+        "startButton.width",
+        "startButton.height",
+        "startButton.labelSize",
+        "tabLabel"
+      ],
+      "doesNotScale": [
+        "bottomInset",
+        "scrollEndBuffer",
+        "minTouch"
+      ]
+    },
+    "detail": {
+      "usesSameBottomInset": true,
+      "scrollClearance": "floatingHeight + scrollEndBuffer (= 106 at scale 1)"
+    },
+    "collection": {
+      "listScrollExtra": 4,
+      "listScrollClearance": "floatingHeight + 4 (= 94 at scale 1)"
+    }
+  },
+  "detail": {
+    "horizontalPadding": 8,
+    "contentWidthInset": 16,
+    "topPadding": 6,
+    "bottomPadding": 10,
+    "sectionSpacing": 10,
+    "cardGridSpacing": 8,
+    "topButtons": {
+      "trailingEllipsis": "system toolbar (ellipsis.circle)",
+      "minTouch": 44,
+      "font": "body.medium",
+      "visibleDiameter": 44,
+      "notes": "Touch target stays minTouch (44 iOS / 48 Android). Visible liquid-glass circle diameter matches iPhone toolbar control (~44pt at logical width 393)."
+    },
+    "titleCard": {
+      "cornerRadius": 14,
+      "innerPadding": 11,
+      "iconBox": 28,
+      "iconSymbol": 13,
+      "iconSpacing": 10,
+      "titleRowSpacing": 3,
+      "titlePrimarySize": 20,
+      "titleSecondarySize": 12,
+      "profileAvatarScale": 0.88,
+      "includesMemo": true
+    },
+    "memoCard": {
+      "embeddedInTitleCard": true,
+      "font": "footnote/secondary",
+      "placeholderColor": "tertiaryLabel"
+    },
+    "mapCard": {
+      "aspectWidthOverHeight": 0.75,
+      "aspectNotes": "Derived at logicalWidth 393 / referenceContentWidth 377 / referenceViewportHeight 780: min(contentWidth*4/3, viewportHeight*0.48)=374.4. Both platforms MUST use `height` as fixed pt/dp; do not recompute from aspect at runtime.",
+      "maxViewportFraction": 0.48,
+      "cornerRadius": 14,
+      "height": 374.4,
+      "aspect": "fixedHeight"
+    },
+    "dataCards": {
+      "ref": "dataCard",
+      "gridSpacing": 8
+    },
+    "referenceContentWidth": 377,
+    "referenceViewportHeight": 780,
+    "layoutAnchors": {
+      "logicalWidth": 393,
+      "referenceViewportHeight": 780,
+      "overlayAlign": "titleTopY",
+      "statusBarHandling": "Inline nav sits below safe-area top inset (~59pt on iPhone 17). Toolbar ellipsis.circle center Y = safeTop + navBarHeight/2. Title card top = safeTop + navBarHeight + detail.topPadding (6).",
+      "topCircularButtonCenterY": 80.8,
+      "titleCardTopY": 122.3,
+      "notes": "Overlays align on titleCardTopY (record title row), NOT screen top. Android mirrors topCircularButtonCenterY / titleCardTopY / mapCard.height as dp with the same status-bar+nav convention.",
+      "measuredOn": "iPhone 17 (DarkMode-iPhone17) logical 402×874 @3x; Y anchors are screen-top pt (status-bar inclusive) and apply 1:1 at 393 SoT",
+      "mapCardHeightMeasured": 374.4
+    }
+  },
+  "collection": {
+    "horizontalPadding": 20,
+    "overlayAlign": {
+      "rule": "titleTopY",
+      "notes": "Align overlays on navigationTitle「경로 모음」 / large-title baseline or list header top — not screen top."
+    },
+    "tabBar": {
+      "verticalPadding": 8,
+      "capsuleHeight": 64,
+      "capsuleInset": 8,
+      "itemGap": 0,
+      "glassSpacing": 12,
+      "iconSize": 14,
+      "labelStyle": "subheadline"
+    },
+    "listRow": {
+      "thumbnail": 72,
+      "thumbnailRadius": 12,
+      "rowSpacing": 12,
+      "titleMetaGap": 8,
+      "chipGap": 6,
+      "verticalPadding": 4
+    },
+    "headerFadeExtension": 72,
+    "headerSolidPortion": 0.1
+  },
+  "androidPlaceholders": {
+    "status": "fill when Android sibling lands; leave null until mirrored",
+    "note": "Every numeric leaf above is iPhone pt SoT. Android column in PARITY-sizes.md uses same number as dp when mirrored 1:1."
+  },
+  "mapUserLocation": {
+    "revision": "v28-jw-heading-indicator-beam-sot",
+    "source": "iPhone main-map heading-up capture with beam visible (LaunchJW-iPhone17Pro dens-norm 1pt=3px). Sim has no magnetometer — DEBUG -UITestInjectHeading draws MapKit-style sector for SoT measure.",
+    "notes": "Blue-dot + heading wedge. Android MUST mirror 1:1 as dp. Cone is a filled circular sector under the dot; not a stroked triangle. v27 90° was rejected (crop had no beam); v28 locked from beam-visible evidence.",
+    "dot": {
+      "fill": "#0088FF",
+      "fillRGB": [0, 136, 255],
+      "fillDiameter": 14,
+      "stroke": "#FFFFFF",
+      "strokeRGB": [255, 255, 255],
+      "strokeWidth": 3,
+      "outerDiameter": 20
+    },
+    "headingBeam": {
+      "shape": "circularSector",
+      "apertureAngleDegrees": 80,
+      "halfAngleDegrees": 40,
+      "lengthRadius": 48,
+      "fill": "#0088FF",
+      "fillRGB": [0, 136, 255],
+      "opacityNear": 0.35,
+      "opacityFar": 0,
+      "opacityGradient": "radialFromPuckCenter",
+      "stroke": "none",
+      "strokeWidth": 0,
+      "zOrder": "underDot",
+      "visibleWhen": "headingAvailable"
+    },
+    "behavior": {
+      "northUp": "mapBearing=0; cone rotates on screen with device heading (points toward heading vs north)",
+      "rotateHeadingUp": "MapUserLocationButton follow-with-heading: map rotates so heading is screen-up; cone points toward top of screen",
+      "hiddenWhen": "heading unavailable / no magnetometer course",
+      "accuracyHalo": "separate soft full circle — not the heading wedge"
+    }
+  },
+  "settingsGrouped": {
+    "revision": "v26-jw-settings-dark-card-sot",
+    "source": "iPhone Form insetGrouped (DarkMode-iPhone17 dens-norm)",
+    "cornerRadius": 10,
+    "horizontalInset": 20,
+    "dark": {
+      "pageBackground": "#1C1C1E",
+      "pageBackgroundRGB": [28, 28, 30],
+      "cardFill": "#2C2C2E",
+      "cardFillRGB": [44, 44, 46],
+      "cardStroke": "none",
+      "cardStrokeWidth": 0,
+      "notes": "v26: Android MUST use cardFill #2C2C2E with stroke=none. Do not ship darker #1C1C1E card fill or hairline/outline stroke — iOS elevates by fill vs page only."
+    },
+    "light": {
+      "pageBackground": "#F2F2F7",
+      "pageBackgroundRGB": [242, 242, 247],
+      "cardFill": "#FFFFFF",
+      "cardFillRGB": [255, 255, 255],
+      "cardStroke": "none",
+      "cardStrokeWidth": 0
+    }
+  },
+  "imageSavePreview": {
+    "ref": "docs/design-tokens/image-save-preview.json",
+    "bundle": "image_save_preview.json",
+    "revision": "v25-jw-settings-footer-sot",
+    "cardAspectWidth": 314,
+    "cardAspectHeight": 510,
+    "dimOpacity": 0.2,
+    "galleryToCaptionGap": 20,
+    "sectionSpacingToShareMap": 18,
+    "galleryCardHeight": 236,
+    "sectionTitleToShareMapToggleTop": 410,
+    "galleryTopToShareMapToggleTop": 370,
+    "galleryCardHeightAtSide1024Px": 295,
+    "galleryTopToShareMapToggleCardAtSide1024Px": 407,
+    "overlayAlign": "sectionTitleTopY",
+    "sectionFooterFontSize": 13,
+    "sectionFooterLineHeight": 18,
+    "sectionFooterTracking": 0,
+    "sectionFooterHorizontalPadding": 32,
+    "sectionFooterMaxTextWidth": 338,
+    "cropTopPxAt1206": {
+      "dataCard": 601,
+      "simpleGrey": 80,
+      "simpleColor": 80
+    }
+  }
+}

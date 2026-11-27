@@ -10,31 +10,83 @@
 
 import UIKit
 
-struct RouteKilometerLabelShift: Equatable {
-    var placesLabelOnLeadingSide: Bool
-    var verticalOffset: CGFloat
-}
-
-struct RouteKilometerLabelRequest {
-    let kilometer: Int
-    let distanceLabel: String?
-    let timeLabel: String?
-    let routePoint: CGPoint
-    let preferredLeadingSide: Bool
-}
-
 enum RouteKilometerMarkerDrawing {
     /// 시작·종료 점(지름 18) 밖으로 라벨을 띄우는 여유.
     private static let endpointClearanceRadius: CGFloat = 18 / 2 + 6
 
-    /// 겹치는 라벨을 포인트 옆에서만 조금 떼어 놓습니다.
-    /// When `imageSize` is set, capsules must stay inside the canvas (impl4 #2 / Android `imageBoundsPenalty`).
+    /// Share-summary / card: final-spec v3 placement (16 dirs + aligned, rings A–D).
     static func labelShifts(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
         contentScale: CGFloat,
         imageSize: CGSize = .zero,
-        sideInset: CGFloat = 0
+        sideInset: CGFloat = 0,
+        routePolyline: [CGPoint] = [],
+        pathHalfWidth: CGFloat = ShareSummaryTokens.routeCasing / 2,
+        titleBlockBottom: CGFloat? = nil
+    ) -> [Int: RouteKilometerLabelShift] {
+        guard !markers.isEmpty else { return [:] }
+        let size = imageSize.width > 1 ? imageSize : CGSize(width: 2000, height: 2000)
+        let result = RouteKilometerLabelPlacement.placeSummary(
+            markers: markers,
+            endpointPoints: endpointPoints,
+            routePolyline: routePolyline,
+            contentScale: contentScale,
+            imageSize: size,
+            sideInset: sideInset,
+            pathHalfWidth: pathHalfWidth,
+            titleBlockBottom: titleBlockBottom
+        )
+        if !result.shifts.isEmpty { return result.shifts }
+        // Extreme fallback: legacy L/R nudges so drawing never blanks all labels.
+        return legacyLabelShifts(
+            for: markers,
+            endpointPoints: endpointPoints,
+            contentScale: contentScale,
+            imageSize: imageSize,
+            sideInset: sideInset
+        )
+    }
+
+    /// Detail-map: final-spec v3 + F1–F5 (visible-only, wholesale 1→5, F5 partial).
+    static func thinnedDetailLabelShifts(
+        for markers: [RouteKilometerLabelRequest],
+        endpointPoints: [CGPoint],
+        contentScale: CGFloat,
+        imageSize: CGSize,
+        sideInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelSideInset,
+        verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset,
+        routePolyline: [CGPoint] = [],
+        preferModeStep: Int = 1,
+        zoomDelta: Double = 1, // treat first layout like a zoom change → start at 1km
+        pathHalfWidth: CGFloat = 4
+    ) -> RouteKilometerPlacementResult {
+        _ = sideInset
+        _ = verticalInset
+        return RouteKilometerLabelPlacement.placeDetail(
+            markers: markers,
+            endpointPoints: endpointPoints,
+            routePolyline: routePolyline,
+            contentScale: contentScale,
+            imageSize: imageSize,
+            preferModeStep: preferModeStep,
+            zoomDelta: zoomDelta,
+            pathHalfWidth: pathHalfWidth
+        )
+    }
+
+    /// Km-dot center inside the map view — off-screen points are excluded from thinning.
+    static func isDetailMarkerOnScreen(_ point: CGPoint, imageSize: CGSize) -> Bool {
+        RouteKilometerLabelPlacement.isOnScreen(point, size: imageSize)
+    }
+
+    /// Legacy sequential L/R placement (fallback only).
+    private static func legacyLabelShifts(
+        for markers: [RouteKilometerLabelRequest],
+        endpointPoints: [CGPoint],
+        contentScale: CGFloat,
+        imageSize: CGSize,
+        sideInset: CGFloat
     ) -> [Int: RouteKilometerLabelShift] {
         var occupied: [CGRect] = []
         var shifts: [Int: RouteKilometerLabelShift] = [:]
@@ -57,50 +109,52 @@ enum RouteKilometerMarkerDrawing {
         return shifts
     }
 
-    /// Detail-map thinning: try hideSteps [1,5,10,20,50] until every kept label places clear.
-    /// Returns the chosen step and shifts only for labeled kilometers (dots still drawn by caller).
-    static func thinnedDetailLabelShifts(
+    /// Inactive (JW): per-label hide with keep priority 10× → 5× → rest.
+    /// Kept for a future designer-confirmed spec; not used by `thinnedDetailLabelShifts`.
+    static func detailLabelKeepPriority(_ kilometer: Int) -> Int {
+        if kilometer % 10 == 0 { return 2 }
+        if kilometer % 5 == 0 { return 1 }
+        return 0
+    }
+
+    /// Inactive scaffold: individual label hide (not the live detail path).
+    static func thinnedDetailLabelShiftsPerLabelHide(
         for markers: [RouteKilometerLabelRequest],
         endpointPoints: [CGPoint],
         contentScale: CGFloat,
         imageSize: CGSize,
         sideInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelSideInset,
         verticalInset: CGFloat = RouteKilometerMarkerMetrics.detailLabelVerticalInset
-    ) -> (step: Int, shifts: [Int: RouteKilometerLabelShift]) {
-        let steps = RouteKilometerMarkerMetrics.detailLabelHideSteps
-        var lastShifts: [Int: RouteKilometerLabelShift] = [:]
-        var lastStep = steps.last ?? 1
-        for step in steps {
-            let subset: [RouteKilometerLabelRequest]
-            if step <= 1 {
-                subset = markers
-            } else {
-                subset = markers.filter { $0.kilometer % step == 0 }
-            }
-            if subset.isEmpty {
-                return (step, [:])
-            }
-            if let shifts = labelShiftsClear(
-                for: subset,
+    ) -> [Int: RouteKilometerLabelShift] {
+        let visible = markers.filter { isDetailMarkerOnScreen($0.routePoint, imageSize: imageSize) }
+        guard !visible.isEmpty else { return [:] }
+        let ordered = visible.sorted { lhs, rhs in
+            let lp = detailLabelKeepPriority(lhs.kilometer)
+            let rp = detailLabelKeepPriority(rhs.kilometer)
+            if lp != rp { return lp > rp }
+            return lhs.kilometer < rhs.kilometer
+        }
+        var occupied: [CGRect] = []
+        var shifts: [Int: RouteKilometerLabelShift] = [:]
+        for marker in ordered {
+            let placed = bestShift(
+                distanceLabel: marker.distanceLabel,
+                timeLabel: marker.timeLabel,
+                routePoint: marker.routePoint,
+                preferredLeadingSide: marker.preferredLeadingSide,
                 endpointPoints: endpointPoints,
+                occupied: occupied,
                 contentScale: contentScale,
                 imageSize: imageSize,
                 sideInset: sideInset,
+                requireClear: true,
                 verticalInset: verticalInset
-            ) {
-                return (step, shifts)
-            }
-            // Keep progressive fallback for the last step (spec: drop only failed labels).
-            lastStep = step
-            lastShifts = labelShifts(
-                for: subset,
-                endpointPoints: endpointPoints,
-                contentScale: contentScale,
-                imageSize: imageSize,
-                sideInset: sideInset
             )
+            guard let clear = placed.clear else { continue }
+            shifts[marker.kilometer] = clear.shift
+            occupied.append(contentsOf: clear.rects)
         }
-        return (lastStep, lastShifts)
+        return shifts
     }
 
     /// Places every marker only when each capsule is clear of labels, endpoints, and inset bounds.
@@ -361,13 +415,91 @@ enum RouteKilometerMarkerDrawing {
         contentScale: CGFloat,
         in cgContext: CGContext
     ) {
+        let size = capsuleSize(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            contentScale: contentScale
+        )
+        let legacy = RouteKilometerLabelShift(
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
+            capsuleWidth: size.width > 0 ? size.width : 72,
+            contentScale: contentScale
+        )
+        drawCombinedMarker(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: legacy.centerOffset,
+            contentScale: contentScale,
+            in: cgContext
+        )
+    }
+
+    static func drawCombinedMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
+        drawCombinedMarkerVariant(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: centerOffset,
+            contentScale: contentScale,
+            style: .shareSummaryWhite,
+            in: cgContext
+        )
+    }
+
+    /// Data Card / detail-map export — blue #007AFF capsules (Android `DetailKmLabelDrawable`).
+    static func drawDetailCombinedMarker(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        in cgContext: CGContext
+    ) {
+        drawCombinedMarkerVariant(
+            distanceLabel: distanceLabel,
+            timeLabel: timeLabel,
+            routePoint: routePoint,
+            centerOffset: centerOffset,
+            contentScale: contentScale,
+            style: .detailBlue,
+            in: cgContext
+        )
+    }
+
+    private enum CombinedMarkerStyle {
+        case shareSummaryWhite
+        case detailBlue
+    }
+
+    private static func drawCombinedMarkerVariant(
+        distanceLabel: String?,
+        timeLabel: String?,
+        routePoint: CGPoint,
+        centerOffset: CGPoint,
+        contentScale: CGFloat,
+        style: CombinedMarkerStyle,
+        in cgContext: CGContext
+    ) {
         guard RouteKilometerMarkerMetrics.combinedLabel(distance: distanceLabel, time: timeLabel) != nil else {
             return
         }
         drawRouteDot(at: routePoint, contentScale: contentScale, in: cgContext)
 
         let fontSize = RouteKilometerMarkerMetrics.labelFontSize * contentScale
-        let kmFont = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let kmFont = UIFont.systemFont(
+            ofSize: fontSize,
+            weight: RouteKilometerMarkerMetrics.distanceLabelWeight
+        )
+        // Detail blue shares exact summary type tokens — color only differs.
         let timeFont = UIFont.systemFont(
             ofSize: fontSize,
             weight: RouteKilometerMarkerMetrics.timeLabelWeight(hasDistance: distanceLabel != nil)
@@ -375,17 +507,32 @@ enum RouteKilometerMarkerDrawing {
         let height = RouteKilometerMarkerMetrics.labelHeight * contentScale
         let padH = RouteKilometerMarkerMetrics.labelPadH * contentScale
         let innerGap = RouteKilometerMarkerMetrics.combinedInnerGap * contentScale
+        let corner = RouteKilometerMarkerMetrics.labelCornerRadius * contentScale
+        let strokeWidth = RouteKilometerMarkerMetrics.labelStrokeWidth * contentScale
+
+        let textColor: UIColor = {
+            switch style {
+            case .shareSummaryWhite: return RouteKilometerMarkerMetrics.inkUIColor
+            case .detailBlue: return RouteKilometerMarkerMetrics.detailLabelTextUIColor
+            }
+        }()
+        let timeColor: UIColor = {
+            switch style {
+            case .shareSummaryWhite: return RouteKilometerMarkerMetrics.ink2UIColor
+            case .detailBlue: return RouteKilometerMarkerMetrics.detailLabelTextUIColor
+            }
+        }()
 
         let parts: [(String, UIFont, UIColor)]
         if let distanceLabel, let timeLabel {
             parts = [
-                (distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor),
-                (timeLabel, timeFont, RouteKilometerMarkerMetrics.ink2UIColor)
+                (distanceLabel, kmFont, textColor),
+                (timeLabel, timeFont, timeColor)
             ]
         } else if let distanceLabel {
-            parts = [(distanceLabel, kmFont, RouteKilometerMarkerMetrics.inkUIColor)]
+            parts = [(distanceLabel, kmFont, textColor)]
         } else if let timeLabel {
-            parts = [(timeLabel, timeFont, RouteKilometerMarkerMetrics.inkUIColor)]
+            parts = [(timeLabel, timeFont, textColor)]
         } else {
             return
         }
@@ -396,33 +543,40 @@ enum RouteKilometerMarkerDrawing {
             textWidth += (part.0 as NSString).size(withAttributes: [.font: part.1]).width
         }
         let capsuleWidth = textWidth + padH * 2
-        let center = labelCenter(
-            capsuleWidth: capsuleWidth,
-            routePoint: routePoint,
-            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
-            contentScale: contentScale
+        let center = CGPoint(
+            x: routePoint.x + centerOffset.x,
+            y: routePoint.y + centerOffset.y
         )
         let capsuleRect = CGRect(
             x: center.x - capsuleWidth / 2,
-            y: center.y - height / 2 + verticalOffset,
+            y: center.y - height / 2,
             width: capsuleWidth,
             height: height
         )
-        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: height / 2)
+        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: corner)
 
         cgContext.saveGState()
-        cgContext.setShadow(
-            offset: CGSize(width: 0, height: 2 * contentScale),
-            blur: 6 * contentScale,
-            color: RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor
-        )
-        cgContext.setFillColor(UIColor.white.cgColor)
-        cgContext.addPath(path.cgPath)
-        cgContext.fillPath()
-        cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
-        cgContext.setLineWidth(max(0.5 * contentScale, 0.5))
-        cgContext.addPath(path.cgPath)
-        cgContext.strokePath()
+        // No drop-shadow — Simple white and detail blue share fill+stroke geometry;
+        // only fill/text/stroke colors differ (visible px parity).
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+        switch style {
+        case .shareSummaryWhite:
+            cgContext.setFillColor(UIColor.white.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.fillPath()
+            cgContext.setStrokeColor(RouteKilometerMarkerMetrics.inkUIColor.withAlphaComponent(0.10).cgColor)
+            cgContext.setLineWidth(max(strokeWidth, 0.5))
+            cgContext.addPath(path.cgPath)
+            cgContext.strokePath()
+        case .detailBlue:
+            cgContext.setFillColor(RouteKilometerMarkerMetrics.detailLabelFillUIColor.cgColor)
+            cgContext.addPath(path.cgPath)
+            cgContext.fillPath()
+            cgContext.setStrokeColor(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor.cgColor)
+            cgContext.setLineWidth(max(strokeWidth, 0.5))
+            cgContext.addPath(path.cgPath)
+            cgContext.strokePath()
+        }
         cgContext.restoreGState()
 
         var cursorX = capsuleRect.minX + padH
@@ -581,7 +735,7 @@ enum RouteKilometerMarkerDrawing {
         return area
     }
 
-    private static func drawRouteDot(
+    static func drawRouteDot(
         at center: CGPoint,
         contentScale: CGFloat,
         in cgContext: CGContext
@@ -596,6 +750,10 @@ enum RouteKilometerMarkerDrawing {
             height: diameter
         )
         cgContext.saveGState()
+        // Topmost, crisp disc — AA on so the white fill + green ring stay round over the route.
+        cgContext.setShadow(offset: .zero, blur: 0, color: nil)
+        cgContext.setShouldAntialias(true)
+        cgContext.setAllowsAntialiasing(true)
         cgContext.setFillColor(UIColor.white.cgColor)
         cgContext.fillEllipse(in: rect)
         cgContext.setStrokeColor(RouteKilometerMarkerMetrics.accentUIColor.cgColor)

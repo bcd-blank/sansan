@@ -12,8 +12,9 @@ import SwiftUI
 import UIKit
 
 struct RouteKilometerRouteDot: View {
-    private let diameter = RouteKilometerMarkerMetrics.routeDotDiameter
-    private let border = RouteKilometerMarkerMetrics.routeDotBorderWidth
+    var contentScale: CGFloat = 1
+    private var diameter: CGFloat { RouteKilometerMarkerMetrics.routeDotDiameter * contentScale }
+    private var border: CGFloat { RouteKilometerMarkerMetrics.routeDotBorderWidth * contentScale }
 
     var body: some View {
         Circle()
@@ -27,60 +28,57 @@ struct RouteKilometerRouteDot: View {
 }
 
 /// Combined blue capsule: both → `1km 16:50`; km-only / time-only → single part.
-/// Fill #007AFF, white text (km 600 / time 400), white 1pt stroke, dual shadows.
+/// Exact Simple label tokens (font/weight/pad/corner/height/stroke); fill #007AFF only.
+/// `contentScale` matches Simple SoT (`width/430`) so live detail pills match save size.
 struct RouteKilometerCombinedLabelCapsule: View {
     var distanceText: String?
     var timeText: String?
+    var contentScale: CGFloat = 1
 
     private var parts: [(text: String, weight: Font.Weight, color: Color)] {
         let white = Color(RouteKilometerMarkerMetrics.detailLabelTextUIColor)
+        let kmWeight = Font.Weight.semibold
+        let timeWeight: Font.Weight = distanceText != nil ? .regular : .medium
         if let distanceText, let timeText {
             return [
-                (distanceText, .semibold, white),
-                (timeText, .regular, white)
+                (distanceText, kmWeight, white),
+                (timeText, timeWeight, white)
             ]
         }
         if let distanceText {
-            return [(distanceText, .semibold, white)]
+            return [(distanceText, kmWeight, white)]
         }
         if let timeText {
-            return [(timeText, .regular, white)]
+            return [(timeText, timeWeight, white)]
         }
         return []
     }
 
     var body: some View {
-        HStack(spacing: RouteKilometerMarkerMetrics.combinedInnerGap) {
+        let s = contentScale
+        let height = RouteKilometerMarkerMetrics.labelHeight * s
+        let corner = RouteKilometerMarkerMetrics.labelCornerRadius * s
+        HStack(spacing: RouteKilometerMarkerMetrics.combinedInnerGap * s) {
             ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
                 Text(part.text)
-                    .font(.system(size: RouteKilometerMarkerMetrics.labelFontSize, weight: part.weight))
+                    .font(.system(size: RouteKilometerMarkerMetrics.labelFontSize * s, weight: part.weight))
                     .foregroundStyle(part.color)
                     .monospacedDigit()
             }
         }
-        .padding(.horizontal, RouteKilometerMarkerMetrics.labelPadH)
-        .frame(height: RouteKilometerMarkerMetrics.labelHeight)
+        .padding(.horizontal, RouteKilometerMarkerMetrics.labelPadH * s)
+        .frame(height: height)
         .background(
             Color(RouteKilometerMarkerMetrics.detailLabelFillUIColor),
-            in: Capsule(style: .continuous)
+            in: RoundedRectangle(cornerRadius: corner, style: .circular)
         )
         .overlay {
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: corner, style: .circular)
                 .strokeBorder(
                     Color(RouteKilometerMarkerMetrics.detailLabelStrokeUIColor),
-                    lineWidth: RouteKilometerMarkerMetrics.detailLabelStrokeWidth
+                    lineWidth: max(RouteKilometerMarkerMetrics.labelStrokeWidth * s, 0.5)
                 )
         }
-        .shadow(
-            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowSecondary.color),
-            radius: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.radius,
-            y: RouteKilometerMarkerMetrics.detailLabelShadowSecondary.y
-        )
-        .shadow(
-            color: Color(RouteKilometerMarkerMetrics.detailLabelShadowPrimary.color),
-            radius: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.radius,
-            y: RouteKilometerMarkerMetrics.detailLabelShadowPrimary.y
-        )
     }
 }
 
@@ -88,37 +86,68 @@ struct RouteKilometerCombinedLabelCapsule: View {
 struct RouteKilometerHorizontalMarker: View {
     var distanceText: String?
     var timeText: String?
-    let placesLabelOnLeadingSide: Bool
-    var verticalOffset: CGFloat = 0
+    /// Capsule center relative to the km-dot center (final-spec v3).
+    var centerOffset: CGPoint = .zero
     /// When false, draw only the km dot (thinning hid this label).
     var showsLabel: Bool = true
+    /// Simple SoT scale (`width/430`); must match placement `contentScale`.
+    var contentScale: CGFloat = 1
 
-    private let gap = RouteKilometerMarkerMetrics.labelGap
+    /// Legacy convenience for call sites that still pass L/R + vertical.
+    init(
+        distanceText: String?,
+        timeText: String?,
+        placesLabelOnLeadingSide: Bool,
+        verticalOffset: CGFloat = 0,
+        showsLabel: Bool = true,
+        contentScale: CGFloat = 1
+    ) {
+        let width = RouteKilometerMarkerDrawing.capsuleSize(
+            distanceLabel: distanceText,
+            timeLabel: timeText,
+            contentScale: contentScale
+        ).width
+        let shift = RouteKilometerLabelShift(
+            placesLabelOnLeadingSide: placesLabelOnLeadingSide,
+            verticalOffset: verticalOffset,
+            capsuleWidth: width > 0 ? width : 72 * contentScale,
+            contentScale: contentScale
+        )
+        self.distanceText = distanceText
+        self.timeText = timeText
+        self.centerOffset = shift.centerOffset
+        self.showsLabel = showsLabel
+        self.contentScale = contentScale
+    }
+
+    init(
+        distanceText: String?,
+        timeText: String?,
+        centerOffset: CGPoint,
+        showsLabel: Bool = true,
+        contentScale: CGFloat = 1
+    ) {
+        self.distanceText = distanceText
+        self.timeText = timeText
+        self.centerOffset = centerOffset
+        self.showsLabel = showsLabel
+        self.contentScale = contentScale
+    }
 
     var body: some View {
         ZStack {
-            RouteKilometerRouteDot()
+            RouteKilometerRouteDot(contentScale: contentScale)
             if showsLabel,
                RouteKilometerMarkerMetrics.combinedLabel(distance: distanceText, time: timeText) != nil {
-                RouteKilometerCombinedLabelCapsule(distanceText: distanceText, timeText: timeText)
+                RouteKilometerCombinedLabelCapsule(
+                    distanceText: distanceText,
+                    timeText: timeText,
+                    contentScale: contentScale
+                )
                     .fixedSize()
-                    .offset(x: horizontalOffset(capsuleWidth: capsuleWidth), y: verticalOffset)
+                    .offset(x: centerOffset.x, y: centerOffset.y)
             }
         }
-    }
-
-    private var capsuleWidth: CGFloat {
-        RouteKilometerMarkerDrawing.capsuleSize(
-            distanceLabel: distanceText,
-            timeLabel: timeText,
-            contentScale: 1
-        ).width
-    }
-
-    private func horizontalOffset(capsuleWidth: CGFloat) -> CGFloat {
-        // labelGap = center → near edge (S7).
-        let distance = gap + capsuleWidth / 2
-        return placesLabelOnLeadingSide ? -distance : distance
     }
 }
 

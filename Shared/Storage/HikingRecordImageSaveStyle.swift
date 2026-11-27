@@ -9,18 +9,31 @@ import Combine
 import Foundation
 
 /// 사진 저장·공유 이미지 구성.
+///
+/// Storage raw values stay stable for migration:
+/// - `card` → Data Card (was 기록 카드)
+/// - `summary` → Simple Grey (was 요약)
+/// - `simpleColor` → Simple Color (new)
 enum HikingRecordImageSaveStyle: String, CaseIterable, Identifiable, Sendable {
     /// 지도와 정보 카드를 세로로 쌓은 기록 카드.
     case card
-    /// 전체 지도 위에 정보 카드 내용을 텍스트로만 올린 한 장.
+    /// 회색 지도 위에 흰 정보 카드를 올린 한 장 (기존 요약).
     case summary
+    /// 컬러 지도 위에 리퀴드 글래스 정보 카드를 올린 한 장.
+    case simpleColor
 
     var id: String { rawValue }
 
+    /// Settings pager order: Data Card | Simple Grey | Simple Color.
+    static var pagerOrder: [HikingRecordImageSaveStyle] {
+        [.card, .summary, .simpleColor]
+    }
+
     var label: String {
         switch self {
-        case .card: "기록 카드"
-        case .summary: "요약"
+        case .card: "Data Card"
+        case .summary: "Simple Grey"
+        case .simpleColor: "Simple Color"
         }
     }
 
@@ -29,7 +42,17 @@ enum HikingRecordImageSaveStyle: String, CaseIterable, Identifiable, Sendable {
         case .card:
             "지도와 시작·거리·칼로리 등 정보 카드를 한 장의 기록으로 저장합니다."
         case .summary:
-            "전체 지도 위에 정보 카드의 내용을 텍스트로만 올려 한 장의 지도 이미지로 저장합니다."
+            "회색 지도 위에 정보 카드 내용을 올려 한 장의 지도 이미지로 저장합니다."
+        case .simpleColor:
+            "컬러 지도 위에 반투명 글래스 정보 카드를 올려 한 장의 지도 이미지로 저장합니다."
+        }
+    }
+
+    /// Offscreen MKMapSnapshotter + ImageRenderer path (no live detail map wait).
+    var usesOffscreenSummaryRenderer: Bool {
+        switch self {
+        case .summary, .simpleColor: true
+        case .card: false
         }
     }
 }

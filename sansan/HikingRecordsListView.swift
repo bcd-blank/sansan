@@ -737,6 +737,43 @@ struct HikingRecordsListView: View {
         if mode.showsKMSCBrowser {
             showsKMSCBrowser = true
         }
+        if let seedID = mode.opensSeededDetailRecordID {
+            // Strict seed-id only — never open another mountain by title substring.
+            Task { @MainActor in
+                for attempt in 0..<100 {
+                    // Prefer in-memory seed (with display cache). Reloading from disk
+                    // before async persist finishes wiped cache and forced 3–9s prepare.
+                    if store.records.contains(where: { $0.id == seedID }) == false {
+                        store.reloadForCurrentUser()
+                    }
+                    if let record = store.records.first(where: { $0.id == seedID }) {
+                        detailRoute = RecordDetailRoute(recordID: seedID)
+                        let title = record.displayName ?? record.listTitle
+                        let envShot = ProcessInfo.processInfo.environment["SANSAN_SCREENSHOT"] ?? "nil"
+                        let argShot: String = {
+                            let args = ProcessInfo.processInfo.arguments
+                            if let idx = args.firstIndex(of: "-SANSAN_SCREENSHOT"),
+                               args.index(after: idx) < args.endIndex {
+                                return args[args.index(after: idx)]
+                            }
+                            return "nil"
+                        }()
+                        let cache = record.session.hasPersistedDisplayCache ? "cache" : "no-cache"
+                        let line = "open detail mode=\(mode.rawValue) env=\(envShot) arg=\(argShot) id=\(seedID) title=\(title) dist=\(Int(record.session.totalDistance))m attempt=\(attempt) \(cache)\n"
+                        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                            let url = dir.appendingPathComponent("label-placement/OPEN_DETAIL.txt")
+                            try? FileManager.default.createDirectory(
+                                at: url.deletingLastPathComponent(),
+                                withIntermediateDirectories: true
+                            )
+                            try? line.write(to: url, atomically: true, encoding: .utf8)
+                        }
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+            }
+        }
     }
 #endif
 }

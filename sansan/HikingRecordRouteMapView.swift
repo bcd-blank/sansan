@@ -36,10 +36,20 @@ struct HikingRecordRouteMapView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var kilometerMarkerPlacements: [RouteKilometerMarkerPlacement] = []
     @State private var kilometerLabelShifts: [Int: RouteKilometerLabelShift] = [:]
-    /// Kilometers that keep a blue combined capsule after hideSteps thinning; dots always draw.
+    /// Kilometers that keep a blue combined capsule after thinning; dots always draw.
     @State private var labeledKilometers: Set<Int> = []
+    /// Detail placement mode: 1km or wholesale 5km (spec §7).
+    @State private var kilometerLabelModeStep: Int = 1
+    @State private var lastLabelLayoutZoom: Double?
+    /// Generation token — stale background layouts are dropped; previous labels stay until apply.
+    @State private var kilometerLabelLayoutGeneration: UInt64 = 0
+    /// Debounce zoom/pan-end label solves (camera can fire bursts).
+    @State private var labelLayoutDebounceTask: Task<Void, Never>?
     @State private var nearbySummits: [MountainSummit] = []
     @State private var isRouteDisplayReady = false
+#if DEBUG
+    @State private var detailOpenStartedAt: CFAbsoluteTime?
+#endif
 
     private var record: SavedHikingSession? {
         store.records.first { $0.id == recordID }
@@ -139,6 +149,11 @@ struct HikingRecordRouteMapView: View {
         }
         .onAppear {
             isLiveRegistryActive = true
+#if DEBUG
+            if detailOpenStartedAt == nil {
+                detailOpenStartedAt = CFAbsoluteTimeGetCurrent()
+            }
+#endif
         }
         .task(id: routePreparationToken) {
             await prepareRouteDisplayData()
@@ -198,22 +213,42 @@ struct HikingRecordRouteMapView: View {
             }
             .mapStyle(.standard(elevation: .flat))
             .onMapCameraChange(frequency: .onEnd) { context in
-                updateKilometerLabelShifts(proxy: proxy)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: context.camera.distance)
+                let rect = liveVisibleMapRect(proxy: proxy) ?? context.rect
+                let zoom = RouteCornerSmoothing.zoomLevel(
+                    longitudeDelta: context.region.span.longitudeDelta
+                )
+                // Fit-open computes once; idle zoom Δ≥0.5 → recompute fillet, replace line only.
+                if let last = lastFilletZoomLevel, abs(zoom - last) >= 0.5 {
+                    let mpp = RouteCornerSmoothing.metersPerPoint(
+                        latitude: context.region.center.latitude,
+                        visibleMapRect: rect,
+                        boundsWidth: mapWidth
+                    )
+                    rebuildRouteRailLayers(metersPerPoint: mpp, region: context.region)
+                } else if lastFilletZoomLevel == nil {
+                    let mpp = RouteCornerSmoothing.metersPerPoint(
+                        latitude: context.region.center.latitude,
+                        visibleMapRect: rect,
+                        boundsWidth: mapWidth
+                    )
+                    rebuildRouteRailLayers(metersPerPoint: mpp, region: context.region)
+                }
                 guard isLiveRegistryActive else { return }
                 LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
                     recordID: recordID,
                     region: context.region,
-                    visibleMapRect: liveVisibleMapRect(proxy: proxy) ?? context.rect
+                    visibleMapRect: rect
                 )
             }
             .onChange(of: kilometerMarkerPlacements) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .onChange(of: showsDistanceMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .onChange(of: showsTimeMarkers) { _, _ in
-                updateKilometerLabelShifts(proxy: proxy)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
             }
             .background {
                 RouteMapVisibleRenderRegistrar(recordID: recordID)
@@ -228,16 +263,98 @@ struct HikingRecordRouteMapView: View {
                 }
             }
             .onAppear {
-                updateKilometerLabelShifts(proxy: proxy)
+                fitRouteInView(animated: false)
+                scheduleKilometerLabelLayout(proxy: proxy, cameraDistance: nil, immediate: true)
                 // 저장 시점에 화면 지도가 실제로 보여주는 영역을 그대로 가져와 클론에 적용합니다.
                 // (onMapCameraChange가 초기 프로그램적 카메라에서 안 뜨는 경우 대비)
                 LiveRouteMapSnapshotRegistry.shared.registerVisibleRectProvider(recordID: recordID) {
                     liveVisibleMapRect(proxy: proxy)
                 }
+#if DEBUG
+                UITestMapCaptureHooks.installIfNeeded()
+#endif
             }
+#if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .uiTestMapCaptureAction)) { note in
+                guard let key = note.userInfo?["action"] as? String else { return }
+                switch key {
+                case "fit":
+                    applyUITestMapCaptureAction(.fit)
+                case "zoomIn":
+                    applyUITestMapCaptureAction(.zoomIn)
+                case "zoomRouteStraight":
+                    applyUITestMapCaptureAction(.zoomRouteStraight)
+                case "zoomRouteCurve":
+                    applyUITestMapCaptureAction(.zoomRouteCurve)
+                case "zoomRouteCurve2":
+                    applyUITestMapCaptureAction(.zoomRouteCurve2)
+                case "zoomRouteCurve3":
+                    applyUITestMapCaptureAction(.zoomRouteCurve3)
+                case "zoomRouteCross":
+                    applyUITestMapCaptureAction(.zoomRouteCross)
+                default:
+                    break
+                }
+            }
+#endif
             .id(mapPhotoListRevision)
         }
     }
+
+#if DEBUG
+    private func applyUITestMapCaptureAction(_ action: UITestMapCaptureHooks.Action) {
+        guard routeCoordinates.count >= 2 else { return }
+        let region: MKCoordinateRegion?
+        switch action {
+        case .fit:
+            fitRouteInView(animated: false)
+            return
+        case .zoomIn:
+            // Zoom near the end so mid/late km stay on-screen (TC-01: 3·4km on ~4.28km).
+            // Span tighter than route-fit so zoom± captures actually differ (가마지천 fit ≈ 0.006).
+            let centerIndex = min(
+                max(Int(Double(routeCoordinates.count) * 0.72), 0),
+                routeCoordinates.count - 1
+            )
+            let center = routeCoordinates[centerIndex]
+            let span = MKCoordinateSpan(latitudeDelta: 0.0028, longitudeDelta: 0.0028)
+            region = MKCoordinateRegion(center: center, span: span)
+        case .zoomRouteStraight:
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.straight,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.span
+            )
+        case .zoomRouteCurve:
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+            )
+        case .zoomRouteCurve2:
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve2,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+            )
+        case .zoomRouteCurve3:
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.curve3,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+            )
+        case .zoomRouteCross:
+            // Crossing SoT: pond junction @ 4× casing crop zoom (span 0.0002875).
+            region = MKCoordinateRegion(
+                center: UITestMapCaptureHooks.GamajiRouteCasingPose.cross,
+                span: UITestMapCaptureHooks.GamajiRouteCasingPose.cross4xSpan
+            )
+        }
+        guard let region else { return }
+        mapPosition = .region(region)
+        // Programmatic camera often skips onMapCameraChange — rebuild when zoom Δ≥0.5.
+        let zoom = RouteCornerSmoothing.zoomLevel(longitudeDelta: region.span.longitudeDelta)
+        if lastFilletZoomLevel == nil || abs(zoom - (lastFilletZoomLevel ?? zoom)) >= 0.5 {
+            rebuildRouteRailLayers(region: region)
+        }
+    }
+#endif
 
     /// 라이브 SwiftUI `Map`의 네 모서리를 좌표로 변환해 현재 보이는 MapRect를 만듭니다.
     private func liveVisibleMapRect(proxy: MapProxy) -> MKMapRect? {
@@ -258,9 +375,27 @@ struct HikingRecordRouteMapView: View {
         return rect.isNull ? nil : rect
     }
 
-    /// 겹치는 거리·시간 라벨을 포인트 근처에서만 떼어 놓습니다.
-    /// Detail map: #007AFF combined capsules + hideSteps [1,5,10,20,50] thinning.
-    private func updateKilometerLabelShifts(proxy: MapProxy) {
+    /// Debounced camera-idle layout; marker/toggle changes can pass `immediate`.
+    private func scheduleKilometerLabelLayout(
+        proxy: MapProxy,
+        cameraDistance: Double?,
+        immediate: Bool = false
+    ) {
+        labelLayoutDebounceTask?.cancel()
+        if immediate {
+            updateKilometerLabelShifts(proxy: proxy, cameraDistance: cameraDistance)
+            return
+        }
+        labelLayoutDebounceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            updateKilometerLabelShifts(proxy: proxy, cameraDistance: cameraDistance)
+        }
+    }
+
+    /// Detail map: #007AFF capsules; final-spec v3. Camera idle → background layout ≤~300ms.
+    /// Previous labels stay until the new result applies (no blank flash).
+    private func updateKilometerLabelShifts(proxy: MapProxy, cameraDistance: Double?) {
         guard mapWidth > 1, mapHeight > 1,
               let start = routeCoordinates.first,
               let startPoint = proxy.convert(start, to: .local) else { return }
@@ -271,6 +406,14 @@ struct HikingRecordRouteMapView: View {
             endpoints.append(endPoint)
         }
         var requests: [RouteKilometerLabelRequest] = []
+        var polyline: [CGPoint] = []
+        // Dense enough screen-space samples so path clearance cannot miss bends.
+        let strideN = max(1, routeCoordinates.count / 220)
+        for (idx, coordinate) in routeCoordinates.enumerated() where idx % strideN == 0 || idx == routeCoordinates.count - 1 {
+            if let point = proxy.convert(coordinate, to: .local) {
+                polyline.append(point)
+            }
+        }
         for marker in kilometerMarkerPlacements {
             let distance = showsDistanceMarkers ? marker.labelText : nil
             let time = showsTimeMarkers ? kilometerArrivalLabels[marker.kilometer] : nil
@@ -286,30 +429,248 @@ struct HikingRecordRouteMapView: View {
                 )
             )
         }
-        let thinned = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
-            for: requests,
-            endpointPoints: endpoints,
-            contentScale: 1,
-            imageSize: CGSize(width: mapWidth, height: mapHeight),
-            sideInset: RouteKilometerMarkerMetrics.detailLabelSideInset,
-            verticalInset: RouteKilometerMarkerMetrics.detailLabelVerticalInset
+
+        let zoomDelta: Double
+        if let cameraDistance, let last = lastLabelLayoutZoom, last > 0 {
+            zoomDelta = log2(max(cameraDistance, 1) / last)
+        } else {
+            zoomDelta = 1
+        }
+        if let cameraDistance {
+            lastLabelLayoutZoom = cameraDistance
+        }
+
+        let imageSize = CGSize(width: mapWidth, height: mapHeight)
+        let preferStep = kilometerLabelModeStep
+        kilometerLabelLayoutGeneration &+= 1
+        let generation = kilometerLabelLayoutGeneration
+        let idleAt = CFAbsoluteTimeGetCurrent()
+
+        // Match Simple summary fill AABB 65px @3x (±1).
+        let labelScale = RouteKilometerMarkerMetrics.liveDetailLabelContentScale
+        DispatchQueue.global(qos: .userInitiated).async {
+            let placed = RouteKilometerMarkerDrawing.thinnedDetailLabelShifts(
+                for: requests,
+                endpointPoints: endpoints,
+                contentScale: labelScale,
+                imageSize: imageSize,
+                routePolyline: polyline,
+                preferModeStep: preferStep,
+                zoomDelta: zoomDelta
+            )
+            let idleToVisibleMs = (CFAbsoluteTimeGetCurrent() - idleAt) * 1000
+            DispatchQueue.main.async {
+                guard generation == kilometerLabelLayoutGeneration else { return }
+#if DEBUG
+                print(
+                    String(
+                        format: "[km-label] mode=%d stage=%@ nodes=%d solver=%.1fms idle→visible=%.1fms labels=%d partial=%@",
+                        placed.modeStep,
+                        placed.stageName,
+                        placed.nodesVisited,
+                        placed.elapsedMilliseconds,
+                        idleToVisibleMs,
+                        placed.shifts.count,
+                        placed.partial ? "yes" : "no"
+                    )
+                )
+#endif
+                if placed.modeStep != kilometerLabelModeStep {
+                    kilometerLabelModeStep = placed.modeStep
+                }
+                let nextLabeled = Set(placed.shifts.keys)
+                if placed.shifts != kilometerLabelShifts {
+                    kilometerLabelShifts = placed.shifts
+                }
+                if nextLabeled != labeledKilometers {
+                    labeledKilometers = nextLabeled
+                }
+            }
+        }
+    }
+
+    /// Cached stretch rails — avoid O(n²) self-cross on every Map body pass.
+    @State private var cachedRouteRailLayers: [RouteRailLayer] = []
+    /// Screen m/pt used for the last fillet rebuild (fit-open + idle zoom Δ≥0.5).
+    @State private var filletMetersPerPoint: CLLocationDistance = 0
+    @State private var lastFilletZoomLevel: Double?
+
+    private struct RouteRailLayer: Identifiable {
+        let id: String
+        let coordinates: [CLLocationCoordinate2D]
+        let isCasing: Bool
+    }
+
+    private func currentFilletMetersPerPoint(region: MKCoordinateRegion? = nil) -> CLLocationDistance {
+        let reg = region ?? fittingRegion
+        return RouteCornerSmoothing.metersPerPoint(
+            latitude: reg.center.latitude,
+            visibleMapRect: reg.mapRect,
+            boundsWidth: mapWidth
         )
-        let nextLabeled = Set(thinned.shifts.keys)
-        if thinned.shifts != kilometerLabelShifts {
-            kilometerLabelShifts = thinned.shifts
+    }
+
+    private func rebuildRouteRailLayers(metersPerPoint: CLLocationDistance? = nil, region: MKCoordinateRegion? = nil) {
+        let coords = routeCoordinates
+        guard coords.count >= 2 else {
+            cachedRouteRailLayers = []
+            return
         }
-        if nextLabeled != labeledKilometers {
-            labeledKilometers = nextLabeled
+        let mpp = metersPerPoint ?? currentFilletMetersPerPoint(region: region)
+        let L = RouteCornerSmoothing.alongPt(mapWidth: mapWidth, mapHeight: mapHeight)
+        let zoom = RouteCornerSmoothing.zoomLevel(
+            longitudeDelta: (region ?? fittingRegion).span.longitudeDelta
+        )
+        filletMetersPerPoint = mpp
+        lastFilletZoomLevel = zoom
+        // Continuous dual-rail first (raw — never smooth on MainActor).
+        if cachedRouteRailLayers.isEmpty {
+            cachedRouteRailLayers = [
+                RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+            ]
         }
+        let hikingPoints = record?.session.points
+        let segmentBreaks = record?.session.segmentBreaks
+        Task(priority: .userInitiated) {
+            // v5: pause-segment split → dejitter → Catmull (no controls across gaps).
+            // Stretch cut per pause-segment on that segment's raw coords.
+            var layers: [RouteRailLayer] = []
+            var filletedTotal = 0
+            var removedTotal = 0
+            let pauseSegs: [[HikingPoint]]
+            if let hikingPoints {
+                pauseSegs = RouteCornerSmoothing.pausePointSegments(
+                    from: hikingPoints,
+                    segmentBreaks: segmentBreaks
+                )
+            } else {
+                pauseSegs = []
+            }
+            if !pauseSegs.isEmpty {
+                var layerIndex = 0
+                for rawSeg in pauseSegs {
+                    guard rawSeg.count >= 2 else { continue }
+                    var stats = RouteCornerSmoothing.DejitterStats()
+                    let smoothed = RouteCornerSmoothing.smoothHikingPoints(
+                        rawSeg,
+                        metersPerPoint: mpp,
+                        alongPt: L,
+                        statsOut: &stats
+                    )
+                    removedTotal += stats.removedCount
+                    filletedTotal += smoothed.count
+                    let rawCoords = rawSeg.map(\.coordinate)
+                    let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: rawCoords)
+                    let list: [[CLLocationCoordinate2D]]
+                    if rawStretches.count <= 1 {
+                        list = [smoothed]
+                    } else {
+                        list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
+                    }
+                    for stretch in list where stretch.count >= 2 {
+                        layers.append(RouteRailLayer(id: "c\(layerIndex)", coordinates: stretch, isCasing: true))
+                        layers.append(RouteRailLayer(id: "f\(layerIndex)", coordinates: stretch, isCasing: false))
+                        layerIndex += 1
+                    }
+                }
+            } else {
+                // Fallback: continuous display coords (no HikingPoint payload).
+                let smoothed = RouteCornerSmoothing.smoothCoordinates(
+                    coords, metersPerPoint: mpp, alongPt: L
+                )
+                filletedTotal = smoothed.count
+                let rawStretches = RouteSelfCrossing.chronologicalCoordinateStretches(in: coords)
+                let list: [[CLLocationCoordinate2D]]
+                if rawStretches.count <= 1 {
+                    list = [smoothed]
+                } else {
+                    list = Self.sliceSmoothed(smoothed, byRawStretches: rawStretches)
+                }
+                for (index, stretch) in list.enumerated() where stretch.count >= 2 {
+                    layers.append(RouteRailLayer(id: "c\(index)", coordinates: stretch, isCasing: true))
+                    layers.append(RouteRailLayer(id: "f\(index)", coordinates: stretch, isCasing: false))
+                }
+            }
+            if layers.isEmpty {
+                layers = [
+                    RouteRailLayer(id: "c0", coordinates: coords, isCasing: true),
+                    RouteRailLayer(id: "f0", coordinates: coords, isCasing: false)
+                ]
+            }
+            await MainActor.run {
+                cachedRouteRailLayers = layers
+#if DEBUG
+                let enabled = RouteCornerSmoothing.isEnabled
+                let target = UITestMapCaptureHooks.GamajiRouteCasingPose.curve3
+                let targetLoc = CLLocation(latitude: target.latitude, longitude: target.longitude)
+                var nearest = Double.greatestFiniteMagnitude
+                var nearestCoord = target
+                for layer in layers where !layer.isCasing {
+                    for c in layer.coordinates {
+                        let d = targetLoc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                        if d < nearest {
+                            nearest = d
+                            nearestCoord = c
+                        }
+                    }
+                }
+                let pts = layers.first?.coordinates.count ?? 0
+                let rawN = coords.count
+                let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
+                let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
+                let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
+                let pauseN = pauseSegs.filter { $0.count >= 2 }.count
+                var dump = "enabled=\(enabled) rawCount=\(rawN) pauseSegs=\(pauseN) removed=\(removedTotal) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(filletedTotal) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=catmullThroughPointsDejitter args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
+                if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                    try? dump.write(
+                        to: dir.appendingPathComponent("corner-smooth-debug.txt"),
+                        atomically: true,
+                        encoding: .utf8
+                    )
+                }
+#endif
+            }
+        }
+    }
+
+    /// Map raw stretch endpoints onto the smoothed polyline (geo-nearest).
+    private static func sliceSmoothed(
+        _ smoothed: [CLLocationCoordinate2D],
+        byRawStretches rawStretches: [[CLLocationCoordinate2D]]
+    ) -> [[CLLocationCoordinate2D]] {
+        guard smoothed.count >= 2, !rawStretches.isEmpty else { return [smoothed] }
+        func nearestIndex(to coord: CLLocationCoordinate2D) -> Int {
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            var best = 0
+            var bestD = Double.greatestFiniteMagnitude
+            for (i, c) in smoothed.enumerated() {
+                let d = loc.distance(from: CLLocation(latitude: c.latitude, longitude: c.longitude))
+                if d < bestD {
+                    bestD = d
+                    best = i
+                }
+            }
+            return best
+        }
+        var out: [[CLLocationCoordinate2D]] = []
+        for stretch in rawStretches {
+            guard let first = stretch.first, let last = stretch.last else { continue }
+            var i0 = nearestIndex(to: first)
+            var i1 = nearestIndex(to: last)
+            if i1 < i0 { swap(&i0, &i1) }
+            if i1 > i0 {
+                out.append(Array(smoothed[i0...i1]))
+            }
+        }
+        return out.isEmpty ? [smoothed] : out
     }
 
     @MapContentBuilder
     private var routeMapContent: some MapContent {
-        MapPolyline(coordinates: routeCoordinates)
-            .stroke(
-                Color(red: 0.12, green: 0.72, blue: 0.45),
-                style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
-            )
+        // Stretch-split (JW): mid-loop cuts between self-crosses; casing→fill per stretch.
+        // Cache starts as continuous dual-rail, then upgrades to stretch rails async.
+        routeStretchPolylines
 
         if let start = routeCoordinates.first {
             Annotation("", coordinate: start) {
@@ -327,6 +688,42 @@ struct HikingRecordRouteMapView: View {
     }
 
     @MapContentBuilder
+    private var routeStretchPolylines: some MapContent {
+        // Unrolled — MapContent ForEach dropped strokes on this Map.
+        if cachedRouteRailLayers.count > 0 { routeRailMapPolyline(cachedRouteRailLayers[0]) }
+        if cachedRouteRailLayers.count > 1 { routeRailMapPolyline(cachedRouteRailLayers[1]) }
+        if cachedRouteRailLayers.count > 2 { routeRailMapPolyline(cachedRouteRailLayers[2]) }
+        if cachedRouteRailLayers.count > 3 { routeRailMapPolyline(cachedRouteRailLayers[3]) }
+        if cachedRouteRailLayers.count > 4 { routeRailMapPolyline(cachedRouteRailLayers[4]) }
+        if cachedRouteRailLayers.count > 5 { routeRailMapPolyline(cachedRouteRailLayers[5]) }
+        if cachedRouteRailLayers.count > 6 { routeRailMapPolyline(cachedRouteRailLayers[6]) }
+        if cachedRouteRailLayers.count > 7 { routeRailMapPolyline(cachedRouteRailLayers[7]) }
+        if cachedRouteRailLayers.count > 8 { routeRailMapPolyline(cachedRouteRailLayers[8]) }
+        if cachedRouteRailLayers.count > 9 { routeRailMapPolyline(cachedRouteRailLayers[9]) }
+        if cachedRouteRailLayers.count > 10 { routeRailMapPolyline(cachedRouteRailLayers[10]) }
+        if cachedRouteRailLayers.count > 11 { routeRailMapPolyline(cachedRouteRailLayers[11]) }
+        if cachedRouteRailLayers.count > 12 { routeRailMapPolyline(cachedRouteRailLayers[12]) }
+        if cachedRouteRailLayers.count > 13 { routeRailMapPolyline(cachedRouteRailLayers[13]) }
+        if cachedRouteRailLayers.count > 14 { routeRailMapPolyline(cachedRouteRailLayers[14]) }
+        if cachedRouteRailLayers.count > 15 { routeRailMapPolyline(cachedRouteRailLayers[15]) }
+    }
+
+    @MapContentBuilder
+    private func routeRailMapPolyline(_ layer: RouteRailLayer) -> some MapContent {
+        MapPolyline(coordinates: layer.coordinates)
+            .stroke(
+                layer.isCasing
+                    ? Color.white.opacity(0.9)
+                    : Color(red: 0.12, green: 0.72, blue: 0.45),
+                style: StrokeStyle(
+                    lineWidth: layer.isCasing ? 9 : 5,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
+    }
+
+    @MapContentBuilder
     private var distanceMarkerMapContent: some MapContent {
         if showsDistanceMarkers || showsTimeMarkers {
             ForEach(kilometerMarkerPlacements) { marker in
@@ -336,12 +733,16 @@ struct HikingRecordRouteMapView: View {
                     Annotation("", coordinate: marker.coordinate, anchor: .center) {
                         let shift = kilometerLabelShifts[marker.kilometer]
                         let showsLabel = labeledKilometers.contains(marker.kilometer)
+                        let fallback = RouteKilometerLabelShift(
+                            placesLabelOnLeadingSide: marker.placesLabelOnLeadingSide,
+                            verticalOffset: 0
+                        )
                         RouteKilometerHorizontalMarker(
                             distanceText: distanceText,
                             timeText: timeText,
-                            placesLabelOnLeadingSide: shift?.placesLabelOnLeadingSide ?? marker.placesLabelOnLeadingSide,
-                            verticalOffset: shift?.verticalOffset ?? 0,
-                            showsLabel: showsLabel
+                            centerOffset: shift?.centerOffset ?? fallback.centerOffset,
+                            showsLabel: showsLabel,
+                            contentScale: RouteKilometerMarkerMetrics.liveDetailLabelContentScale
                         )
                         .background { MapAnnotationZPriority(priority: MapAnnotationZOrder.kilometer) }
                     }
@@ -491,6 +892,10 @@ struct HikingRecordRouteMapView: View {
     }
 
     private func prepareRouteDisplayData() async {
+#if DEBUG
+        // Measure prepare itself — not seed/navigation wait before the record exists.
+        detailOpenStartedAt = CFAbsoluteTimeGetCurrent()
+#endif
         guard let record, record.session.points.count >= 2 else {
             isRouteDisplayReady = false
             routeCoordinates = []
@@ -501,14 +906,43 @@ struct HikingRecordRouteMapView: View {
         }
 
         if loadPersistedRouteDisplayIfAvailable(from: record) {
+            // Yield so Map is in the hierarchy before camera fit (avoids blank grid).
+            await Task.yield()
             fitRouteInView(animated: false)
+            rebuildRouteRailLayers()
+#if DEBUG
+            logDetailOpenReady(stage: "cache")
+#endif
             return
         }
 
-        isRouteDisplayReady = false
+        // Already enriched (token may re-fire when displayCacheVersion updates) — keep map.
+        if isRouteDisplayReady,
+           !kilometerMarkerPlacements.isEmpty,
+           routeCoordinates.count >= 2 {
+#if DEBUG
+            logDetailOpenReady(stage: "skip-ready")
+#endif
+            return
+        }
+
+        // Map first: show raw polyline immediately; enrich markers/summits off-main.
+        // Do not clear `isRouteDisplayReady` — avoids blanking an already-visible map.
+        let points = record.session.points
+        let quickCoords = points.map(\.coordinate)
+        if routeCoordinates.isEmpty {
+            routeCoordinates = quickCoords
+            isRouteDisplayReady = true
+            fitRouteInView(animated: false)
+            rebuildRouteRailLayers()
+#if DEBUG
+            logDetailOpenReady(stage: "map-first")
+#endif
+        }
+
         let includeSummits = mapDisplayPreferences.showsSummitMarkers
         let displayData = await HikingRecordRouteDisplayPreparer.prepare(
-            points: record.session.points,
+            points: points,
             includeSummits: includeSummits
         )
 
@@ -518,7 +952,55 @@ struct HikingRecordRouteMapView: View {
         nearbySummits = displayData.nearbySummits
         isRouteDisplayReady = true
         fitRouteInView(animated: false)
+        rebuildRouteRailLayers()
+#if DEBUG
+        logDetailOpenReady(stage: "prepared")
+#endif
+        // Persist display cache so the next open is a ≤1s cache hit.
+        HikingRecordStore.shared.backfillDisplayCache(for: recordID)
+        if includeSummits, nearbySummits.isEmpty {
+            Task { await refreshSummitsWhenCatalogReady() }
+        }
     }
+
+    private func refreshSummitsWhenCatalogReady() async {
+        await MountainSummitCatalog.waitUntilReady(timeout: .seconds(8))
+        guard mapDisplayPreferences.showsSummitMarkers,
+              routeCoordinates.count >= 2 else { return }
+        let coords = routeCoordinates
+        let summits = await Task.detached(priority: .utility) {
+            MountainSummitRouteFilter.summits(near: coords)
+        }.value
+        guard !summits.isEmpty else { return }
+        nearbySummits = summits
+    }
+
+#if DEBUG
+    private func logDetailOpenReady(stage: String) {
+        guard let t0 = detailOpenStartedAt else { return }
+        let ms = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+        let name = record?.displayName ?? recordID.uuidString
+        let line = String(
+            format: "[detail-open] %@ stage=%@ ready=%.1fms pts=%d\n",
+            name, stage, ms, routeCoordinates.count
+        )
+        print(line, terminator: "")
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let url = dir.appendingPathComponent("detail-open-perf.log")
+            if let data = line.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: url.path) {
+                    if let handle = try? FileHandle(forWritingTo: url) {
+                        defer { try? handle.close() }
+                        try? handle.seekToEnd()
+                        try? handle.write(contentsOf: data)
+                    }
+                } else {
+                    try? data.write(to: url)
+                }
+            }
+        }
+    }
+#endif
 
     /// 저장 시 계산해 둔 경로·마커·정상 데이터를 그대로 사용합니다.
     private func loadPersistedRouteDisplayIfAvailable(from record: SavedHikingSession) -> Bool {
@@ -554,6 +1036,8 @@ struct HikingRecordRouteMapView: View {
         } else {
             mapPosition = .region(fittingRegion)
         }
+        // Detail fit-open: compute 12pt fillet at the fit camera.
+        rebuildRouteRailLayers(region: fittingRegion)
         guard isLiveRegistryActive else { return }
         LiveRouteMapSnapshotRegistry.shared.updateLiveCamera(
             recordID: recordID,
@@ -612,6 +1096,7 @@ private struct GlassIconButton: View {
     let accessibilityLabel: String
     let action: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     private let iconBox: CGFloat = 22
 
     var body: some View {
@@ -628,7 +1113,10 @@ private struct GlassIconButton: View {
                     }
                     .overlay {
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.5)
+                            .strokeBorder(
+                                Color.primary.opacity(colorScheme == .dark ? 0.22 : 0.12),
+                                lineWidth: 0.5
+                            )
                     }
 
                 if isLoading {

@@ -1,0 +1,17 @@
+{
+  "id": "route.cornerSmooth",
+  "revision": "v5-catmull-through-points-dejitter",
+  "mapMinSideFraction": 0.01,
+  "catmullAlpha": 0.5,
+  "subdivPxPerSample": 2,
+  "subdivMin": 2,
+  "subdivMax": 16,
+  "duplicateMinSeparationMeters": 0.5,
+  "dejitterHeadingDegrees": 120,
+  "dejitterMaxArmMeters": 30,
+  "dejitterDefaultAccuracyMeters": 10,
+  "dejitterMaxPasses": 5,
+  "method": "catmullThroughPointsDejitter",
+  "zoomRecalcDelta": 0.5,
+  "notes": "Split by segmentBreaks; per pause-segment: drop dup <0.5m; rebound dejitter (Δ>120°, arms≤30m, acc>min(a,b), default acc 10m, max 5 passes, keep first/last); centripetal Catmull-Rom α=0.5 through remaining (subdiv screenLen/2px clamp 2…16). No Catmull controls across pause gaps. Stretch-split later-over-earlier. 9/5/0.9 round. Render-only."
+}

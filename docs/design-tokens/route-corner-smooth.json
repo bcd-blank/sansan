@@ -1,0 +1,25 @@
+{
+  "id": "route.cornerSmooth",
+  "sourceOfTruth": "iPhone",
+  "unit": {
+    "ios": "pt",
+    "android": "dp",
+    "mapping": "1:1; subdiv by screen px length / 2"
+  },
+  "revision": "v5-catmull-through-points-dejitter",
+  "notes": "Pause: split saved points by segmentBreaks (no line pause↔resume; 1-pt segment = no line). Per pause-segment: skip dup <0.5m; iterative rebound dejitter (heading Δ>120°, both arms ≤30m, acc_i > min(a,b); missing acc→10m; max 5 passes; preserve segment first/last); then centripetal Catmull-Rom α=0.5 through ALL remaining (subdiv=clamp(screenLenPx/2,2,16); duplicate ends within segment only). Meter plane. |Δzoom|≥0.5 → recompute subdiv. Stretch cut per pause-segment; time-order stack; casing 9 / fill 5 / white 0.9 / #1FB873 round caps. GPS/distance/time unchanged.",
+  "mapMinSideFraction": 0.01,
+  "catmullAlpha": 0.5,
+  "subdivPxPerSample": 2,
+  "subdivMin": 2,
+  "subdivMax": 16,
+  "duplicateMinSeparationMeters": 0.5,
+  "dejitterHeadingDegrees": 120,
+  "dejitterMaxArmMeters": 30,
+  "dejitterDefaultAccuracyMeters": 10,
+  "dejitterMaxPasses": 5,
+  "zoomRecalcDelta": 0.5,
+  "metersPerPointAndroid": "156543.03392 * cos(lat) / 2^zoom / density",
+  "method": "catmullThroughPointsDejitter",
+  "methodNotes": "Dejitter then through-points Catmull-Rom α=0.5; pause-segment isolation; variable subdiv by screen length; dup skip 0.5m."
+}
