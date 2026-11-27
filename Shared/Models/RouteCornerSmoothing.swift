@@ -13,7 +13,8 @@ import MapKit
 ///    first/last of segment fixed); then Catmull-Rom α=0.5 through remaining
 ///    (subdiv screenLen/2 px, clamp 2…16). No Catmull controls across segments.
 /// 3. Token `v5-catmull-through-points-dejitter`. Casing/fill 9/5/0.9 round unchanged.
-enum RouteCornerSmoothing {
+/// `nonisolated` — fillet/dejitter must run in MapView `Task.detached`, not MainActor.
+nonisolated enum RouteCornerSmoothing: Sendable {
     static let alongFractionOfMinSide: CGFloat = 0.01
     /// Canvas/pt fallback when no map size is known.
     static let maxFilletAlongPt: CGFloat = 4
