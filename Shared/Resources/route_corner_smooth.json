@@ -1,10 +1,14 @@
 {
   "id": "route.cornerSmooth",
-  "revision": "v2j-resample-moving-avg",
+  "revision": "v3-resample-gauss-catmull",
   "mapMinSideFraction": 0.01,
-  "resampleStepFractionOfTm": 0.25,
-  "movingAverageWindow": 9,
-  "method": "uniformResampleMovingAverage",
+  "resampleStepFractionOfTm": 1.0,
+  "gaussianSigmaSamples": 1.5,
+  "gaussianHalfWidth": 4,
+  "catmullAlpha": 0.5,
+  "catmullSubdivisions": 8,
+  "minStretchLengthTmFactor": 3,
+  "method": "resampleGaussianCatmullRom",
   "zoomRecalcDelta": 0.5,
-  "notes": "t_m=0.01\u00d7min(mapW,mapH)\u00d7mpp. Resample h=t_m/4. MA window=9 uniform; ends shrink; start/end fixed. Render-only."
+  "notes": "t_m=0.01\u00d7min(mapW,mapH)\u00d7mpp. Per stretch: resample s=t_m; Gaussian \u03c3=1.5 k=4; centripetal Catmull-Rom \u03b1=0.5 \u00d78. Skip if length<3\u00b7t_m; ends fixed. Render-only."
 }

@@ -575,7 +575,7 @@ struct HikingRecordRouteMapView: View {
                 let head = coords.prefix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tail = coords.suffix(3).map { String(format: "%.6f,%.6f", $0.latitude, $0.longitude) }.joined(separator: "|")
                 let tM = RouteCornerSmoothing.maxAlongMeters(metersPerPoint: mpp, alongPt: L)
-                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(smoothed.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=resampleMA args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
+                var dump = "enabled=\(enabled) rawCount=\(rawN) head3=\(head) tail3=\(tail) layers=\(layers.count) firstPts=\(pts) nearCurve3m=\(String(format: "%.2f", nearest)) nearLat=\(nearestCoord.latitude) nearLng=\(nearestCoord.longitude) filletedPts=\(smoothed.count) L=\(String(format: "%.2f", L)) mpp=\(String(format: "%.4f", mpp)) t_m=\(String(format: "%.3f", tM)) zoom=\(String(format: "%.2f", zoom)) method=resampleGaussCatmull args=\(ProcessInfo.processInfo.arguments.filter { $0.contains("CORNER") || $0.contains("SANSAN") }.joined(separator: ","))\n"
                 if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
                     try? dump.write(
                         to: dir.appendingPathComponent("corner-smooth-debug.txt"),

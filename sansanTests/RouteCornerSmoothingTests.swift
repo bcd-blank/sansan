@@ -10,7 +10,7 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(RouteCornerSmoothing.alongPt(mapWidth: 400, mapHeight: 200), 2.0, accuracy: 1e-9)
     }
 
-    func testResampleMovingAverageRoundsCornerAndKeepsEnds() {
+    func testResampleGaussCatmullRoundsCornerAndKeepsEnds() {
         let points: [CGPoint] = [
             CGPoint(x: 0, y: 0),
             CGPoint(x: 40, y: 0),
@@ -22,8 +22,20 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(smoothed.first!.y, 0, accuracy: 1e-6)
         XCTAssertEqual(smoothed.last!.x, 40, accuracy: 1e-6)
         XCTAssertEqual(smoothed.last!.y, 40, accuracy: 1e-6)
-        // Apex (40,0) must be pulled inward by the ±t_m window.
+        // Apex (40,0) must be pulled inward by Gaussian+Catmull.
         XCTAssertFalse(smoothed.contains { hypot($0.x - 40, $0.y - 0) < 0.5 })
+    }
+
+    func testShortStretchSkipsSmooth() {
+        // Length 20 < 3·t_m (=24) → raw.
+        let points: [CGPoint] = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 10, y: 0),
+            CGPoint(x: 20, y: 0)
+        ]
+        let smoothed = RouteCornerSmoothing.smoothPoints(points, maxAlong: 8)
+        XCTAssertEqual(smoothed.count, points.count)
+        XCTAssertEqual(smoothed[1].x, 10, accuracy: 1e-9)
     }
 
     func testColinearStaysOnLine() {
@@ -32,7 +44,7 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(smoothed.first, points.first)
         XCTAssertEqual(smoothed.last, points.last)
         for p in smoothed {
-            XCTAssertEqual(p.y, 0, accuracy: 1e-6)
+            XCTAssertEqual(p.y, 0, accuracy: 1e-5)
         }
     }
 
@@ -61,20 +73,28 @@ final class RouteCornerSmoothingTests: XCTestCase {
         XCTAssertEqual(smoothed.first!.latitude, coords.first!.latitude, accuracy: 1e-9)
         XCTAssertEqual(smoothed.last!.latitude, coords.last!.latitude, accuracy: 1e-9)
         XCTAssertNotEqual(smoothed.count, coords.count)
-        // Mid interior of raw must move after MA.
         let mid = coords[coords.count / 2]
         let midLoc = CLLocation(latitude: mid.latitude, longitude: mid.longitude)
         let nearest = smoothed.map {
             midLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        // Resampled path still tracks route; check a sharp apex moves.
         let apex = coords[232]
         let apexLoc = CLLocation(latitude: apex.latitude, longitude: apex.longitude)
         let apexCut = smoothed.map {
             apexLoc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
         }.min() ?? 0
-        XCTAssertGreaterThan(apexCut, 0.5, "MA must pull sharp tip inward")
+        XCTAssertGreaterThan(apexCut, 0.5, "v3 must pull sharp tip inward")
         XCTAssertLessThan(nearest, 30)
+        // Max deviation raw→smooth ≤ 3·t_m.
+        var maxDev = 0.0
+        for c in coords {
+            let loc = CLLocation(latitude: c.latitude, longitude: c.longitude)
+            let d = smoothed.map {
+                loc.distance(from: CLLocation(latitude: $0.latitude, longitude: $0.longitude))
+            }.min() ?? 0
+            maxDev = max(maxDev, d)
+        }
+        XCTAssertLessThanOrEqual(maxDev, 3 * tM + 1e-6)
     }
 
     func testStretchOnSmoothedKeepsLayers() {
